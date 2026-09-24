@@ -1,0 +1,102 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-serial-command-console",
+  "name": "Blink",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 140,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "r1",
+        "type": "resistor",
+        "x": 420,
+        "y": 150,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led1",
+        "type": "led",
+        "x": 580,
+        "y": 150,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "D13"
+        },
+        "to": {
+          "part": "r1",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "r1",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led1",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "led1",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Serial command console: type \"on\" or \"off\" in the monitor.\nString command = \"\";\n\nvoid setup() {\n  pinMode(13, OUTPUT);\n  Serial.begin(9600);\n  Serial.println(\"ready\");\n}\n\nvoid loop() {\n  while (Serial.available() > 0) {\n    char c = Serial.read();\n    if (c == '\\n') {\n      command.trim();\n      if (command == \"on\") {\n        digitalWrite(13, HIGH);\n        Serial.println(\"LED on\");\n      } else if (command == \"off\") {\n        digitalWrite(13, LOW);\n        Serial.println(\"LED off\");\n      } else {\n        Serial.println(\"unknown command\");\n      }\n      command = \"\";\n    } else {\n      command += c;\n    }\n  }\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {},
+    "speed": 1
+  },
+  "provenance": {},
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

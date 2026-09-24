@@ -1,0 +1,22 @@
+name: Serial command console
+version: 1
+author: SparkLab
+description: Run with the console sketch from the docs, which toggles the LED on "on" and "off".
+steps:
+  - wait-serial: ready
+  - write-serial: "on\n"
+  - wait-serial:
+      text: LED on
+      timeout: 1s
+  - expect-pin:
+      part-id: uno
+      pin: 13
+      expected: 1
+  - write-serial: "off\n"
+  - wait-serial:
+      text: LED off
+      timeout: 1s
+  - expect-pin:
+      part-id: uno
+      pin: 13
+      expected: 0

@@ -1,0 +1,50 @@
+name: Gas shutoff latch and reset
+version: 1
+author: SparkLab
+steps:
+  - set-control:
+      part-id: gas
+      control: gasLevel
+      value: 700
+  - delay: 500ms
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 0
+  # The gas drops but is not yet clear: a reset must be refused.
+  - set-control:
+      part-id: gas
+      control: gasLevel
+      value: 300
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 1
+  - delay: 500ms
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 0
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 0
+  # Now the air is clear: the same reset is accepted.
+  - set-control:
+      part-id: gas
+      control: gasLevel
+      value: 100
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 1
+  - delay: 700ms
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 0
+  - delay: 300ms
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 1

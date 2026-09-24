@@ -1,0 +1,20 @@
+name: Motion alarm trigger
+version: 1
+author: SparkLab
+steps:
+  - delay: 300ms
+  - expect-pin:
+      part-id: buzzer
+      pin: "+"
+      expected: 0
+  - set-control:
+      part-id: pir
+      control: motionDetected
+      value: 1
+  - wait-serial:
+      text: motion detected
+      timeout: 1s
+  - expect-pin:
+      part-id: buzzer
+      pin: "+"
+      expected: 1

@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "author": "SparkLab",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 160,
+      "left": 80,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-photoresistor-sensor",
+      "id": "ldr",
+      "top": 80,
+      "left": 400,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-relay-module",
+      "id": "relay",
+      "top": 250,
+      "left": 400,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r",
+      "top": 300,
+      "left": 640,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led",
+      "top": 300,
+      "left": 760,
+      "attrs": {
+        "color": "red"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "uno:5V",
+      "ldr:VCC",
+      "red",
+      []
+    ],
+    [
+      "uno:GND.1",
+      "ldr:GND",
+      "black",
+      []
+    ],
+    [
+      "ldr:AO",
+      "uno:A0",
+      "green",
+      []
+    ],
+    [
+      "uno:5V",
+      "relay:VCC",
+      "red",
+      []
+    ],
+    [
+      "uno:GND.1",
+      "relay:GND",
+      "black",
+      []
+    ],
+    [
+      "relay:IN",
+      "uno:8",
+      "green",
+      []
+    ],
+    [
+      "uno:5V",
+      "relay:COM",
+      "red",
+      []
+    ],
+    [
+      "relay:NO",
+      "r:1",
+      "green",
+      []
+    ],
+    [
+      "r:2",
+      "led:A",
+      "green",
+      []
+    ],
+    [
+      "led:C",
+      "uno:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {}
+}

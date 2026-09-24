@@ -1,0 +1,198 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-parking-radar-distance",
+  "name": "Ultrasonic Parking Radar",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "sonar",
+        "type": "hc-sr04",
+        "x": 400,
+        "y": 90,
+        "rotate": 0,
+        "attrs": {}
+      },
+      {
+        "id": "buzzer",
+        "type": "buzzer-active",
+        "x": 400,
+        "y": 260,
+        "rotate": 0,
+        "attrs": {
+          "active": true
+        }
+      },
+      {
+        "id": "r",
+        "type": "resistor",
+        "x": 660,
+        "y": 140,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led",
+        "type": "led",
+        "x": 780,
+        "y": 140,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "sonar",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "sonar",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "sonar",
+          "pin": "TRIG"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D9"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "sonar",
+          "pin": "ECHO"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D10"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "buzzer",
+          "pin": "+"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "buzzer",
+          "pin": "-"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "uno",
+          "pin": "D13"
+        },
+        "to": {
+          "part": "r",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "r",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w9",
+        "from": {
+          "part": "led",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Ultrasonic Parking Radar\nconst int trigPin = 9;\nconst int echoPin = 10;\nconst int buzzerPin = 8;\nconst int ledPin = 13;\n\nlong measureCm() {\n  digitalWrite(trigPin, LOW);\n  delayMicroseconds(2);\n  digitalWrite(trigPin, HIGH);\n  delayMicroseconds(10);\n  digitalWrite(trigPin, LOW);\n\n  long duration = pulseIn(echoPin, HIGH);\n  return duration * 0.034 / 2;      // 0.034 cm per microsecond, there and back\n}\n\nvoid setup() {\n  pinMode(trigPin, OUTPUT);\n  pinMode(echoPin, INPUT);\n  pinMode(buzzerPin, OUTPUT);\n  pinMode(ledPin, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  long cm = measureCm();\n  Serial.print(cm);\n  Serial.println(\" cm\");\n\n  if (cm > 0 && cm < 30) {\n    digitalWrite(ledPin, HIGH);\n    long gap = map(cm, 2, 30, 60, 600);   // closer means faster beeps\n    digitalWrite(buzzerPin, HIGH);\n    delay(gap);\n    digitalWrite(buzzerPin, LOW);\n    delay(gap);\n  } else {\n    digitalWrite(ledPin, LOW);\n    digitalWrite(buzzerPin, LOW);\n    delay(60);\n  }\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "hcSr04Distance": 42,
+      "resistance": 220
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "ultrasonic-parking-radar",
+    "step": 7
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

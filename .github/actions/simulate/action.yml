@@ -1,0 +1,41 @@
+name: SparkLab simulate
+description: >
+  Run SparkLab automation scenarios headless and fail the job if any assertion
+  fails. Scenarios use the Wokwi step vocabulary (set-control, delay,
+  wait-serial, expect-pin, write-serial) plus SparkLab's extensions.
+
+inputs:
+  path:
+    description: Directory to search for *.test.yaml scenarios, recursively.
+    required: false
+    default: .
+  junit-report:
+    description: Where to write a JUnit XML report. Leave empty for none.
+    required: false
+    default: ''
+  node-version:
+    description: Node.js version to run the simulator on.
+    required: false
+    default: '22'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install
+      shell: bash
+      run: npm ci --no-audit --no-fund
+
+    - name: Run scenarios
+      shell: bash
+      env:
+        SCENARIO_PATH: ${{ inputs.path }}
+        JUNIT_REPORT: ${{ inputs.junit-report }}
+      run: |
+        args=(test "$SCENARIO_PATH" --recursive)
+        if [ -n "$JUNIT_REPORT" ]; then args+=(--junit-report "$JUNIT_REPORT"); fi
+        npm run --silent cli -- "${args[@]}"

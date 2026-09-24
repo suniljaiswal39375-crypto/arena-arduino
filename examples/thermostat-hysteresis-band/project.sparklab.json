@@ -1,0 +1,214 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-thermostat-hysteresis-band",
+  "name": "Thermostat with Hysteresis",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "dht",
+        "type": "dht11",
+        "x": 400,
+        "y": 80,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "dht11"
+        }
+      },
+      {
+        "id": "relay",
+        "type": "relay-1ch",
+        "x": 400,
+        "y": 240,
+        "rotate": 0,
+        "attrs": {
+          "activeLow": true,
+          "coilCurrent": 70
+        }
+      },
+      {
+        "id": "r",
+        "type": "resistor",
+        "x": 660,
+        "y": 300,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led",
+        "type": "led",
+        "x": 780,
+        "y": 300,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "dht",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "dht",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "dht",
+          "pin": "DATA"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D2"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC+"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC-"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "relay",
+          "pin": "IN"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "COM"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "relay",
+          "pin": "NO"
+        },
+        "to": {
+          "part": "r",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w9",
+        "from": {
+          "part": "r",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w10",
+        "from": {
+          "part": "led",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "#include <DHT.h>\n\n#define DHTPIN 2\n#define DHTTYPE DHT11\n\nDHT dht(DHTPIN, DHTTYPE);\nconst int relayPin = 8;\n\nconst float heatOn = 24.0;    // switch the heater on below this\nconst float heatOff = 27.0;   // and off again above this\n\nbool heating = false;\n\nvoid setup() {\n  pinMode(relayPin, OUTPUT);\n  digitalWrite(relayPin, HIGH);   // active LOW relay: start off\n  dht.begin();\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  float t = dht.readTemperature();\n\n  if (!heating && t < heatOn) heating = true;\n  else if (heating && t > heatOff) heating = false;\n\n  digitalWrite(relayPin, heating ? LOW : HIGH);\n  Serial.println(t);\n  delay(500);\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "dhtTemperature": 27,
+      "dhtHumidity": 55,
+      "resistance": 220
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "thermostat-hysteresis",
+    "step": 8
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

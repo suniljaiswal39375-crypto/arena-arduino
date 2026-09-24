@@ -1,0 +1,23 @@
+name: Streetlight at dusk and dawn
+version: 1
+author: SparkLab
+steps:
+  - set-control:
+      part-id: ldr
+      control: ldrLux
+      value: 900
+  - delay: 1s
+  - expect-pin:
+      part-id: led
+      pin: A
+      expected: 0
+  - set-control:
+      part-id: ldr
+      control: ldrLux
+      value: 60
+  - delay: 1s
+  - expect-pin:
+      part-id: led
+      pin: A
+      expected: 1
+  - assert-no-diagnostic: short-circuit

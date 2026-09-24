@@ -1,0 +1,299 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-greenhouse-autonomy",
+  "name": "Smart Greenhouse Climate",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 60,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "dht",
+        "type": "dht11",
+        "x": 360,
+        "y": 70,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "dht11"
+        }
+      },
+      {
+        "id": "soil",
+        "type": "soil-moisture",
+        "x": 360,
+        "y": 180,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "soil"
+        }
+      },
+      {
+        "id": "servo",
+        "type": "servo-sg90",
+        "x": 360,
+        "y": 290,
+        "rotate": 0,
+        "attrs": {
+          "minAngle": 0,
+          "maxAngle": 180,
+          "minPulse": 544,
+          "maxPulse": 2400
+        }
+      },
+      {
+        "id": "relay",
+        "type": "relay-1ch",
+        "x": 360,
+        "y": 400,
+        "rotate": 0,
+        "attrs": {
+          "activeLow": true,
+          "coilCurrent": 70
+        }
+      },
+      {
+        "id": "lcd",
+        "type": "lcd-16x2-i2c",
+        "x": 660,
+        "y": 200,
+        "rotate": 0,
+        "attrs": {
+          "cols": 16,
+          "rows": 2,
+          "address": 39
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "dht",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "dht",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "dht",
+          "pin": "DATA"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D2"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "soil",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "soil",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "soil",
+          "pin": "AO"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "A1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "servo",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "servo",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w9",
+        "from": {
+          "part": "servo",
+          "pin": "SIG"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D9"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w10",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC+"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w11",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC-"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w12",
+        "from": {
+          "part": "relay",
+          "pin": "IN"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w13",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "lcd",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w14",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "lcd",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w15",
+        "from": {
+          "part": "lcd",
+          "pin": "SDA"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "A4"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w16",
+        "from": {
+          "part": "lcd",
+          "pin": "SCL"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "A5"
+        },
+        "color": "green"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "#include <DHT.h>\n#include <LiquidCrystal_I2C.h>\n#include <Servo.h>\n\n#define DHTPIN 2\n#define DHTTYPE DHT11\n\nDHT dht(DHTPIN, DHTTYPE);\nLiquidCrystal_I2C lcd(0x27, 16, 2);\nServo vent;\n\nconst int soilPin = A1;\nconst int pumpPin = 8;\n\nconst float ventAbove = 28.0;     // open the vent when hotter than this\nconst float ventBelow = 24.0;     // and close it again below this\nconst int drySoil = 300;          // water when the soil reads drier than this\n\nbool ventOpen = false;\n\nvoid setup() {\n  dht.begin();\n  lcd.init();\n  lcd.backlight();\n  vent.attach(9);\n  vent.write(0);                  // closed\n  pinMode(pumpPin, OUTPUT);\n  digitalWrite(pumpPin, HIGH);    // active LOW relay: pump off\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  float t = dht.readTemperature();\n  int soil = analogRead(soilPin);\n\n  if (!ventOpen && t > ventAbove) { vent.write(90); ventOpen = true; }\n  else if (ventOpen && t < ventBelow) { vent.write(0); ventOpen = false; }\n\n  if (soil < drySoil) digitalWrite(pumpPin, LOW);\n  else digitalWrite(pumpPin, HIGH);\n\n  lcd.setCursor(0, 0);\n  lcd.print(\"T:\");\n  lcd.print(t);\n  lcd.print(\"C  V:\");\n  lcd.print(ventOpen ? \"open \" : \"shut \");\n\n  lcd.setCursor(0, 1);\n  lcd.print(\"soil \");\n  lcd.print(soil);\n  lcd.print(\"     \");\n\n  Serial.print(t);\n  Serial.print(\" C, soil \");\n  Serial.println(soil);\n  delay(500);\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "dhtTemperature": 27,
+      "dhtHumidity": 55,
+      "soilMoisture": 380
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "smart-greenhouse",
+    "step": 8
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

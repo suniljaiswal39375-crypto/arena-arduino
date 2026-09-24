@@ -1,0 +1,41 @@
+name: Thermostat hysteresis band
+version: 1
+author: SparkLab
+description: The heater comes on below 24 C, goes off above 27 C, and holds its state in between.
+steps:
+  - set-control:
+      part-id: dht
+      control: dhtTemperature
+      value: 20
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 0
+  - set-control:
+      part-id: dht
+      control: dhtTemperature
+      value: 25
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 0
+  - set-control:
+      part-id: dht
+      control: dhtTemperature
+      value: 28
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 1
+  - set-control:
+      part-id: dht
+      control: dhtTemperature
+      value: 25
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 1

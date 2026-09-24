@@ -1,0 +1,25 @@
+name: Greenhouse autonomy
+version: 1
+author: SparkLab
+steps:
+  - set-control:
+      part-id: soil
+      control: soilMoisture
+      value: 150
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 0
+  - set-control:
+      part-id: soil
+      control: soilMoisture
+      value: 800
+  - delay: 1s
+  - expect-pin:
+      part-id: relay
+      pin: IN
+      expected: 1
+  - assert-serial-regex:
+      pattern: "soil 800"
+      timeout: 1s

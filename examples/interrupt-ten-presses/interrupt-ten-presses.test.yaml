@@ -1,0 +1,21 @@
+name: Ten presses on an interrupt
+version: 1
+author: SparkLab
+steps:
+  - delay: 100ms
+  - repeat:
+      times: 10
+      steps:
+        - set-control:
+            part-id: btn
+            control: pressed
+            value: 1
+        - delay: 40ms
+        - set-control:
+            part-id: btn
+            control: pressed
+            value: 0
+        - delay: 40ms
+  - wait-serial:
+      text: reached 10
+      timeout: 1s

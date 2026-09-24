@@ -1,0 +1,27 @@
+name: Button press
+version: 1
+author: SparkLab
+steps:
+  - delay: 100ms
+  - expect-pin:
+      part-id: led1
+      pin: A
+      expected: 0
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 1
+  - delay: 50ms
+  - expect-pin:
+      part-id: led1
+      pin: A
+      expected: 1
+  - set-control:
+      part-id: btn
+      control: pressed
+      value: 0
+  - delay: 50ms
+  - expect-pin:
+      part-id: led1
+      pin: A
+      expected: 0
