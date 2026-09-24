@@ -25,6 +25,7 @@ peripherals.ts  I2C LCD + SSD1306 OLED TWI bus decoders (byte-exact protocol
                 slicing); see also the 5x7 font table in font5x7.ts.
 font5x7.ts      the classic Adafruit_GFX 5x7 glyph table (from glcdfont.c),
                 embedded so the OLED decoder recovers text byte-exactly.
+servo.ts        Timer1 servo-pulse decode (Fast-PWM mode 14 → D9/D10 pulse µs).
 engine.ts       FirmwareEngine: host-bounded instruction frame + Circuit reuse.
 firmware-runtime.ts  one lifecycle for worker/client/tests (resolve + load + run).
 adapt.ts        FirmwareSnapshot -> UI SimSnapshot projection.
@@ -52,12 +53,12 @@ re-labelled interpreter.
   the functional engine uses (LEDs, button pull-ups, relay contacts, stray
   rail voltages, sensor/potentiometer inputs).
 - **NOT WIRED (reported by name, never guessed):** `matrix`/`seven-seg`
-  (shift-register timing), `stepper`, `servo` pulse timing, USART framing
-  other than 8N1, and *non-text* SSD1306 graphics (`drawPixel`/`drawLine`/
-  bitmap regions are text-irrelevant and, like the functional engine's OLED
-  model, are not rasterised). Each appears in `unsupported` on the snapshot
-  exactly like the functional engine reports unsupported APIs. `RP2040` /
-  `ESP32` / STM32 are later phases.
+  (shift-register timing), `stepper`, USART framing other than 8N1, and
+  *non-text* SSD1306 graphics (`drawPixel`/`drawLine`/ bitmap regions are
+  text-irrelevant and, like the functional engine's OLED model, are not
+  rasterised). Each appears in `unsupported` on the snapshot exactly like the
+  functional engine reports unsupported APIs. `RP2040` / `ESP32` / STM32 are
+  later phases.
 - **DECODED on the bus:** the I2C character LCD (`lcd-16x2-i2c` and friends) —
   the engine slices the real TWI (I2C) signals a LiquidCrystal_I2C-style sketch
   clocks out (START / SLA+W / PCF8574 expander bytes with EN-pulse latching /
@@ -72,6 +73,18 @@ re-labelled interpreter.
   at a 6-column advance. `oled.e2e.test.ts` drives it with real AVR TWI
   firmware; `parity/oled-parity.test.ts` proves the same `"SparkLab"` appears
   on both engines.
+- **DECODED from the registers: servo pulse timing** (`servo.ts`) — Timer1's
+  real register file is read each frame; when it is in the Servo library's
+  Fast-PWM mode 14 (ICR1 top, prescaler 8 → 50 Hz), the compare values are the
+  exact pulse widths on D9/D10, and the engine hands them to the shared
+  circuit's `servoWrite` — the same surface the functional engine's
+  `Servo.write(us)` reaches. `analogWrite`'s PWM modes are distinguishable
+  and never mis-read as a servo. `servo.e2e.test.ts` positions an SG90 from
+  real AVR machine code; `parity/servo-parity.test.ts` proves
+  `writeMicroseconds(1500)` and `OCR1A = 3000` land on the same angle. One
+  honesty caveat (same family as the clock bridge): the *period* is not
+  cycle-counted through `delay()`, only the *pulse width*, which is a pure
+  function of the register values the firmware programmed.
 
 ## Determinism and the clock bridge
 
@@ -115,5 +128,11 @@ npm test -- src/lib/sim/parity
 - `avr.test.ts` — Intel HEX decode (address/checksum/bounds), the sentinel
   fixture executing real instructions, `delay()` pacing via the shim, busy-idle
   hosting, USART → serial, ADC → analogRead parity.
+- `servo.test.ts` — Timer1 register decode: servo-mode pulses, analogWrite
+  non-servo rejection, disabled-compare and zero-top guards.
+- `servo.e2e.test.ts` — real AVR machine code in Servo-library mode 14 drives
+  an SG90 on D9/D10 through the shared circuit.
 - `parity/blink-parity.test.ts` — the acceptance test from the PDF: the same
   observable behaviour (D13 toggles an LED on the same net) on both engines.
+- `parity/oled-parity.test.ts` and `parity/servo-parity.test.ts` — the same
+  visible output/angle on both engines for the OLED and servo decoders.

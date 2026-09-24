@@ -320,3 +320,27 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - The decoder recovers an unchanged framebuffer as one `oledCommand('render',
   [lines])` per fresh frame; it overwrites rather than accumulates, unlike the
   functional engine's append-only `print`/`println` model.
+
+## Servo pulse timing (Timer1 register decode) — 24 September 2026
+
+- Servo position is decoded from Timer1's **real register state** (`servo.ts`),
+  not by intercepting the `Servo` library: the engine reads TCCR1A/TCCR1B/
+  ICR1/OCR1A/OCR1B each frame. Only the Servo library's waveform — Fast PWM
+  mode 14 (ICR1 top, prescaler 8 → 50 Hz) with a compare output enabled — is
+  treated as a servo signal; `analogWrite`'s modes 5/7 are distinguishable and
+  never mis-read. The pulse µs is `OCR1x * prescaler / 16`, exactly as the part
+  measures it.
+- The decoded µs is handed to `Circuit.servoWrite(pin, us)`, the very surface
+  the functional interpreter's `Servo.writeMicroseconds` reaches, so the two
+  engines agree by construction (proven in `parity/servo-parity.test.ts`).
+- Honesty caveat (same family as the clock bridge): the pulse **period** is not
+  cycle-counted through `delay()` — the deterministic slice fast-forwards
+  `delay()`, so Timer1 does not accumulate the 20 ms tick span a hardware part
+  sees while the sketch waits. The pulse **width** is a pure function of the
+  registers the firmware programmed and is exact. Recorded in the fidelity list
+  rather than silently approximated.
+- `Servo.write(angle)` was deliberately **not** modelled as a register decode:
+  the real library's angle→µs trim (544–2400 with 1472 µs at 90°) is a
+  library constant, not a register fact. The parity fixture therefore uses
+  `writeMicroseconds(1500)` ↔ `OCR1A = 3000` (both 1500 µs), not an angle
+  claim the register file cannot carry.

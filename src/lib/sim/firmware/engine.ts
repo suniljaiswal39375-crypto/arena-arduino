@@ -39,6 +39,7 @@ import {
 } from './avr';
 import type { FirmwareStatus, FirmwareSnapshot } from './interfaces';
 import { I2cLcdDecoder, Ssd1306Decoder, type I2cLcdEvent, type TwiEvent } from './peripherals';
+import { timer1ServoFromRegisters, OC1A_PIN, OC1B_PIN } from './servo';
 
 export const FW_LIMITS = {
   /** Instructions per debt-loop segment (mirrors the interpreter's OP_BUDGET yield). */
@@ -55,13 +56,12 @@ export const FW_LIMITS = {
 
 /** Adapters the AVR slice v0 does not yet decode on the bus. */
 const UNWIRED_ADAPTERS: ReadonlySet<string> = new Set([
-  // 'lcd' and 'oled' are now decoded from the TWI bus: see peripherals.ts
-  // (I2cLcdDecoder / Ssd1306Decoder). A document must carry an OLED part with
-  // the decoder's address before its display is rendered.
+  // 'lcd' and 'oled' are now decoded from the TWI bus (peripherals.ts), and
+  // 'servo' is decoded from Timer1's real register state (servo.ts). A servo
+  // part needs a Timer1 servo-mode pulse on D9/D10 to render a position.
   'matrix',
   'seven-seg',
   'stepper',
-  'servo',
   'chip',
 ]);
 
@@ -99,6 +99,8 @@ export class FirmwareEngine {
   private pendingLcdEvents: I2cLcdEvent[] = [];
   /** Per-address SSD1306 decoders, keyed by 7-bit slave address. */
   private ssd1306 = new Map<number, Ssd1306Decoder>();
+  /** Pulse width the last Timer1 servo decode produced, µs, keyed by pin. */
+  private lastServoUs = new Map<number, number>();
 
   constructor(doc: ProjectDoc) {
     this.doc = doc;
@@ -179,6 +181,7 @@ export class FirmwareEngine {
     this.plotLabels = [];
     this.pinDrive.clear();
     this.pinOutputs.clear();
+    this.lastServoUs.clear();
     this.circuit = new Circuit(doc);
 
     const boardInst = doc.diagram.parts.find((p) => getPart(p.type)?.adapter === 'board');
@@ -260,6 +263,28 @@ export class FirmwareEngine {
         this.circuit.oledCommand(event.command, event.args);
       }
     }
+  }
+
+  /**
+   * Read Timer1's real register state and, when it is in the Servo library's
+   * Fast-PWM mode 14, translate the compare values into the pulse widths the
+   * shared circuit's servo sees — exactly how the functional engine's
+   * `Servo.write(us)` reaches the same part.
+   */
+  private drainServo(): void {
+    const sandbox = this.sandbox;
+    if (!sandbox) return;
+    const { pin9Us, pin10Us } = timer1ServoFromRegisters(sandbox.cpu.data);
+    this.applyServoPulse(OC1A_PIN, pin9Us);
+    this.applyServoPulse(OC1B_PIN, pin10Us);
+  }
+
+  private applyServoPulse(pin: number, us: number | null): void {
+    if (us === null) return; // not a servo signal on this pin
+    if (us < 500) return; // below any real servo's minimum pulse: not attached
+    if (this.lastServoUs.get(pin) === us) return; // unchanged: no write churn
+    this.lastServoUs.set(pin, us);
+    this.circuit.servoWrite(pin, us);
   }
 
   private flushSerialLine(): void {
@@ -437,6 +462,7 @@ export class FirmwareEngine {
     this.syncPinModel();
     this.drainI2cLcdEvents();
     this.drainOledEvents();
+    this.drainServo();
     return { snapshot: this.snapshot(), err: null };
   }
 

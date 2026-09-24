@@ -73,11 +73,11 @@ describe('FirmwareEngine blink (real machine code)', () => {
 
   it('reports timing-only peripherals by name instead of guessing', () => {
     const { doc, hex } = blinkFixture();
-    const servo = makePart('servo-sg90', 500, 80);
-    doc.diagram.parts.push(servo);
+    const stepper = makePart('uln2003', 500, 80);
+    doc.diagram.parts.push(stepper);
     const fw = new FirmwareEngine(doc);
     fw.load(doc, hex, 'arduino-uno');
-    expect([...fw.snapshot().unsupported].join(' ')).toMatch(/servo/);
+    expect([...fw.snapshot().unsupported].join(' ')).toMatch(/stepper|uln2003/);
   });
 
   it('does not report the decoded I2C LCD as unsupported', () => {

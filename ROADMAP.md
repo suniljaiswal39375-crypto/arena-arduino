@@ -72,9 +72,9 @@ Still to do (same order as before):
   the single-node form of the same contract.
 - `sim-core` as WASM beyond AVR8: RP2040, then ESP32 (Xtensa / RISC-V); STM32 cores.
 - Peripheral models the AVR slice still reports as unsupported rather than guessing:
-  matrix/seven-seg decode, `servo` pulse timing, `stepper`. (The SSD1306 OLED is now
-  decoded from the TWI bus — see `peripherals.ts` `Ssd1306Decoder` + `font5x7.ts` —
-  with parity support for `Adafruit_SSD1306::print`/`println` text.)
+  matrix/seven-seg decode and `stepper`. (The SSD1306 OLED is decoded from the TWI bus —
+  `Ssd1306Decoder` + `font5x7.ts` — and servo pulse timing is decoded from Timer1's real
+  registers — `servo.ts` — both with cross-engine parity.)
 - ESP32/Pico virtual WiFi, SD, and the debugger/GDB later phases.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
@@ -242,10 +242,11 @@ The complete PDF roadmap is not finished by this checkpoint. Prefer correct test
   gate, honest toolchain discovery) and the firmware worker mirroring `SimClient`'s protocol.
 - Added the PDF's parity acceptance test: the same blink project produces the identical LED trace
   on the functional interpreter and on real AVR machine code.
-- Honest boundaries: I2C displays, matrix/seven-seg, servo/stepper are reported by name as
-  unsupported on the AVR bus rather than guessed; `arduino-cli` binaries could not be downloaded
-  in this sandbox (release CDN blocked), so compile **execution** is tested behind a fake
-  executor, never claimed as a live build. RP2040/ESP32/STM32 remain future work.
+- Honest boundaries: the I2C displays and the servo are now decoded from the real AVR bus
+  (`peripherals.ts` / `servo.ts`); matrix/seven-seg and steppers are reported by name as
+  unsupported rather than guessed. `arduino-cli` binaries could not be downloaded in this
+  sandbox (release CDN blocked), so compile **execution** is tested behind a fake executor,
+  never claimed as a live build. RP2040/ESP32/STM32 remain future work.
 
 Verification this session: 520 unit/render tests pass (28 files, up from 482); the parity test
 and 40 firmware/compile/hex tests are new; strict typecheck and production build pass.
