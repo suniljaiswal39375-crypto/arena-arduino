@@ -57,7 +57,13 @@ edge capture, 2 × 2,048 bounded events, unknown (`X`) for unmodelled sources an
 writes have virtual-µs timestamps, AVR GPIO writes use instruction-cycle offsets
 (62.5 ns), and peripheral/PWM outputs without a waveform decoder remain unknown.
 Wiring changes invalidate old waves; captured data stays out of the document and
-browser persistence. See `instruments/logic-analyzer.integration.test.ts`.
+browser persistence. `instruments/oscilloscope.ts` provides a dual-channel calibrated
+virtual-time oscilloscope with 10 horizontal divisions (100 µs/div to 1 s/div), vertical
+scales (0.5 to 5 V/div), auto-measurements (Vpp, Vmax, Vmin, Vavg, Vrms, frequency, duty,
+rise time), trigger modes (Auto, Normal, Single) and hold controls. `instruments/multimeter.ts`
+provides a netlist-solved digital multimeter supporting DC V, mA, resistance, continuity and
+diode testing with honest unknown/open-loop states. Cross-engine parity tests in `parity/instruments-parity.test.ts`
+assert identical readings across both engines. See `instruments/` for scope and tests.
 
 **How the virtual clock works.** `tick(realMs, speed)` converts real elapsed time into a
 microsecond budget and runs the interpreter's generator until the budget is spent. Time the sketch

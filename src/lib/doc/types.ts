@@ -105,10 +105,30 @@ export interface Diagram {
   connections: Wire[];
 }
 
+export interface ScopePrefs {
+  ch1?: string | null;
+  ch2?: string | null;
+  timebaseUs?: number;
+  trigger?: {
+    mode?: 'auto' | 'normal' | 'single';
+    source?: 'ch1' | 'ch2';
+    slope?: 'rising' | 'falling';
+    thresholdVolts?: number;
+  };
+}
+
+export interface MultimeterPrefs {
+  mode?: 'dc-v' | 'dc-i' | 'resistance' | 'continuity' | 'diode';
+  probeA?: string | null;
+  probeB?: string | null;
+}
+
 export interface SimPrefs {
   prefsVersion: 2;
   inputs: Record<string, number>;
   speed: number;
+  scope?: ScopePrefs;
+  multimeter?: MultimeterPrefs;
 }
 
 export interface Provenance {

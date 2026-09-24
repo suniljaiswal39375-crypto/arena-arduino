@@ -38,6 +38,7 @@ import {
   type IntelHexImage,
 } from './avr';
 import type { FirmwareStatus, FirmwareSnapshot } from './interfaces';
+import type { MultimeterMode, MultimeterReading } from '../instruments/multimeter';
 import { I2cLcdDecoder, Ssd1306Decoder, type I2cLcdEvent, type TwiEvent } from './peripherals';
 import { timer1ServoFromRegisters, OC1A_PIN, OC1B_PIN } from './servo';
 
@@ -590,6 +591,14 @@ export class FirmwareEngine {
 
   /* ----------------------------------------------------------- snapshot -- */
 
+  multimeterReading(
+    mode: MultimeterMode = 'dc-v',
+    probeA: string | null = null,
+    probeB: string | null = null,
+  ): MultimeterReading {
+    return this.circuit.multimeterReading(mode, probeA, probeB);
+  }
+
   snapshot(): FirmwareSnapshot {
     const parts: Record<string, PartState> = {};
     if (this.started) {
@@ -605,6 +614,8 @@ export class FirmwareEngine {
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
       logicAnalyzers: this.circuit.logicTraces(),
+      scope: this.circuit.scopeTrace(),
+      multimeter: this.circuit.multimeterReading(),
       status: this.status(),
       unsupported: [...new Set([...this.unsupported, ...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()])],
     };

@@ -122,7 +122,7 @@ describe('builder render with live simulator state', () => {
     expect(snap.serial.length).toBeGreaterThan(0);
 
     const seen = new Set<string>();
-    const tabs: DockTab[] = ['serial', 'plotter', 'logic', 'inputs', 'diagnostics', 'build'];
+    const tabs: DockTab[] = ['serial', 'plotter', 'scope', 'logic', 'multimeter', 'inputs', 'diagnostics', 'build'];
     for (const tab of tabs) {
       useLab.setState({ dock: tab });
       const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
@@ -174,6 +174,34 @@ describe('builder render with live simulator state', () => {
     expect(inspector).toContain('retained edges');
     expect(glyph).toContain('edges');
     useLab.setState({ dock: 'serial', selection: null });
+  });
+
+  it('renders oscilloscope screen reticle and auto-measurements in the Scope tab', () => {
+    const doc = templateDoc('uno-blink')!;
+    useLab.getState().loadDoc(doc);
+    const snap = liveSnapshot(doc);
+    useLab.setState({ dock: 'scope' });
+    const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
+    expect(html).toContain('Oscilloscope display reticle');
+    expect(html).toContain('Auto-measurements');
+    expect(html).toContain('CH1');
+    expect(html).toContain('Timebase');
+    expect(html).toContain('Trigger');
+    useLab.setState({ dock: 'serial' });
+  });
+
+  it('renders digital multimeter face, LCD digits, and mode dial in the Multimeter tab', () => {
+    const doc = templateDoc('uno-blink')!;
+    useLab.getState().loadDoc(doc);
+    const snap = liveSnapshot(doc);
+    useLab.setState({ dock: 'multimeter' });
+    const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
+    expect(html).toContain('DC Voltage');
+    expect(html).toContain('Resistance');
+    expect(html).toContain('Continuity');
+    expect(html).toContain('Probe A (+)');
+    expect(html).toContain('Probe B (-)');
+    useLab.setState({ dock: 'serial' });
   });
 
   it('shows the serial output of the run in the Serial tab', () => {

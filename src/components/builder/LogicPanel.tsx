@@ -75,6 +75,11 @@ export function LogicPanel({ snapshot }: { snapshot: SimSnapshot | null }) {
           </label>
         )}
         <span className="mono" lang="en">{trace.label} · {trace.edges.length} edges · {formatLogicTime(trace.endNs - trace.startNs)} retained</span>
+        {trace.trigger && (
+          <span className="ml-2 rounded border border-[var(--color-border)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-dim)]">
+            Trigger: {trace.trigger.mode === 'none' ? 'None' : `D${trace.trigger.channel} ${trace.trigger.slope} (${trace.trigger.triggered ? 'Triggered' : 'Waiting'})`}
+          </span>
+        )}
         <button type="button" className="btn btn-sm ml-auto" disabled={!trace.grounded}
           onClick={() => downloadVcd(trace, doc.name)}>{t('exportVcd')}</button>
       </div>

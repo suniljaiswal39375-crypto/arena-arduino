@@ -28,6 +28,8 @@ export function firmwareSnapshotAsSim(snapshot: FirmwareSnapshot, loadError: Sim
     plot: snapshot.plot,
     plotLabels: snapshot.plotLabels,
     logicAnalyzers: snapshot.logicAnalyzers,
+    scope: snapshot.scope,
+    multimeter: snapshot.multimeter,
     error,
     unsupported: snapshot.unsupported,
   };

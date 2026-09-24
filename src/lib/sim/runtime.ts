@@ -7,6 +7,16 @@ import type { PinMode, SimHost } from './host';
 import { INPUT, INPUT_PULLUP, OUTPUT } from './host';
 import { GpioStepperDecoder, Max7219Decoder, SEGMENT_PINS, sevenSegmentValue, type SerialPins } from './gpio-devices';
 import { LogicCapture, LOGIC_CHANNELS, MAX_LOGIC_ANALYZERS, type LogicLevel, type LogicTrace } from './instruments/logic-analyzer';
+import { Oscilloscope, type ScopeTrace } from './instruments/oscilloscope';
+import {
+  solveMultimeter,
+  type MultimeterMode,
+  type MultimeterReading,
+} from './instruments/multimeter';
+
+export type VoltageReading =
+  | { kind: 'voltage'; volts: number; source: 'driven' | 'rail' | 'sensor' | 'ground' | 'relay' | 'pullup' }
+  | { kind: 'unmeasured'; reason: 'floating' | 'unpowered' | 'open' | 'unwired' | 'not-running' };
 
 export interface LedState {
   kind: 'led';
@@ -161,6 +171,8 @@ export class Circuit implements SimHost {
   private logicCaptures = new Map<string, LogicCapture>();
   /** Peripheral waveforms not decoded by the eight-channel GPIO probe. */
   private unknownLogicPins = new Set<number>();
+  /** Virtual-time dual-channel oscilloscope instance. Transient worker memory only. */
+  private oscilloscope = new Oscilloscope('scope-main');
 
   clock = 0;
   /** Lines printed since the plotter last harvested, used for CSV extraction. */
@@ -222,6 +234,7 @@ export class Circuit implements SimHost {
     }
     this.rebuildGpioDevices();
     this.rebuildLogicCaptures();
+    this.rebuildOscilloscope();
   }
 
   /** A probe is only meaningful relative to an actual ground reference. */
@@ -344,13 +357,142 @@ export class Circuit implements SimHost {
   /** AVR SPI/UART/TWI/Timer pins are X until a timed waveform decoder exists. */
   setUnknownLogicPins(pins: ReadonlySet<number>): void {
     this.unknownLogicPins = new Set(pins);
-    this.sampleLogicCaptures();
+    this.sampleInstruments();
   }
 
   /** Clear stale waves on a sketch reload without storing them in the document. */
   resetLogicCaptures(): void {
     this.logicCaptures.clear();
     this.rebuildLogicCaptures();
+  }
+
+  private rebuildOscilloscope(): void {
+    const scopePrefs = this.doc.sim?.scope;
+    let ch1 = scopePrefs?.ch1;
+    let ch2 = scopePrefs?.ch2;
+
+    if (ch1 === undefined) {
+      if (this.board) {
+        ch1 = `${this.board.id}:D13`;
+      }
+    }
+    if (ch2 === undefined) {
+      if (this.board) {
+        ch2 = `${this.board.id}:A0`;
+      }
+    }
+
+    this.oscilloscope.setConfig({
+      ch1Source: ch1 ?? null,
+      ch2Source: ch2 ?? null,
+      timebaseUsPerDiv: scopePrefs?.timebaseUs ?? 1000,
+      trigger: scopePrefs?.trigger,
+    });
+  }
+
+  nodeVoltage(nodeKey: string): VoltageReading {
+    if (!this.nl.nodeNet.has(nodeKey)) {
+      return { kind: 'unmeasured', reason: 'unwired' };
+    }
+    const netId = this.nl.nodeNet.get(nodeKey)!;
+    const net = this.nl.nets.get(netId);
+    if (!net) return { kind: 'unmeasured', reason: 'open' };
+
+    if (net.isGround) {
+      return { kind: 'voltage', volts: 0.0, source: 'ground' };
+    }
+
+    if (this.netVoltage.has(netId)) {
+      return { kind: 'voltage', volts: this.netVoltage.get(netId)!, source: 'driven' };
+    }
+
+    if (net.isPower && net.voltage !== null) {
+      return { kind: 'voltage', volts: net.voltage, source: 'rail' };
+    }
+
+    // Potentiometer wiper or sensor module
+    for (const inst of this.partsOnNet(netId)) {
+      const def = getPart(inst.type);
+      if (def?.adapter === 'potentiometer') {
+        const vccNet = this.nl.nodeNet.get(`${inst.id}:VCC`) ?? this.nl.nodeNet.get(`${inst.id}:3`);
+        const gndNet = this.nl.nodeNet.get(`${inst.id}:GND`) ?? this.nl.nodeNet.get(`${inst.id}:1`);
+        const isPowered = vccNet && this.nl.nets.get(vccNet)?.isPower;
+        const isGrounded = gndNet && this.nl.nets.get(gndNet)?.isGround;
+        if (isPowered && isGrounded) {
+          const v = (this.inputValue(inst, 'potentiometer') / 1023) * 5.0;
+          return { kind: 'voltage', volts: Math.round(v * 1000) / 1000, source: 'sensor' };
+        }
+        return { kind: 'unmeasured', reason: 'unpowered' };
+      }
+      if (def?.adapter === 'sensor-value') {
+        const val = (this.inputValue(inst) / 1023) * 5.0;
+        return { kind: 'voltage', volts: Math.round(val * 1000) / 1000, source: 'sensor' };
+      }
+    }
+
+    // Relay contacts
+    const cv = this.contactVoltage(netId, new Set([netId]));
+    if (cv !== null) {
+      return { kind: 'voltage', volts: cv, source: 'relay' };
+    }
+
+    // Input pullup on board pins
+    for (const [pinNum, mappedNode] of this.pinNode) {
+      if (this.nl.nodeNet.get(mappedNode) === netId && this.pinModes.get(pinNum) === INPUT_PULLUP) {
+        const isPulledLow = this.partsOnNet(netId).some((inst) => {
+          const def = getPart(inst.type);
+          if (def?.adapter === 'button' && this.inputValue(inst) !== 0) {
+            const other = def.pins.find((p) => p.name !== this.pinNameOnNet(inst, netId));
+            if (other) {
+              const otherNet = this.nl.nodeNet.get(`${inst.id}:${other.name}`);
+              return otherNet && this.nl.nets.get(otherNet)?.isGround;
+            }
+          }
+          return false;
+        });
+        return { kind: 'voltage', volts: isPulledLow ? 0.0 : 5.0, source: 'pullup' };
+      }
+    }
+
+    return { kind: 'unmeasured', reason: 'floating' };
+  }
+
+  private sampleOscilloscope(): void {
+    let ch1Volts: number | null = null;
+    if (this.oscilloscope.ch1Source) {
+      const v = this.nodeVoltage(this.oscilloscope.ch1Source);
+      ch1Volts = v.kind === 'voltage' ? v.volts : null;
+    }
+    let ch2Volts: number | null = null;
+    if (this.oscilloscope.ch2Source) {
+      const v = this.nodeVoltage(this.oscilloscope.ch2Source);
+      ch2Volts = v.kind === 'voltage' ? v.volts : null;
+    }
+    this.oscilloscope.observe(this.clock, ch1Volts, ch2Volts);
+  }
+
+  sampleInstruments(): void {
+    this.sampleLogicCaptures();
+    this.sampleOscilloscope();
+  }
+
+  scopeTrace(): ScopeTrace {
+    return this.oscilloscope.snapshot(this.clock);
+  }
+
+  multimeterReading(
+    mode: MultimeterMode = 'dc-v',
+    probeA: string | null = null,
+    probeB: string | null = null,
+  ): MultimeterReading {
+    const defaultA = probeA ?? this.doc.sim?.multimeter?.probeA ?? (this.board ? `${this.board.id}:D13` : null);
+    const defaultB = probeB ?? this.doc.sim?.multimeter?.probeB ?? (this.board ? `${this.board.id}:GND` : null);
+    return solveMultimeter(this.doc, this.nl, this, mode, defaultA, defaultB);
+  }
+
+  resetInstruments(): void {
+    this.resetLogicCaptures();
+    this.oscilloscope.reset();
   }
 
   logicTraces(): LogicTrace[] {
@@ -470,7 +612,7 @@ export class Circuit implements SimHost {
     }
     for (const net of touched) this.updateOutputs(net);
     this.sampleGpioDevices();
-    this.sampleLogicCaptures();
+    this.sampleInstruments();
     this.pollInterrupts();
   }
 
@@ -596,6 +738,7 @@ export class Circuit implements SimHost {
     const total = Math.max(0, us);
     if (this.interrupts.size === 0 || this.inIsr) {
       this.clock += total;
+      this.sampleInstruments();
       return;
     }
     let left = total;
@@ -605,6 +748,7 @@ export class Circuit implements SimHost {
       left -= step;
       this.pollInterrupts();
     }
+    this.sampleInstruments();
   }
 
   pinMode(pin: number, mode: PinMode): void {
@@ -623,7 +767,7 @@ export class Circuit implements SimHost {
       this.netDuty.delete(net);
     }
     this.sampleGpioDevices();
-    this.sampleLogicCaptures();
+    this.sampleInstruments();
   }
 
   digitalWrite(pin: number, value: number): void {
@@ -642,7 +786,7 @@ export class Circuit implements SimHost {
     for (const net of touched) this.updateOutputs(net);
     if (touched.size > 0) {
       this.sampleGpioDevices();
-      this.sampleLogicCaptures();
+      this.sampleInstruments();
       this.pollInterrupts();
     }
   }
@@ -813,7 +957,7 @@ export class Circuit implements SimHost {
     this.netDuty.set(net, duty);
     this.netVoltage.set(net, (duty / 255) * 5);
     this.updateOutputs(net);
-    this.sampleLogicCaptures();
+    this.sampleInstruments();
   }
 
   pulseIn(pin: number, level: number, timeoutUs: number): number {

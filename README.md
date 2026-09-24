@@ -69,8 +69,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
 | 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
-| Eight-channel virtual logic analyzer: grounded GPIO edge capture, live waveform, bounded VCD export on either engine | ✅ modelled slice · see limits below |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, oscilloscope/multimeter, AI mentor, multiplayer, 3D/scanning | ⏳ see ROADMAP |
+| Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, AI mentor, multiplayer, 3D/scanning | ⏳ see ROADMAP |
 
 ---
 
@@ -151,18 +151,11 @@ The optional build farm runs each sketch in a disposable, no-network Docker cont
 **Build logs** panel, with JSON compatibility. Docker integration **passed in GitHub Actions CI** (run 36048759643); it cannot
 be run in this sandbox, which has no Docker. See `ROADMAP.md` Phase 10 for limits.
 
-**Inspect bench (first instrument, Phase 12 partial).** Add *Logic Analyzer (8 ch)* from the
-palette; wire its GND to board GND and D0–D7 to board GPIO nets. Open the **Logic** dock tab
-to see live event-driven step traces, source pins and the most recent edges; **Export VCD**
-downloads a standard 1 ns-timescale VCD for the retained window. Up to two analyzers hold
-2,048 edges each in worker memory, never in the project/autosave or service-worker cache.
-Older edges are visibly counted when evicted. AVR GPIO port writes are stamped at their
-16 MHz instruction-cycle position (62.5 ns cycles, rounded to 1 ns); the functional engine
-stamps writes at its virtual microsecond time. This is **not a physical 1 GHz sampler** or
-a trigger; floating/contended nets, missing ground and peripheral-owned SPI/UART/TWI/Timer
-waveforms are unknown (`X`), not guessed. Functional averaged PWM also appears as `X`.
-Wiring changes reset the affected capture. See `src/lib/sim/instruments/` for scope/tests.
-Multimeter, analogue oscilloscope and physical instrument calibration remain to do.
+**Inspect bench (Phase 12 instruments milestone).** The bottom dock now houses calibrated virtual-time instruments across both engines:
+- **Dual-channel virtual-time oscilloscope (`Scope` tab):** Probe CH1 & CH2 on any pin/net; 10 horizontal divisions (100 µs/div to 1 s/div), vertical scales (0.5 to 5 V/div), auto-measurements (`Vpp`, `Vmax`, `Vmin`, `Vavg`, `Vrms`, frequency, duty cycle, rise time), configurable trigger modes (`Auto`, `Normal`, `Single`, rising/falling slope, threshold voltage) and freeze/hold controls.
+- **Digital multimeter (`Multimeter` tab):** Probe A (+) and Probe B (-) selectable on any pin/net across the schematic; modes DC Voltage (`V⎓`), DC Branch Current (`mA⎓`), Resistance (`Ω`), Continuity test with audio/visual beep (`🔊`), and Diode/LED test (`⏵|`). Solved from netlist graph impedance and simulated potentials. Floating, unreferenced or open nets report honest states (`O.L`, `unmeasured`, `floating`) rather than invented values.
+- **Eight-channel digital logic analyzer (`Logic` tab):** Live event-driven step traces, source pins, recent edge history, trigger support (edge/level), and bounded VCD export (up to 2,048 edges per analyzer).
+- **Zero persistence guarantee:** Waveform buffers and instrument samples live strictly in transient worker/React memory, never serialised into `ProjectDoc`, `localStorage`, or service-worker caches. Cross-engine differential parity verifies identical oscilloscope measurements and multimeter readings for both functional sketch execution and real AVR machine code. See `src/lib/sim/instruments/`. Physical GHz sampling and external probe hardware remain to do.
 
 ---
 

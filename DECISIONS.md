@@ -464,3 +464,34 @@ has been performed.
   official CLI/Core and real Docker AVR-to-avr8js/SSE integration. Local CLI/Docker
   remain unavailable; a public farm deployment and Cloudflare Workers build have
   not been verified.
+
+## Calibrated virtual-time oscilloscope, multimeter & trigger modes — 25 September 2026
+
+- **Virtual time rather than invented analog sampling.** Oscilloscope waveforms are sampled
+  directly at virtual simulation timestamps (`timeUs`), in strict lock-step with simulation
+  clock advances and pin transitions. We explicitly do NOT claim physical GHz sampling or
+  generate fake analog Gaussian noise. Nodes that are floating, undriven, unpowered, or
+  unreferenced are tracked as `null` / unmeasured and displayed with dashed traces / X markers
+  rather than guessed 0V.
+- **Graph-based electrical impedance for DMM.** The multimeter measures passive path impedance
+  using Dijkstra's algorithm across schematic connections, 0-ohm wire jumpers, breadboard
+  lines, and resistor components. Resistance between disconnected nodes yields `O.L` (open loop);
+  continuity threshold is set at 50 Ω with visual and optional audio beep. DC voltage computes
+  the potential difference relative to probe B (GND reference); DC current computes branch
+  current via Ohm's law ($I = \Delta V / R$), with direct rail shorts triggering overcurrent
+  warnings. Diode mode evaluates forward and reverse bias against LED/diode forward voltage drops.
+- **Calibrated trigger modes.** Both the oscilloscope and the logic analyzer support edge
+  (rising/falling) and level triggering. The oscilloscope supports Auto, Normal, and Single
+  trigger modes, with automatic hold/freeze upon single trigger capture.
+- **Transient worker/React memory only.** In compliance with privacy and persistence rules,
+  trace buffers (up to 1,024 oscilloscope samples, 2,048 logic edges) live strictly in
+  transient worker/React memory. Neither waveforms nor raw instrument samples are persisted
+  to `ProjectDoc`, `localStorage`, or service-worker caches.
+- **Verification boundary:** Unit tests for oscilloscope sampling, auto-measurements, trigger
+  state machines, DMM impedance/resistance/continuity/diode solvers, cross-engine differential
+  parity (asserting identical scope auto-measurements and DMM readings for blink and passive rails
+  across functional interpretation and avr8js execution), builder render tests for Scope and
+  Multimeter panels, and browser E2E test verifying zero persistence leaks. Local typecheck,
+  696 Vitest tests (2 CLI/Docker opt-ins skipped), 10/10 scenarios, and production build with
+  215 static pages passed cleanly.
+
