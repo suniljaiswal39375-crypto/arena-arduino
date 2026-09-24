@@ -39,6 +39,7 @@ interface LabState {
   missionSlug: string | null;
   dirty: boolean;
   saveError: string | null;
+  hasSaved: boolean;
 
   apply: (cmd: Command) => void;
   applyAll: (cmds: Command[]) => void;
@@ -96,6 +97,7 @@ export const useLab = create<LabState>((set, get) => ({
   missionSlug: null,
   dirty: false,
   saveError: null,
+  hasSaved: false,
 
   apply: (cmd) => {
     const current = get().doc;
@@ -252,8 +254,9 @@ export const useLab = create<LabState>((set, get) => ({
       pendingWire: null,
       dirty: true,
       saveError: null,
+      hasSaved: false,
     });
-    get().save();
+    get().flushSave();
   },
 
   newProject: () => {
@@ -295,7 +298,7 @@ export const useLab = create<LabState>((set, get) => ({
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = null;
     const saved = saveProject(get().doc);
-    set({ dirty: !saved, saveError: saved ? null : 'Browser storage is unavailable or full. Export your project to keep a copy.' });
+    set({ dirty: !saved, hasSaved: saved, saveError: saved ? null : 'Browser storage is unavailable or full. Export your project to keep a copy.' });
   },
 }));
 

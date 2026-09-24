@@ -1,13 +1,6 @@
-import { expect, test, type BrowserContext } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
-async function disconnect(context: BrowserContext) {
-  await context.setOffline(true);
-  // Chromium's CDP offline emulation can leave a service-worker target online.
-  // Disable that target's fetch as well, so no assertion passes via the server.
-  for (const worker of context.serviceWorkers()) await worker.evaluate(() => {
-    globalThis.fetch = () => Promise.reject(new TypeError('Test network disconnected'));
-  });
-}
+import { disconnect } from './helpers';
 
 test('mission link loads BOM and saved work survives a plain builder reload', async ({ page }) => {
   await page.goto('/builder?mission=traffic-light');

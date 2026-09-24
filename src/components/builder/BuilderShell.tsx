@@ -1,5 +1,6 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n/client';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLab } from '@/store/lab';
 import { SimClient } from '@/lib/sim/client';
@@ -26,6 +27,16 @@ export function BuilderShell({
   initialShowcaseSlug,
   initialChaosSlug,
 }: { initialMissionSlug?: string; initialShowcaseSlug?: string; initialChaosSlug?: string } = {}) {
+  const { t, locale } = useI18n();
+  const [mobilePanel, setMobilePanel] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const guidanceButton = useRef<HTMLButtonElement | null>(null);
+  const wasPanelOpen = useRef(false);
+  useEffect(() => {
+    if (mobilePanel) panelRef.current?.focus();
+    else if (wasPanelOpen.current && guidanceButton.current?.offsetParent) guidanceButton.current.focus();
+    wasPanelOpen.current = mobilePanel;
+  }, [mobilePanel]);
   const doc = useLab((s) => s.doc);
   const missionSlug = useLab((s) => s.missionSlug);
   const loadDoc = useLab((s) => s.loadDoc);
@@ -177,7 +188,7 @@ export function BuilderShell({
   const error = snapshot?.error;
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <main id="main" tabIndex={-1} lang={locale} className="flex h-dvh flex-col overflow-hidden">
       <Toolbar
         running={running}
         snapshot={snapshot}
@@ -191,54 +202,63 @@ export function BuilderShell({
       {error && (
         <div className="border-b border-[#55262c] bg-[#2a1418] px-3 py-2 text-[12.5px]">
           <span className="font-semibold text-[var(--color-fault)]">
-            {error.kind === 'compile' ? 'Compile error' : 'Runtime error'}
+            {t(error.kind === 'compile' ? 'compileError' : 'runtimeError')}
           </span>
-          {error.line > 0 && <span className="mono ml-2 text-[var(--color-text-dim)]">line {error.line}</span>}
-          <span className="ml-2">{error.message}</span>
+          {error.line > 0 && <span className="mono ml-2 text-[var(--color-text-dim)]">{t('line', { line: error.line })}</span>}
+          <span lang="en" className="ml-2">{error.message}</span>
         </div>
       )}
 
       {snapshot && snapshot.unsupported.length > 0 && (
         <div className="border-b border-[#5c4405] bg-[#2a2109] px-3 py-1.5 text-[11.5px] text-[var(--color-text-dim)]">
-          The functional runtime does not model: {snapshot.unsupported.join(', ')}. Switch the engine
-          to Firmware Emulation when that is available.
+          {t('unsupported', { parts: snapshot.unsupported.join(', ') })}
         </div>
       )}
 
+      {locale === 'hi' && <p lang="hi" className="border-b border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-text-dim)]">{t('partial')}</p>}
+      <div className="border-b border-[var(--color-border)] p-1 xl:hidden">
+        <button ref={guidanceButton} type="button" className="btn btn-sm" aria-expanded={mobilePanel} aria-controls="builder-guidance" onClick={() => setMobilePanel(v => !v)}>
+          {t(mobilePanel ? 'backToCircuit' : 'guidance')}
+        </button>
+      </div>
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[286px] shrink-0 border-r border-[var(--color-border)] lg:block">
+        <aside lang="en" className="hidden w-[286px] shrink-0 border-r border-[var(--color-border)] lg:block">
           <PartPalette />
         </aside>
 
-        <main id="main" className="flex min-w-0 flex-1 flex-col">
+        <section aria-label={t('builder')} className={cn('min-w-0 flex-1 flex-col overflow-y-auto xl:overflow-hidden', mobilePanel ? 'hidden xl:flex' : 'flex')}>
           <button type="button" className="btn btn-sm self-start" aria-pressed={textCircuit} onClick={() => setTextCircuit(v => !v)}>
-            {textCircuit ? 'Show schematic' : 'Keyboard wiring & connections'}
+            {t(textCircuit ? 'schematic' : 'keyboardWiring')}
           </button>
-          <div className="min-h-0 flex-[1.35]">
-            {textCircuit ? <ConnectionsPanel /> : <SchematicCanvas states={states} />}
+          <div className="min-h-[260px] shrink-0 flex-[1.35] xl:min-h-0 xl:shrink">
+            {textCircuit ? <ConnectionsPanel /> : <div lang="en" className="h-full"><SchematicCanvas states={states} /></div>}
           </div>
-          <div className="h-[30%] min-h-[160px] border-t border-[var(--color-border)]">
+          <div lang="en" className="h-[30%] min-h-[160px] shrink-0 xl:shrink border-t border-[var(--color-border)]">
             <CodePane />
           </div>
-          <div className="h-[24%] min-h-[150px] border-t border-[var(--color-border)]">
+          <div className="h-[24%] min-h-[150px] shrink-0 xl:shrink border-t border-[var(--color-border)]">
             <BottomDock snapshot={snapshot} onSend={onSend} />
           </div>
-        </main>
+        </section>
 
-        <aside className="hidden w-[330px] shrink-0 border-l border-[var(--color-border)] xl:flex xl:flex-col">
+        <aside id="builder-guidance" ref={panelRef} tabIndex={-1} aria-label={t('guidance')}
+          onKeyDown={event => {
+            if (event.key === 'Escape' && mobilePanel) { event.stopPropagation(); setMobilePanel(false); }
+          }}
+          className={cn('min-w-0 w-full shrink-0 flex-col border-l border-[var(--color-border)] xl:flex xl:w-[330px]', mobilePanel ? 'flex' : 'hidden')}>
           <div className="flex border-b border-[var(--color-border)]">
             <RailTab
               active={rail === 'inspector'}
               onClick={() => setRail('inspector')}
               icon={<Wrench size={13} />}
-              label="Inspector"
+              label={t('inspector')}
             />
             {mission && (
               <RailTab
                 active={rail === 'mission'}
                 onClick={() => setRail('mission')}
                 icon={<Layers size={13} />}
-                label="Mission"
+                label={t('mission')}
               />
             )}
             {challenge && (
@@ -246,13 +266,13 @@ export function BuilderShell({
                 active={rail === 'chaos'}
                 onClick={() => setRail('chaos')}
                 icon={<Flame size={13} />}
-                label="Chaos Lab"
+                label={t('chaos')}
               />
             )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rail === 'chaos' && challenge ? (
-              <ChaosPanel key={`${doc.id}:${challenge.slug}`} challenge={challenge} onRestart={() => loadDoc(brokenProject(challenge))} />
+              <div lang="en" className="h-full"><ChaosPanel key={`${doc.id}:${challenge.slug}`} challenge={challenge} onRestart={() => loadDoc(brokenProject(challenge))} /></div>
             ) : rail === 'mission' && mission ? (
               <StepTracker
                 key={`${doc.id}:${mission.slug}`}
@@ -262,12 +282,12 @@ export function BuilderShell({
                 onReveal={revealReference}
               />
             ) : (
-              <Inspector states={states} />
+              <div lang="en"><Inspector states={states} /></div>
             )}
           </div>
         </aside>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -286,6 +306,7 @@ function RailTab({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         'flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[12.5px] font-medium',
         active

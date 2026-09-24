@@ -190,3 +190,17 @@ A build-versioned, production-only service worker caches public app HTML and ass
 
 ## Dependency security maintenance
 Kept Next 15 as specified. Upgraded development tooling to Vitest 4.1.11, Vite 6.4.3 and vite-node 3.2.4; overrode PostCSS to 8.5.28. The complete test/scenario/build pipeline passes and npm audit reports zero known advisories. npm 10 hit a peer-resolution bug during lock regeneration; npm 11 generated the lock, and a subsequent npm 10 `npm ci` succeeded. Browser regressions use Playwright; a temporary packaged Chromium overcame the sandbox CDN restriction and is not checked in.
+
+
+## Partial Hindi localization without changing circuit semantics
+Added a small typed dictionary/context layer instead of machine-translating lesson/code data or
+introducing locale-prefixed routes. Default English SSR avoids hydration mismatches; guarded browser
+storage remembers the choice and storage events synchronize tabs. Hindi is explicitly partial.
+Document language remains English; translated UI and English content have scoped language attributes.
+Pinned and bundled Noto Sans Devanagari via Fontsource, including the OFL licence, for offline glyphs.
+
+## One responsive guidance panel
+Reuse the existing tracker/inspector rather than mounting a second mobile copy that might duplicate
+evidence effects. A small-screen view switch hides the work area with CSS, keeping simulation and
+editor state mounted. Focus enters the panel and returns on Escape/back. Phone menus are viewport-
+positioned, scrollable disclosures, not modal dialogs; no focus trap or modal semantics are claimed.

@@ -149,3 +149,19 @@ AI feature that talks without touching the simulator.
 - Next: Hindi UI/content, cache update/storage-pressure testing on real Chromebooks, accessible dialogs
   and responsive mission panels. Full firmware, backend/auth/classrooms, AI, 3D/scan and collaboration
   remain future work; none are represented as complete here.
+
+
+## Hindi controls and responsive guidance pass
+- Shipped English/Hindi dictionaries, guarded persisted preference and cross-tab synchronization.
+  Translated navigation, toolbar, keyboard wiring, mission action controls and serial send UI.
+- Bundled Noto Sans Devanagari with its OFL licence and offline font caching. Browser verification
+  confirms Hindi controls and fonts load after both page and worker networking are disabled.
+- Shipped the small-screen guidance view using one existing tracker instance, with focus transfer,
+  Escape/return behaviour, scrolling work areas, wrapping toolbar controls and phone-safe menus.
+- Corrected save-status initialization; opening a project updates last-project storage immediately.
+- Verification: 393 tests / 19 Vitest files, 13 Chromium tests, 10 CLI scenarios, typecheck and build.
+- Remaining localization: full mission instructions/hints, catalogue/descriptions, diagnostics,
+  specialist panels and import/export. Hindi wording needs educator review. Public metadata remains
+  English, with scoped language attributes for translated and untranslated regions.
+- Still pending: real-device/touch and screen-reader testing, firmware execution, classroom/auth
+  services, AI, 3D/scan and collaboration. None are claimed as delivered in this pass.

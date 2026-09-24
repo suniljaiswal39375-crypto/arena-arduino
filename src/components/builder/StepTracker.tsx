@@ -1,5 +1,6 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n/client';
 import { useEffect, useRef, useState } from 'react';
 import { useLab } from '@/store/lab';
 import { loadProgress, completeMission, saveProgress } from '@/lib/skills';
@@ -21,6 +22,7 @@ export function StepTracker({
   onConfirm: (note: string) => void;
   onReveal: () => void;
 }) {
+  const { t, locale } = useI18n();
   const doc = useLab((s) => s.doc);
   const results = checkMission(mission, doc, confirmed);
   const progress = missionProgress(results);
@@ -70,13 +72,13 @@ export function StepTracker({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div lang={locale} className="flex h-full flex-col">
       <div className="border-b border-[var(--color-border)] p-3">
         <div className="flex items-center gap-2">
           <span aria-hidden className="text-lg">
             {mission.emoji}
           </span>
-          <h3 className="text-[13.5px] font-semibold">{mission.title}</h3>
+          <h3 lang="en" className="text-[13.5px] font-semibold">{mission.title}</h3>
         </div>
         <div className="mt-2 flex items-center gap-2">
           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-3)]">
@@ -117,7 +119,7 @@ export function StepTracker({
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p
+                  <p lang="en"
                     className={cn(
                       'text-[12.5px] leading-snug',
                       status === 'done' && 'text-[var(--color-text-dim)] line-through',
@@ -133,7 +135,7 @@ export function StepTracker({
                       onClick={() => toggleHint(step.id)}
                       aria-expanded={hintOpen}
                     >
-                      <Lightbulb size={12} /> Hint
+                      <Lightbulb size={12} /> {t('hint')}
                     </button>
                     {isManual && status !== 'done' && (
                       <button
@@ -141,12 +143,12 @@ export function StepTracker({
                         className="btn btn-sm"
                         onClick={() => onConfirm(note)}
                       >
-                        <CheckCircle2 size={12} /> Confirm myself
+                        <CheckCircle2 size={12} /> {t('confirm')}
                       </button>
                     )}
                     {status === 'manual' && (
                       <span className="text-[10.5px] text-[var(--color-text-faint)]">
-                        self-confirmed step
+                        {t('selfConfirmed')}
                       </span>
                     )}
                   </div>
@@ -155,11 +157,11 @@ export function StepTracker({
                     <div className="mt-2 space-y-1.5 rounded-md bg-black/25 p-2 text-[11.5px]">
                       <p className="flex gap-1.5">
                         <Lightbulb size={12} className="mt-0.5 shrink-0 text-[var(--color-warn)]" />
-                        <span>{step.hint}</span>
+                        <span lang="en">{step.hint}</span>
                       </p>
                       <p className="flex gap-1.5 text-[var(--color-text-dim)]">
                         <HelpCircle size={12} className="mt-0.5 shrink-0" />
-                        <span>{step.whyItMatters}</span>
+                        <span lang="en">{step.whyItMatters}</span>
                       </p>
                     </div>
                   )}
@@ -173,16 +175,16 @@ export function StepTracker({
       <div className="border-t border-[var(--color-border)] p-2.5">
         {justCompleted && (
           <p role="status" className="mb-2 text-center text-[11.5px] text-[var(--color-ok)]">
-            Mission complete. Evidence recorded for {mission.skills.length} skills; see your mastery map.
+            {t('missionComplete', { count: mission.skills.length })}
           </p>
         )}
         {progress.complete ? (
-          <button type="button" className="btn btn-primary w-full" onClick={onReveal}>
-            <Eye size={13} /> Reveal the reference sketch
+          <button type="button" className="btn btn-primary w-full" style={{ whiteSpace: 'normal' }} onClick={onReveal}>
+            <Eye size={13} /> {t('reveal')}
           </button>
         ) : (
           <p className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--color-text-faint)]">
-            <Lock size={12} /> The reference sketch unlocks when every step is done
+            <Lock size={12} /> {t('locked')}
           </p>
         )}
       </div>

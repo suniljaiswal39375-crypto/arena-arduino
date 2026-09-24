@@ -25,6 +25,8 @@ export default function AccessibilityPage() {
         <h2 className="mt-8 text-[17px] font-semibold">What works today</h2>
         <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[var(--color-text-dim)]">
           <li>The builder’s “Keyboard wiring &amp; connections” view provides native controls for adding parts, connecting pins, rotating parts and removing wires, plus a text connection table.</li>
+          <li>The language switch provides English/Hindi navigation and core builder controls. Hindi font files are bundled locally; the offline cache includes them.</li>
+          <li>Mission, Chaos and Inspector panels are reachable on smaller screens through “Guidance &amp; inspector”. Escape closes this view and returns keyboard focus to the opener.</li>
           <li>Every page outside the builder can be used with the keyboard alone, with visible focus.</li>
           <li>
             Diagnostics never rely on colour alone: each finding has a title, a plain-language explanation,
@@ -42,7 +44,7 @@ export default function AccessibilityPage() {
         <h2 className="mt-8 text-[17px] font-semibold">Known gaps</h2>
         <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[var(--color-text-dim)]">
           <li>
-            <strong>Canvas placement needs a pointer.</strong> Use the text connection view for wiring; precise component positioning and wire routing remain pointer-only. Screen-reader and browser interaction testing is still needed.
+            <strong>Canvas placement needs a pointer.</strong> Use the text connection view for wiring; precise component positioning and wire routing remain pointer-only. Browser wiring and focus tests pass; screen-reader testing is still needed.
           </li>
           <li>
             <strong>Simulation state is not announced.</strong> A screen reader is not told when an LED
@@ -54,7 +56,7 @@ export default function AccessibilityPage() {
             animate much, but the few animations do not yet respect prefers-reduced-motion everywhere.
           </li>
           <li>
-            <strong>English only.</strong> Hindi is planned for launch and not yet available.
+            <strong>Partial Hindi translation.</strong> Navigation, simulation controls, keyboard wiring and mission action buttons are translated. Lesson text, component names, inspector details, import/export menus and diagnostic explanations remain English, with language attributes identifying English sections.
           </li>
           <li>
             <strong>Not yet audited.</strong> No automated axe scan or screen-reader test (NVDA, VoiceOver)

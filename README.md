@@ -221,7 +221,7 @@ Licensed under the terms in [`LICENSE`](LICENSE).
   An uncached page shows a standalone offline fallback. Updates wait for old tabs to close.
   Private/API routes and RSC payloads are excluded. See `src/components/offline/README.md`.
 
-Latest verification: **375 unit/behaviour/render tests, 4 Chromium browser tests, 10 CLI scenarios**;
+Latest verification: **393 unit/behaviour/render tests, 13 Chromium browser tests, 10 CLI scenarios**;
 strict typecheck and production build pass. `npm audit` reports **0 known vulnerabilities** for the
 locked dependency tree at the time of this pass. This does not constitute a security audit.
 
@@ -231,6 +231,20 @@ npx playwright install --with-deps chromium
 npm run test:e2e             # starts a production server if needed
 ```
 
-Still unfinished: Hindi translation, full offline installation/update UX, real firmware execution,
+Still unfinished: full Hindi lesson/content translation, full offline installation/update UX, real firmware execution,
 accounts/classrooms, AI services, 3D/scan and collaboration. See `ROADMAP.md`; this is not the
 complete specification yet.
+
+
+## Language and smaller screens
+
+Use the **English / हिंदी** selector in the site header or builder toolbar. Navigation, simulation
+controls, save feedback, keyboard wiring and mission action buttons are translated. Lesson text,
+component names, inspector details, import/export menus and diagnostic explanations remain English;
+the interface labels this limitation. Language preference survives reloads and synchronizes tabs.
+Hindi font assets are bundled and cached for offline use; source code and pin names are never translated.
+
+Below desktop width, **Guidance & inspector** opens the existing mission/Chaos/Inspector panel.
+Escape returns to the circuit and restores focus. The circuit/editor/dock stack scrolls on small
+screens. Native wiring controls remain available when the part palette is hidden. Toolbar controls
+wrap, and phone menus stay inside the viewport. Tests cover 390, 768 and 1024 px widths.

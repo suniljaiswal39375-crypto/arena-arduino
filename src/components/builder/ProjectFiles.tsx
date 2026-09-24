@@ -91,7 +91,7 @@ export function ProjectFiles() {
   };
 
   return (
-    <div className="relative flex items-center gap-1.5">
+    <div className="relative flex items-center gap-1.5" onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setNotice(null); e.stopPropagation(); e.currentTarget.querySelector('button')?.focus(); } }}>
       <button type="button" className="btn btn-sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <Download size={13} /> Export
       </button>
@@ -101,6 +101,7 @@ export function ProjectFiles() {
       <input
         ref={fileInput}
         type="file"
+        tabIndex={-1}
         accept=".json,.zip,application/json,application/zip"
         className="sr-only"
         aria-label="Import a SparkLab project, a Wokwi diagram.json or a Wokwi project zip"
@@ -112,7 +113,7 @@ export function ProjectFiles() {
       />
 
       {open && (
-        <div className="absolute right-0 top-9 z-30 w-72 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1 shadow-xl">
+        <div className="fixed inset-x-2 top-28 z-30 max-h-[65dvh] overflow-y-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-9 sm:w-72 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1 shadow-xl">
           {exports.map((x) => (
             <button
               key={x.label}
@@ -134,7 +135,7 @@ export function ProjectFiles() {
         <div
           role="status"
           className={
-            'absolute right-0 top-9 z-20 w-80 rounded-md border p-2.5 text-[12px] leading-relaxed shadow-xl ' +
+            'fixed inset-x-2 top-28 z-20 max-h-[65dvh] overflow-y-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-9 sm:w-80 rounded-md border p-2.5 text-[12px] leading-relaxed shadow-xl ' +
             (notice.tone === 'error'
               ? 'border-[#55262c] bg-[#2a1418]'
               : notice.tone === 'warn'

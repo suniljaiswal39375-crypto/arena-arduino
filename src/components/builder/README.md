@@ -29,3 +29,10 @@ textarea if it has not arrived within 7 seconds. Production service workers cach
 `ConnectionsPanel` provides native select controls for keyboard wiring and part creation, with a connection table and undoable remove/rotate commands. Toggle it above the schematic. SSR coverage: `npx vitest run src/components/builder/render.test.tsx`. Browser wiring/undo/redo verification passes in `e2e/builder.spec.ts`. Precise pointer-free placement and screen-reader verification remain outstanding.
 
 `BuilderShell` restores saved mission documents without resetting them. Explicit mission selection creates a starter document through `lib/missions/workspace`. Step confirmations live in document provenance; `StepTracker` is keyed by project and mission, and skill completion is idempotent.
+
+
+**Responsive/language controls.** `useI18n` translates core controls; identifiers and curriculum
+text stay unchanged. Below `xl`, the guidance switch exposes the same rail instance and restores
+focus on return/Escape. The work area scrolls instead of squeezing the canvas to zero height.
+Toolbar actions wrap and phone menus use viewport positioning. A project is labelled saved only
+after a successful write; loading/switching immediately persists the selected last-project ID.

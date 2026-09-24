@@ -39,6 +39,10 @@ describe('a stranger opening the builder for the first time', () => {
     expect(off && off.kind === 'led' ? off.on : null).toBe(false);
   });
 
+  it('does not claim a newly opened circuit has been saved', () => {
+    expect(lab().hasSaved).toBe(false);
+  });
+
   it('is what the store actually starts with', () => {
     // The module-level initial state, before any test has replaced it.
     const types = lab().doc.diagram.parts.map((p) => p.type).sort();
@@ -247,6 +251,12 @@ describe('durable editing', () => {
     lab().newProject();
   });
   afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+  it('makes the newly opened project the last project immediately', () => {
+    lab().newProject();
+    expect(lastProjectId()).toBe(lab().doc.id);
+    expect(lab().hasSaved).toBe(true);
+  });
+
   it('persists undo and redo, not just forward edits', () => {
     lab().rename('First name');
     lab().rename('Second name');

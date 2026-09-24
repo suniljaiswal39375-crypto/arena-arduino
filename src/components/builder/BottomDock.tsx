@@ -1,5 +1,7 @@
 'use client';
 
+import { useI18n } from '@/lib/i18n/client';
+import type { MessageKey } from '@/lib/i18n/messages';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLab, type DockTab } from '@/store/lab';
 import { getPart } from '@/lib/parts';
@@ -7,11 +9,11 @@ import type { SimSnapshot } from '@/lib/sim/engine';
 import { AlertTriangle, Info, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
-const TABS: Array<{ id: DockTab; label: string }> = [
-  { id: 'serial', label: 'Serial' },
-  { id: 'plotter', label: 'Plotter' },
-  { id: 'inputs', label: 'Inputs' },
-  { id: 'diagnostics', label: 'Diagnostics' },
+const TABS: Array<{ id: DockTab; label: MessageKey }> = [
+  { id: 'serial', label: 'serial' },
+  { id: 'plotter', label: 'plotter' },
+  { id: 'inputs', label: 'inputs' },
+  { id: 'diagnostics', label: 'diagnostics' },
 ];
 
 export function BottomDock({
@@ -21,6 +23,7 @@ export function BottomDock({
   snapshot: SimSnapshot | null;
   onSend: (text: string) => void;
 }) {
+  const { t: text, locale } = useI18n();
   const dock = useLab((s) => s.dock);
   const setDock = useLab((s) => s.setDock);
   const diagnostics = useLab((s) => s.diagnostics);
@@ -31,12 +34,13 @@ export function BottomDock({
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-1 border-b border-[var(--color-border)] px-2">
+    <div lang={locale} className="flex h-full flex-col">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--color-border)] px-2">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
+            aria-pressed={dock === t.id}
             onClick={() => setDock(t.id)}
             className={cn(
               'relative px-3 py-2 text-[12.5px] font-medium transition-colors',
@@ -45,7 +49,7 @@ export function BottomDock({
                 : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]',
             )}
           >
-            {t.label}
+            {text(t.label)}
             {t.id === 'diagnostics' && counts.error + counts.warning > 0 && (
               <span
                 className={cn(
@@ -67,9 +71,9 @@ export function BottomDock({
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {dock === 'serial' && <SerialPanel snapshot={snapshot} onSend={onSend} />}
-        {dock === 'plotter' && <PlotterPanel snapshot={snapshot} />}
-        {dock === 'inputs' && <InputsPanel />}
-        {dock === 'diagnostics' && <DiagnosticsPanel />}
+        {dock === 'plotter' && <div lang="en" className="h-full"><PlotterPanel snapshot={snapshot} /></div>}
+        {dock === 'inputs' && <div lang="en" className="h-full"><InputsPanel /></div>}
+        {dock === 'diagnostics' && <div lang="en" className="h-full"><DiagnosticsPanel /></div>}
       </div>
     </div>
   );
@@ -84,6 +88,7 @@ function SerialPanel({
   snapshot: SimSnapshot | null;
   onSend: (text: string) => void;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState('');
   const scroller = useRef<HTMLDivElement | null>(null);
   const lines = snapshot?.serial ?? [];
@@ -98,7 +103,7 @@ function SerialPanel({
       <div ref={scroller} className="mono min-h-0 flex-1 overflow-y-auto p-2 text-[12px] leading-relaxed">
         {lines.length === 0 ? (
           <p className="p-1 text-[var(--color-text-faint)]">
-            Serial output appears here. Add Serial.begin(9600) and print something.
+            {t('serialEmpty')}
           </p>
         ) : (
           lines.map((l, i) => (
@@ -122,13 +127,13 @@ function SerialPanel({
       >
         <input
           className="input mono"
-          placeholder="Send to the sketch"
+          placeholder={t('sendPlaceholder')}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          aria-label="Send text to the sketch"
+          aria-label={t('sendLabel')}
         />
         <button className="btn btn-sm" type="submit">
-          Send
+          {t('send')}
         </button>
       </form>
     </div>
