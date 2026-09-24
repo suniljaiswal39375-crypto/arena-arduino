@@ -455,5 +455,10 @@ has been performed.
   an explicit user download.
 - **Verification boundary:** dedicated capture/VCD unit tests, a wired functional/real-AVR
   blink trace and sub-frame machine-code edge tests, SPI-unknown tests, render coverage,
-  and a new browser wiring/download test. Local CLI/Docker remain unavailable; a
-  public build-farm deployment and Cloudflare Workers build have not been verified.
+  and a browser wiring/download test. Local typecheck, 671 Vitest tests (2 CLI/Docker
+  opt-ins skipped), 10/10 scenarios, build (215 static pages), and 21 Chromium tests
+  (5 configured-classroom opt-ins skipped) passed after fixing an ambiguous test
+  selector. The first CI run for this instrument (36052576969) passed AVR/Docker/
+  scenarios but failed the browser selector; its corrected revision needs a fresh
+  green run. Local CLI/Docker remain unavailable; a public farm deployment and
+  Cloudflare Workers build have not been verified.

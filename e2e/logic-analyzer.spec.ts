@@ -5,12 +5,13 @@ import { expect, test } from '@playwright/test';
 test('wires the logic analyzer, captures blink and downloads its VCD without persisting the trace', async ({ page }) => {
   await page.goto('/builder');
   await page.getByRole('button', { name: 'Keyboard wiring & connections' }).click();
-  await page.getByLabel('Component', { exact: true }).selectOption('emu-logic-analyzer');
-  await page.getByRole('button', { name: 'Add component' }).click();
-  await expect(page.getByRole('status')).toContainText('Logic Analyzer');
+  const panel = page.getByRole('region', { name: 'Circuit commands and connections' });
+  await panel.getByRole('combobox', { name: 'Component', exact: true }).selectOption('emu-logic-analyzer');
+  await panel.getByRole('button', { name: 'Add component' }).click();
+  await expect(panel.getByRole('status')).toContainText('Logic Analyzer');
 
-  const from = page.getByLabel('From pin');
-  const to = page.getByLabel('To pin');
+  const from = panel.getByRole('combobox', { name: 'From pin' });
+  const to = panel.getByRole('combobox', { name: 'To pin' });
   const choose = async (label: string, pin: string) => from.locator('option').evaluateAll((options, args) => {
     const option = options.find((item) => {
       if (!(item instanceof HTMLOptionElement) || !item.value) return false;
@@ -23,8 +24,8 @@ test('wires the logic analyzer, captures blink and downloads its VCD without per
   for (const [boardPin, probePin] of [['D13', 'D0'], ['GND', 'GND']] as const) {
     await from.selectOption(await choose('Arduino Uno', boardPin));
     await to.selectOption(await choose('Logic Analyzer', probePin));
-    await page.getByRole('button', { name: 'Connect pins' }).click();
-    await expect(page.getByRole('status')).toContainText('Wire connected');
+    await panel.getByRole('button', { name: 'Connect pins' }).click();
+    await expect(panel.getByRole('status')).toContainText('Wire connected');
   }
 
   await page.getByRole('button', { name: 'Logic', exact: true }).click();

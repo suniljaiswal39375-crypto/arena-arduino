@@ -202,8 +202,9 @@ npm test
 Current local logic-instrument checkpoint: `npm run typecheck` passed; `npm test`
 passed **671 tests across 59 files**, with **2 opt-in integration tests skipped locally**
 (no CLI or Docker); `npm run scenarios` passed **10/10** and `npm run build`
-passed (**215 static pages**). Browser checks for this instrument require the
-CI-provided Chromium (see `e2e/logic-analyzer.spec.ts`). The previous [CI run 36049923223](https://github.com/suniljaiswal39375-crypto/arena-arduino/actions/runs/36049923223)
+passed (**215 static pages**). Local `npm run test:e2e` with a temporary packaged
+Chromium 143 passed **21 browser tests**, with **5 configured-classroom tests skipped**;
+`e2e/logic-analyzer.spec.ts` exercised wiring and a real VCD download. The previous [CI run 36049923223](https://github.com/suniljaiswal39375-crypto/arena-arduino/actions/runs/36049923223)
 passed all four GitHub Actions jobs (including official CLI/Core, real Docker/SSE-to-avr8js,
 and browser regressions) **before** the new instrument was added. This is neither a
 public deployment nor live OAuth/PostgreSQL validation. An external Cloudflare Workers

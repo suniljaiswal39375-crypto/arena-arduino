@@ -334,13 +334,15 @@ are shown. Captures are transient, not project/browser-storage state.
 
 Local verification for this slice: `npm run typecheck` passed; `npm test` passed
 **671 tests in 59 files**, with 2 CLI/Docker opt-ins skipped locally; `npm run scenarios`
-passed **10/10**; `npm run build` generated **215 static pages**. The new browser
-wiring/VCD-download regression needs CI Chromium; the preceding GitHub Actions
-run 36049923223 passed all four jobs before this instrument was added. Do not
-interpret that run as validation of the new browser test. Cloudflare Workers
-Builds fails independently even on merged baseline PR #2; its external logs
-and deployment require separate operator diagnosis.
+passed **10/10**; `npm run build` generated **215 static pages**. Local
+`npm run test:e2e` with packaged Chromium 143 passed **21 browser tests, 5 opt-in
+configured-classroom tests skipped**, including native wiring and VCD download.
+GitHub Actions run 36052576969 passed AVR/Docker/scenarios but its browser job
+failed on a strict selector in the new regression; that selector is fixed and
+passes locally. Recheck all CI jobs on the corrected commit before claiming
+remote validation. Cloudflare Workers Builds also fails independently on merged
+baseline PR #2; its external logs/deployment require separate operator diagnosis.
 
-Next: verify the browser regression and AVR/container jobs on this commit;
+Next: verify the corrected browser regression and AVR/container jobs on this commit;
 then design a calibrated virtual-time analogue oscilloscope/multimeter and
 trigger modes. AI/Chaos generation and later phases remain in the order above.
