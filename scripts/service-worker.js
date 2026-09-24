@@ -5,6 +5,7 @@ const pages = /^\/(?:$|builder\/?$|(?:missions|parts|skills|docs|showcase|chaos|
 
 function cacheable(request) {
   const url = new URL(request.url);
+  if (/^\/(?:api|classrooms)(?:\/|$)/.test(url.pathname)) return false;
   if (request.method !== 'GET' || url.origin !== self.location.origin) return false;
   if (request.headers.has('RSC') || url.searchParams.has('_rsc')) return false;
   if (request.mode === 'navigate') return pages.test(url.pathname);

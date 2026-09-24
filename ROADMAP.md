@@ -55,7 +55,7 @@ not.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
 
-Nothing here exists yet; `DATABASE_URL` and friends in `.env.example` are placeholders.
+Foundation implemented: optional PostgreSQL + Drizzle + Auth.js Google/database sessions; operator-approved teacher roles; private six-character classrooms, mission assignments, uploaded project snapshots and version-checked manual reviews. Setup is documented in `src/server/README.md`. Real Google OAuth and network PostgreSQL deployment verification remain required.
 
 - Postgres (Neon/Supabase) + Drizzle, Auth.js with Google and magic links.
 - Teacher classrooms with six-character join codes, per-student progress, and a class heatmap of
@@ -183,3 +183,11 @@ AI feature that talks without touching the simulator.
 - Next: classroom/auth backend foundation and remaining catalogue/diagnostic/skill localization.
   Educator translation review, real-device and screen-reader testing remain. Firmware emulation,
   backend services, AI, 3D/scan and collaboration are not delivered by this content pass.
+
+
+## Classroom foundation checkpoint — 24 September 2026
+
+- Implemented optional Google/database-session authentication, PostgreSQL/Drizzle schema + checksummed migration CLI, operator teacher approval/revocation, authorization, shared rate limits and bounded JSON inputs.
+- Online workspace: create/join, private invitations and roster, archive/restore, assign canonical missions, upload/download snapshots and manual feedback with stale-version protection. Private data is excluded from offline caching. Local lab remains zero-config.
+- Validation: 471 unit/render/database/HTTP tests; 20 browser tests in the disabled configuration plus 2 configured workspace tests with intercepted API responses; 10 CLI scenarios; production build/typecheck and dependency audit. No live OAuth or hosted PostgreSQL verification.
+- Next: real deployment integration and school privacy/retention controls, classroom progress views, remaining localization, then firmware/AI/3D/collaboration phases. Magic links, heatmaps, public sharing and automated grading are not delivered in this pass.

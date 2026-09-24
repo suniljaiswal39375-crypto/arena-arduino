@@ -6,3 +6,7 @@
 - `generate-examples.ts`: regenerate ten checked-in scenario examples with `npm run examples`.
 
 Run `npm ci`, `npm run build`, `npm test`, and `npm run scenarios`. Offline browser tests require a production build; see `e2e/README.md`. Never run a build while a dev server is writing the same `.next` directory.
+
+## Classroom administration
+
+`classroom-admin.mjs` loads Next environment files and exposes `npm run db:migrate` (ordered SQL migrations with checksums and a transaction-scoped advisory lock) and `npm run db:role -- email@example.com teacher|student` (existing-account role change and session revocation). Use only from trusted operator environments. Credentials and SQL errors are not printed. See `src/server/README.md` for deployment prerequisites. The SQL/service tests run with `npm test -- --run src/server/classrooms/classrooms.test.ts`; live CLI migration/approval must also be checked against the deployment PostgreSQL instance.

@@ -13,7 +13,7 @@ export const en = {
   noMissions: 'No mission matches that. Try “relay”, “ultrasonic” or “OLED”.',
   missionSafety: 'Learning simulation only. Use low-voltage training circuits; do not use these sketches for mains wiring, gas safety or other safety-critical systems.',
   labControls: 'Lab controls', mainNav: 'Main', builder: 'Builder', missions: 'Missions', showcase: 'Showcase', chaos: 'Chaos Lab',
-  components: 'Components', skills: 'Skills', docs: 'Docs', language: 'Language / भाषा',
+  classrooms: 'Classrooms', components: 'Components', skills: 'Skills', docs: 'Docs', language: 'Language / भाषा',
   partial: 'Core controls and all 16 guided missions are translated. Component names, skill descriptions and diagnostic explanations remain in English.',
   projectName: 'Project name', saving: 'Saving…', saved: 'Saved locally',
   saveError: 'Browser storage is unavailable or full. Export your project to keep a copy.',
@@ -43,7 +43,7 @@ export const en = {
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
-  allMissions: 'सभी अभ्यास', startMission: 'अभ्यास शुरू करें', stepsHeading: 'चरण',
+  classrooms: 'कक्षाएँ', allMissions: 'सभी अभ्यास', startMission: 'अभ्यास शुरू करें', stepsHeading: 'चरण',
   whyMatters: 'यह क्यों महत्वपूर्ण है', learningGoals: 'आप क्या सीखेंगे', billOfMaterials: 'आवश्यक घटक',
   skillsBuilt: 'इससे बनने वाले कौशल', curriculumLinks: 'पाठ्यक्रम से संबंध', beforeStart: 'शुरू करने से पहले', upNext: 'अगला अभ्यास',
   missionIntro: 'इन निर्देशित अभ्यासों के चरण आपके सर्किट से जांचे जाते हैं। शुरुआती अभ्यासों से शुरू करें; आगे के अभ्यास पहले सीखे कौशलों पर आधारित हैं।',

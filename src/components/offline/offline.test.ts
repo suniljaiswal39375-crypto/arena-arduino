@@ -34,7 +34,7 @@ describe('offline service worker', () => {
     expect(w.caches.delete).toHaveBeenCalledExactlyOnceWith('sparklab-offline-old');
     expect(w.claim).toHaveBeenCalledOnce();
   });
-  it.each(['/api/projects', '/account', 'https://external.test/builder', '/builder?_rsc=x'])('never intercepts %s', path => {
+  it.each(['/api/projects', '/api/classrooms', '/api/auth/session', '/classrooms', '/classrooms/private', '/account', 'https://external.test/builder', '/builder?_rsc=x'])('never intercepts %s', path => {
     expect(worker().request(path).response).not.toHaveBeenCalled();
   });
   it('excludes mutations, RSC payloads and arbitrary subresources', () => {

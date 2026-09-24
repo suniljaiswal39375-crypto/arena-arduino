@@ -16,6 +16,7 @@ const LINKS = [
   { href: '/parts', label: 'components' },
   { href: '/skills', label: 'skills' },
   { href: '/docs', label: 'docs' },
+  { href: '/classrooms', label: 'classrooms' },
 ] as const;
 
 export function SiteHeader() {

@@ -1,0 +1,7 @@
+# Classroom workspace
+
+`ClassroomWorkspace({missions})` is the online-only authenticated classroom client. The server page supplies a small mission title/slug list. Supports sign-in/out, create/join, archive/restore, invitation replacement, roster, mission assignment, explicit native JSON snapshot uploads/downloads and version-checked manual reviews. It does not persist private data in browser storage. All data requests use same-origin URLs and `no-store`.
+
+`/classrooms` shows operator setup guidance when disabled. Teachers must be approved through the operator CLI; there is no client role selector. English-only initial UI is explicitly labelled. Run `npm run typecheck`, `npm test`, and `npm run test:e2e`; server tests use real PostgreSQL WASM, while browser tests cover disabled setup and mocked HTTP workspace flows, not live OAuth.
+
+For the two intercepted-API workspace browser tests, run a separate **test-only** `npm start` with `SPARKLAB_CLASSROOMS_ENABLED=true`, a syntactically valid `DATABASE_URL`, `AUTH_URL=http://localhost:3000`, a 32+ character test `AUTH_SECRET`, and nonempty test Google values. Then run `CLASSROOM_UI_TESTS=1 npm run test:e2e -- e2e/classrooms.spec.ts`. The browser intercepts classroom requests; this does not test OAuth or provision a database. Stop that test server afterward; never use these dummy settings for a real deployment. The default zero-config run instead verifies the disabled setup page.

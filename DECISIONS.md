@@ -39,8 +39,8 @@ locally bundled `monaco-editor` (no CDN) is the correct fix and is in ROADMAP Ph
 
 ### Zustand + Immer — as specified
 `store/lab.ts` holds the document plus `past`/`future` Immer patch stacks. TanStack Query, Yjs,
-react-three-fiber and the backend half of the stack are deliberately **not** installed yet: they
-earn their place when accounts, sharing, 3D and multiplayer land. Unused dependencies are a
+react-three-fiber remain deferred until sharing, 3D and multiplayer land. PostgreSQL,
+Drizzle and Auth.js were added with the classroom foundation (see below). Unused dependencies are a
 maintenance cost, not a head start.
 
 ## Simulation
@@ -216,3 +216,14 @@ coverage, source fingerprints and checker results; fingerprints do not imply edu
 A browser test exposed that Next requests `%5Bslug%5D` chunk URLs while the precache originally stored
 literal brackets. Encode every filesystem path segment when generating asset URLs (never encode the
 path separators). Added a build-script fixture test and real offline mission-page hydration coverage.
+
+
+## Classroom foundation — 24 September 2026
+
+- PostgreSQL + Drizzle and Auth.js follow the specified backend stack. Auth.js 5 is pinned to beta.32 for its Next 15 integration; this is a pre-release dependency requiring deployment review, not a production-readiness claim. Google verified email is the only initial provider; magic links are deferred. Unused Google OAuth bearer tokens are not persisted.
+- Accounts are opt-in through a server-only enable flag plus complete configuration. The existing local builder remains zero-config. Teacher roles are operator-granted, never browser-selected; APIs re-resolve current database roles.
+- SQL migrations are explicit reviewed files, applied by a transactional checksum/advisory-lock CLI instead of adding drizzle-kit. PGlite executes the actual PostgreSQL migration and service queries in tests; it does not replace production PostgreSQL and does not prove multi-connection concurrency or live OAuth.
+- Native uploads are untrusted snapshots for manual review, not grades or proof of simulator execution. Resubmission clears feedback and increments a version; reviews must match that version. Due dates are advisory.
+- Limits use atomic PostgreSQL counters rather than Redis for this bounded first service. Add edge abuse controls, retention/deletion tooling, auditing, consent policy and school privacy/security review before real student deployment.
+- The initial online-only classroom client uses direct same-origin fetch with no-store rather than TanStack Query: no background polling, optimistic private-data cache or persisted classroom state is needed. Private routes are excluded from the service worker. Explicitly downloaded snapshots remain the user's responsibility.
+- Remaining work: live integration validation, authenticated UI expansion/localization, class heatmaps, membership removal, retention/export/deletion, magic links and project sharing.

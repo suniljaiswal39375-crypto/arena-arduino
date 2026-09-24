@@ -255,3 +255,8 @@ Mission translations preserve all sketches, validator objects and confirmation k
 source-fingerprint tests flag missing or stale copy. Hindi needs native-language educator review;
 complete seed coverage is not a claim of classroom certification. Individual cached mission pages
 now hydrate offline correctly with Next's URL-encoded dynamic-route chunk names.
+
+
+### Optional online classrooms
+
+The local lab still needs no account or database. `/classrooms` now supports operator-approved teachers, six-character joins, mission assignments and private versioned project submissions with manual reviews once PostgreSQL and Google sign-in are enabled. See [server setup and API documentation](src/server/README.md) for migrations, approval commands and deployment/privacy prerequisites. Live OAuth and hosted database verification are deployment steps, not completed sandbox checks.
