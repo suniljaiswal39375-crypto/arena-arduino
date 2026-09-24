@@ -10,7 +10,7 @@ import {
   recomputeFidelity,
 } from '@/lib/doc/factory';
 import { execute, executeAll, applyPatchSet, type Command } from '@/lib/doc/commands';
-import type { PartInstance, PinRef, ProjectDoc, WireColor } from '@/lib/doc/types';
+import type { PartInstance, PinRef, ProjectDoc, WireColor, ScopePrefs, MultimeterPrefs } from '@/lib/doc/types';
 import { runERC, type Diagnostic } from '@/lib/erc/diagnostics';
 import { lastProjectId, loadProject } from '@/lib/doc/persistence';
 import { getPart, tierForType } from '@/lib/parts';
@@ -23,7 +23,7 @@ export interface HistoryEntry {
   inverse: Patch[];
 }
 
-export type DockTab = 'serial' | 'plotter' | 'logic' | 'inputs' | 'diagnostics' | 'build';
+export type DockTab = 'serial' | 'plotter' | 'scope' | 'logic' | 'multimeter' | 'inputs' | 'diagnostics' | 'build';
 
 interface LabState {
   doc: ProjectDoc;
@@ -58,6 +58,8 @@ interface LabState {
   deleteSelection: () => void;
   setDock: (tab: DockTab) => void;
   setInput: (name: string, value: number) => void;
+  setScopePrefs: (prefs: Partial<ScopePrefs>) => void;
+  setMultimeterPrefs: (prefs: Partial<MultimeterPrefs>) => void;
   setFile: (name: string, content: string) => void;
   rename: (name: string) => void;
   setEngine: (engine: ProjectDoc['engine']) => void;
@@ -233,6 +235,8 @@ export const useLab = create<LabState>((set, get) => ({
   setDock: (tab) => set({ dock: tab }),
 
   setInput: (name, value) => get().apply({ t: 'setInput', name, value }),
+  setScopePrefs: (prefs) => get().apply({ t: 'setScopePrefs', prefs }),
+  setMultimeterPrefs: (prefs) => get().apply({ t: 'setMultimeterPrefs', prefs }),
   setFile: (name, content) => get().apply({ t: 'setFile', name, content }),
   rename: (name) => get().apply({ t: 'rename', name }),
 

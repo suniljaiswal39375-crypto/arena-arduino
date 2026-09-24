@@ -1,10 +1,13 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { parseSketch } from './parser';
 import { Circuit, type PartState, type SerialLine } from './runtime';
-import type { LogicTrace } from './instruments/logic-analyzer';
 import { Interpreter } from './interpreter';
 import { RuntimeError } from './interpreter';
 import { SkethError } from './tokens';
+
+import type { LogicTrace } from './instruments/logic-analyzer';
+import type { ScopeTrace } from './instruments/oscilloscope';
+import type { MultimeterMode, MultimeterReading } from './instruments/multimeter';
 
 export interface SimError {
   message: string;
@@ -23,6 +26,10 @@ export interface SimSnapshot {
   plotLabels: Array<string | undefined>;
   /** In-memory edge captures; never serialised into ProjectDoc. */
   logicAnalyzers: LogicTrace[];
+  /** Virtual-time analogue oscilloscope snapshot; memory-only. */
+  scope: ScopeTrace | null;
+  /** Live or passive digital multimeter reading; memory-only. */
+  multimeter: MultimeterReading | null;
   error: SimError | null;
   unsupported: string[];
 }
@@ -218,6 +225,14 @@ export class SimEngine {
     this.circuit.serialBuffer.length = 0;
   }
 
+  multimeterReading(
+    mode: MultimeterMode = 'dc-v',
+    probeA: string | null = null,
+    probeB: string | null = null,
+  ): MultimeterReading {
+    return this.circuit.multimeterReading(mode, probeA, probeB);
+  }
+
   snapshot(): SimSnapshot {
     return {
       running: this.running,
@@ -227,6 +242,8 @@ export class SimEngine {
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
       logicAnalyzers: this.circuit.logicTraces(),
+      scope: this.circuit.scopeTrace(),
+      multimeter: this.circuit.multimeterReading(),
       error: this.error,
       unsupported: [...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()],
     };

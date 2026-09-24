@@ -6,6 +6,8 @@ import type {
   ProjectDoc,
   Wire,
   WireColor,
+  ScopePrefs,
+  MultimeterPrefs,
 } from './types';
 
 enablePatches();
@@ -21,6 +23,8 @@ export type Command =
   | { t: 'setWireColor'; id: string; color: WireColor }
   | { t: 'setFile'; name: string; content: string }
   | { t: 'setInput'; name: string; value: number }
+  | { t: 'setScopePrefs'; prefs: Partial<ScopePrefs> }
+  | { t: 'setMultimeterPrefs'; prefs: Partial<MultimeterPrefs> }
   | { t: 'setEngine'; engine: Engine }
   | { t: 'setBoard'; board: string }
   | { t: 'rename'; name: string }
@@ -58,6 +62,10 @@ function labelFor(c: Command): string {
       return `edit ${c.name}`;
     case 'setInput':
       return `set ${c.name}`;
+    case 'setScopePrefs':
+      return 'configure scope';
+    case 'setMultimeterPrefs':
+      return 'configure multimeter';
     case 'setEngine':
       return 'switch engine';
     case 'setBoard':
@@ -122,6 +130,12 @@ function mutate(draft: ProjectDoc, c: Command): void {
       break;
     case 'setInput':
       draft.sim.inputs[c.name] = c.value;
+      break;
+    case 'setScopePrefs':
+      draft.sim.scope = { ...(draft.sim.scope ?? {}), ...c.prefs };
+      break;
+    case 'setMultimeterPrefs':
+      draft.sim.multimeter = { ...(draft.sim.multimeter ?? {}), ...c.prefs };
       break;
     case 'setEngine':
       draft.engine = c.engine;

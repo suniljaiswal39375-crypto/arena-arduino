@@ -57,4 +57,28 @@ describe('eight-channel bounded virtual edge capture', () => {
     expect(toVcd(snap)).toContain('#1\n0!');
     expect(toVcd(snap)).not.toContain('#-');
   });
+
+  it('supports edge and level triggering', () => {
+    const c = new LogicCapture(
+      'la-trig',
+      'w',
+      'Triggered',
+      true,
+      sources,
+      0,
+      levels('0'),
+      { mode: 'edge', channel: 0, slope: 'rising' },
+    );
+    expect(c.isTriggered).toBe(false);
+
+    c.observe(100, levels('0'));
+    expect(c.isTriggered).toBe(false);
+
+    c.observe(200, levels('1'));
+    expect(c.isTriggered).toBe(true);
+
+    const snap = c.snapshot(300);
+    expect(snap.trigger?.triggered).toBe(true);
+    expect(snap.trigger?.triggerTimeNs).toBe(200);
+  });
 });

@@ -8,6 +8,14 @@
  * 'x', never guessed LOW. Capture stays in worker memory until an explicit VCD
  * download; it is not a project file or a service-worker asset.
  */
+import {
+  DigitalTrigger,
+  type DigitalTriggerConfig,
+  type TriggerMode,
+  type EdgeSlope,
+  type DigitalLevel,
+} from './trigger';
+
 export const LOGIC_CHANNELS = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7'] as const;
 export const MAX_LOGIC_ANALYZERS = 2;
 export const MAX_LOGIC_EDGES = 2048;
@@ -27,6 +35,14 @@ export interface LogicTrace {
   edges: LogicEdge[];
   /** Old edges removed when the bounded window filled. Never silently lost. */
   dropped: number;
+  trigger?: {
+    mode: TriggerMode;
+    channel: number;
+    slope: EdgeSlope;
+    level: DigitalLevel;
+    triggered: boolean;
+    triggerTimeNs: number | null;
+  };
 }
 
 export class LogicCapture {
@@ -41,10 +57,17 @@ export class LogicCapture {
   private endNs: number;
   private edges: LogicEdge[] = [];
   private dropped = 0;
+  private trigger: DigitalTrigger;
 
   constructor(
-    id: string, signature: string, label: string, grounded: boolean,
-    sources: string[], timeNs: number, values: LogicLevel[],
+    id: string,
+    signature: string,
+    label: string,
+    grounded: boolean,
+    sources: string[],
+    timeNs: number,
+    values: LogicLevel[],
+    triggerConfig?: Partial<DigitalTriggerConfig>,
   ) {
     this.id = id;
     this.signature = signature;
@@ -55,11 +78,23 @@ export class LogicCapture {
     this.endNs = timeNs;
     this.initial = [...values];
     this.levels = [...values];
+    this.trigger = new DigitalTrigger(triggerConfig);
+  }
+
+  setTrigger(config: Partial<DigitalTriggerConfig>): void {
+    this.trigger.setConfig(config);
   }
 
   observe(timeNs: number, values: LogicLevel[]): void {
     if (!Number.isSafeInteger(timeNs) || timeNs < 0) return;
     this.endNs = Math.max(this.endNs, timeNs);
+
+    const triggerChan = this.trigger.currentConfig.channel;
+    const triggerVal = values[triggerChan];
+    if (triggerVal === '0' || triggerVal === '1') {
+      this.trigger.check(timeNs, triggerVal);
+    }
+
     for (let channel = 0; channel < LOGIC_CHANNELS.length; channel++) {
       const value = values[channel] ?? 'x';
       if (this.levels[channel] === value) continue;
@@ -76,17 +111,36 @@ export class LogicCapture {
 
   snapshot(timeNs: number): LogicTrace {
     if (Number.isSafeInteger(timeNs)) this.endNs = Math.max(this.endNs, timeNs);
+    const trigCfg = this.trigger.currentConfig;
     return {
-      id: this.id, label: this.label, grounded: this.grounded,
-      channels: LOGIC_CHANNELS.map((name, i) => ({ name, source: this.sources[i] ?? 'unwired', level: this.levels[i] ?? 'x' })),
-      initial: [...this.initial], startNs: this.startNs, endNs: this.endNs,
-      edges: this.edges.map((edge) => ({ ...edge })), dropped: this.dropped,
+      id: this.id,
+      label: this.label,
+      grounded: this.grounded,
+      channels: LOGIC_CHANNELS.map((name, i) => ({
+        name,
+        source: this.sources[i] ?? 'unwired',
+        level: this.levels[i] ?? 'x',
+      })),
+      initial: [...this.initial],
+      startNs: this.startNs,
+      endNs: this.endNs,
+      edges: this.edges.map((edge) => ({ ...edge })),
+      dropped: this.dropped,
+      trigger: {
+        mode: trigCfg.mode,
+        channel: trigCfg.channel,
+        slope: trigCfg.slope,
+        level: trigCfg.level,
+        triggered: this.trigger.triggered,
+        triggerTimeNs: this.trigger.triggerTime,
+      },
     };
   }
 
   get levelsNow(): LogicLevel[] { return [...this.levels]; }
   get eventCount(): number { return this.edges.length; }
   get droppedCount(): number { return this.dropped; }
+  get isTriggered(): boolean { return this.trigger.triggered; }
 }
 
 /** One analyzer per VCD file. Times are relative to the retained window. */

@@ -344,5 +344,29 @@ including real CLI/Core, Docker AVR-to-avr8js/SSE, and browser/offline tests.
 Cloudflare Workers Builds still fails independently on merged baseline PR #2;
 its external logs/deployment require separate operator diagnosis.
 
-Next: design a calibrated virtual-time analogue oscilloscope/multimeter and
-trigger modes. AI/Chaos generation and later phases remain in the order above.
+### Inspect-bench calibrated oscilloscope, multimeter & trigger modes — 25 September 2026 (Phase 12 expanded)
+
+- **Calibrated virtual-time oscilloscope (`Scope` tab):** dual probes CH1 & CH2 observing simulated
+  node potentials on both engines; 10 horizontal divisions (100 µs/div to 1 s/div), vertical scales
+  (0.5 to 5 V/div), auto-measurements (`Vpp`, `Vmax`, `Vmin`, `Vavg`, `Vrms`, frequency, duty cycle,
+  rise time), configurable trigger modes (`Auto`, `Normal`, `Single`, rising/falling slope, threshold
+  voltage) and freeze/hold controls.
+- **Digital multimeter (`Multimeter` tab):** Probe A (+) and Probe B (-) selectable on any pin/net;
+  modes DC Voltage (`V⎓`), DC Branch Current (`mA⎓`), Resistance (`Ω`), Continuity test with
+  audio/visual beep (`🔊`), and Diode/LED forward drop (`⏵|`). Solved from netlist graph impedance and
+  simulated potentials. Floating, unreferenced, or open nets report honest states (`O.L`, `unmeasured`,
+  `floating`) rather than invented values.
+- **Logic analyzer trigger enhancements:** Edge and level triggering on channels D0–D7 with armed
+  and triggered indicators.
+- **Differential cross-engine parity:** Blink and passive rail tests verify identical oscilloscope
+  measurements and multimeter readings across both the functional sketch interpreter and the
+  avr8js firmware engine.
+- **Zero persistence guarantee:** Waveform buffers and instrument samples live strictly in transient
+  worker/React memory, never serialised into `ProjectDoc`, `localStorage`, or service-worker caches.
+
+Local verification for this checkpoint: `npm run typecheck` passed; `npm test` passed
+**696 tests in 63 files**, with 2 CLI/Docker opt-ins skipped locally; `npm run scenarios`
+passed **10/10**; `npm run build` compiled successfully and generated **215 static pages**.
+
+Next: proceed to typed-tool AI mentor ("Saksham-class"), generated Chaos Lab exercises, custom chip authoring,
+and later roadmap phases in the order specified in the PDF.

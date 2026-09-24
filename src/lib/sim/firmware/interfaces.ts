@@ -1,5 +1,7 @@
 import type { PartState, SerialLine } from '../runtime';
 import type { LogicTrace } from '../instruments/logic-analyzer';
+import type { ScopeTrace } from '../instruments/oscilloscope';
+import type { MultimeterReading } from '../instruments/multimeter';
 
 /**
  * A hardware-level probe of the firmware slice, compatible in spirit with the
@@ -34,6 +36,8 @@ export interface FirmwareSnapshot {
   plot: number[][];
   plotLabels: Array<string | undefined>;
   logicAnalyzers: LogicTrace[];
+  scope: ScopeTrace | null;
+  multimeter: MultimeterReading | null;
   status: FirmwareStatus;
   unsupported: string[];
 }
