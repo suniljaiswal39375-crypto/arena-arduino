@@ -54,7 +54,11 @@ re-labelled interpreter.
   ADC, watchdog), one instruction at a time on a 16 MHz clock.
 - **MODEL:** the *nets* the pins drive — the same `Circuit` netlist/pin model
   the functional engine uses (LEDs, button pull-ups, relay contacts, stray
-  rail voltages, sensor/potentiometer inputs).
+  rail voltages, sensor/potentiometer inputs). The eight-channel logic analyzer
+  is also a *model*, not an exact physical sampler: AVR GPIO port writes use
+  16 MHz cycle offsets and a 1 ns VCD export scale. SPI/TWI/UART/Timer-owned
+  pins are unknown `X` rather than the misleading DDR/PORT latch state;
+  analogue waves, triggers and internal CPU probes are not claimed.
 - **NOT MODELED (reported by name, never guessed):** multi-device MAX7219
   cascades, BCD matrix decode mode, non-common-cathode seven-segment topologies,
   shaft steps/speed/angle/torque or coil current for the stepper, non-8N1/non-ASCII
@@ -175,6 +179,10 @@ npm test -- src/lib/sim/parity
   outputs, and both engines' observable results. `parity/lcd-parity.test.ts`,
   `analog-serial-parity.test.ts` and `gpio-input-output-parity.test.ts` cover
   TWI LCD, USART0 lines/plot, ADC0/analogRead, pull-up/button and relay load.
+- `../instruments/logic-analyzer*.test.ts` — VCD initial/retained values,
+  clipped window, both-engine blink edges, sub-frame AVR cycles, and peripheral
+  waveform unknowns. `e2e/logic-analyzer.spec.ts` wires through the builder and
+  downloads a real capture in Chromium.
 - `src/server/firmware/real-cli.integration.test.ts` — skipped locally unless
   official CLI + AVR core are installed and both CLI env vars are set; this
   passed in GitHub Actions. `build-events.test.ts` checks bounded/fractured

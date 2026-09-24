@@ -427,3 +427,33 @@ a production build with 215 static pages passed. GitHub Actions run
 36048759643 passed the official CLI/Core, isolated Docker/SSE-to-avr8js and
 browser regressions. No public deployment or school-scale security review
 has been performed.
+
+## First inspect-bench slice: event-timestamped digital logic, not a GHz instrument — 25 September 2026
+
+- **Capture observable nets, not UI frames or fabricated CPU internals.** The eight-channel
+  `emu-logic-analyzer` now needs its GND tied to a true ground reference; D0–D7 only
+  resolve a single board GPIO drive, a directly wired input pull-up/button, or a sound
+  rail. Floating, contended and undecoded nets are `X`. Shared `Circuit` samples
+  *every* functional GPIO write or AVR atomic port update; AVR port listeners use the
+  current 16 MHz instruction-cycle offset, rather than the end-of-worker-frame clock.
+  Firmware instruction time retains fractional microseconds. One AVR cycle is 62.5 ns;
+  VCD stores its rounded 1 ns timestamp. Functional writes carry the interpreter's
+  virtual microsecond clock (rapid same-time transitions are not invented into pulses).
+- **No false peripheral waveforms.** Functional `analogWrite` is an averaged duty model:
+  those channels become `X`. AVR timer compare outputs, SPI, UART TX and TWI pins are
+  similarly `X` while their peripheral owns the pin; the GPIO latch is not a physical
+  waveform. Unknowns and missing ground are explained by `deviceLimitations`.
+  This first instrument is explicitly `MODEL`, *not* the PDF's physical 1 GHz sampler,
+  edge/level trigger, analogue oscilloscope, calibrated multimeter or internal core probe.
+- **Bounded, transient capture and deterministic export.** Two analyzers × 2,048 retained
+  edges; eviction updates the retained initial state and increments an exposed drop count.
+  Rewiring or reloading clears incompatible history. Waveforms and source labels appear
+  in the Logic dock and selected-part inspector; VCD uses fixed channel identifiers,
+  `$dumpvars` for the retained initial levels and relative 1 ns timestamps. No user
+  label is interpolated into VCD syntax. Captures live only in worker/React memory —
+  not in project JSON, browser persistence or service-worker caches. Export requires
+  an explicit user download.
+- **Verification boundary:** dedicated capture/VCD unit tests, a wired functional/real-AVR
+  blink trace and sub-frame machine-code edge tests, SPI-unknown tests, render coverage,
+  and a new browser wiring/download test. Local CLI/Docker remain unavailable; a
+  public build-farm deployment and Cloudflare Workers build have not been verified.

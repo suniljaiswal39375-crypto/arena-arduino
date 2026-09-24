@@ -12,7 +12,7 @@ Hindi keys must cover every English key at compile time. Interpolation is text-o
 The provider renders English on the server and hydrates the stored preference after mount, avoiding an SSR mismatch. `sparklab:language` persists in localStorage; a blocked/quota-limited store still allows page-session switching. Storage events synchronize tabs.
 
 ## Scope and language attributes
-Translated: site navigation, toolbar/save feedback, native keyboard wiring, mission action buttons, dock navigation, serial send controls, and the directory/detail/tracker teaching content for all 16 guided missions and 121 steps. Mission content lives in `lib/missions/hi-a.ts` and `hi-b.ts`, separate from UI labels. Component names, skill descriptions, inspector details, diagnostics, import/export and several specialist panels remain English. A Hindi notice explicitly explains that scope.
+Translated: site navigation, toolbar/save feedback, native keyboard wiring, mission action buttons, dock navigation, logic-analyzer tab/export/ground controls, serial send controls, and the directory/detail/tracker teaching content for all 16 guided missions and 121 steps. Mission content lives in `lib/missions/hi-a.ts` and `hi-b.ts`, separate from UI labels. Component names, skill descriptions, inspector details, diagnostics, import/export and several specialist panels remain English. A Hindi notice explicitly explains that scope.
 
 The document language stays English because many public page bodies and all metadata remain English. Mission content uses its own scoped language tag. Translated headers, builder controls and the builder main region get `lang="hi"`; untranslated sections explicitly declare `lang="en"`. Do not set the entire document to Hindi until its content is translated.
 

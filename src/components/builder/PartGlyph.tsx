@@ -262,6 +262,24 @@ export function PartGlyph({ def, state, width, height }: Props) {
       );
     }
 
+    case 'logic-analyzer': {
+      return (
+        <g>
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+            <g key={i}>
+              <circle cx={width / 2 - 28 + (i % 4) * 18} cy={cy - 12 + Math.floor(i / 4) * 16} r={3.5}
+                fill={state.levels[i] === '1' ? 'var(--color-ok)' : state.levels[i] === '0' ? 'var(--color-accent)' : 'var(--color-border-strong)'} />
+              <text x={width / 2 - 28 + (i % 4) * 18} y={cy - 18 + Math.floor(i / 4) * 16}
+                textAnchor="middle" fontSize={6} fill="var(--color-text-faint)">{i}</text>
+            </g>
+          ))}
+          <text x={width / 2} y={cy + 31} fontSize={9} textAnchor="middle" fill="var(--color-text-dim)">
+            {state.grounded ? `${state.edges} edges${state.dropped ? ' · clipped' : ''}` : 'GND ?'}
+          </text>
+        </g>
+      );
+    }
+
     case 'matrix': {
       const cells = state.cells ?? [];
       const size = 3;

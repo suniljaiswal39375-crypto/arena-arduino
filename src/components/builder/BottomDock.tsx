@@ -9,10 +9,12 @@ import type { SimSnapshot } from '@/lib/sim/engine';
 import type { BuildMessage } from '@/lib/sim/firmware/build-events';
 import { AlertTriangle, Info, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { LogicPanel } from './LogicPanel';
 
 const TABS: Array<{ id: DockTab; label: MessageKey }> = [
   { id: 'serial', label: 'serial' },
   { id: 'plotter', label: 'plotter' },
+  { id: 'logic', label: 'logic' },
   { id: 'inputs', label: 'inputs' },
   { id: 'diagnostics', label: 'diagnostics' },
   { id: 'build', label: 'buildLogs' },
@@ -76,6 +78,7 @@ export function BottomDock({
       <div className="min-h-0 flex-1 overflow-hidden">
         {dock === 'serial' && <SerialPanel snapshot={snapshot} onSend={onSend} />}
         {dock === 'plotter' && <div lang="en" className="h-full"><PlotterPanel snapshot={snapshot} /></div>}
+        {dock === 'logic' && <LogicPanel snapshot={snapshot} />}
         {dock === 'inputs' && <div lang="en" className="h-full"><InputsPanel /></div>}
         {dock === 'diagnostics' && <div lang="en" className="h-full"><DiagnosticsPanel /></div>}
         {dock === 'build' && (

@@ -197,6 +197,10 @@ function describeState(state: PartState): string {
         ? state.coils === null ? 'GPIO IN1–4: floating/input · coil phase unknown'
           : `GPIO IN1–4: ${state.coils.toString(2).padStart(4, '0')} · ${state.sequence ?? 'unknown'} phase · ${state.transitions} observed GPIO transitions (not shaft steps)`
         : 'Unpowered · no motor motion inferred';
+    case 'logic-analyzer':
+      return state.grounded
+        ? `${state.levels.map((v, i) => `D${i}:${v}`).join(' ')} · ${state.edges} retained edges${state.dropped ? ` · ${state.dropped} dropped` : ''}`
+        : 'GND not referenced · digital levels unknown (X)';
     case 'board':
       return 'running';
     default:

@@ -75,6 +75,9 @@ export class FirmwareEngine {
   private boardId = '';
   private image: IntelHexImage | null = null;
   private clock = 0;
+  /** AVR cycle counter at the start of the instruction segment now executing. */
+  private segmentStartCycles: number | null = null;
+  private unknownLogicMask = 0;
   private running = false;
   private started = false;
   private instructions = 0;
@@ -107,6 +110,8 @@ export class FirmwareEngine {
   /** Re-read the document after an edit. Inputs/wiring change, firmware keeps running. */
   update(doc: ProjectDoc): void {
     this.doc = doc;
+    this.circuit.clock = this.clock;
+    this.refreshPeripheralProbeMask(true);
     this.circuit.update(doc); // keep latched display RAM and valid phase history if wiring is unchanged
     this.pinDrive.clear();
     this.pinOutputs.clear();
@@ -183,6 +188,8 @@ export class FirmwareEngine {
     this.image = image;
     this.lastHex = hex;
     this.clock = 0;
+    this.segmentStartCycles = null;
+    this.unknownLogicMask = 0;
     this.debt = 0;
     this.partial = '';
     this.instructions = 0;
@@ -364,6 +371,42 @@ export class FirmwareEngine {
 
   /* --------------------------------------------------------- pin model -- */
 
+  /** Cycle position within this virtual debt-loop segment, not the UI frame. */
+  private currentCycleTimeUs(): number {
+    const cpu = this.sandbox?.cpu;
+    return this.clock + (cpu && this.segmentStartCycles !== null
+      ? (cpu.cycles - this.segmentStartCycles) / 16 : 0);
+  }
+
+  /**
+   * GPIO port writes are captured; peripheral waveforms are NOT. Do not turn
+   * timer PWM, SPI SCK/MOSI, USART TX or TWI SDA/SCL into a fictitious constant
+   * 0/1 just because the DDR/PORT latch has that value. Observe control
+   * registers after each executed instruction when a probe is present so a
+   * mid-frame peripheral enable becomes X at its actual virtual time.
+   */
+  private refreshPeripheralProbeMask(force = false): void {
+    const cpu = this.sandbox?.cpu;
+    if (!cpu) return;
+    const d = cpu.data;
+    let mask = 0;
+    if ((d[0x44] ?? 0) & 0xc0) mask |= 1 << 6;  // Timer0 OC0A
+    if ((d[0x44] ?? 0) & 0x30) mask |= 1 << 5;  // Timer0 OC0B
+    if ((d[0x80] ?? 0) & 0xc0) mask |= 1 << 9;  // Timer1 OC1A
+    if ((d[0x80] ?? 0) & 0x30) mask |= 1 << 10; // Timer1 OC1B
+    if ((d[0xb0] ?? 0) & 0xc0) mask |= 1 << 11; // Timer2 OC2A
+    if ((d[0xb0] ?? 0) & 0x30) mask |= 1 << 3;  // Timer2 OC2B
+    if ((d[0x4c] ?? 0) & 0x40) mask |= (1 << 11) | (1 << 13); // SPI master pins
+    if ((d[0xc1] ?? 0) & 0x08) mask |= 1 << 1;  // USART0 TX
+    if ((d[0xbc] ?? 0) & 0x04) mask |= (1 << 18) | (1 << 19); // TWI A4/A5
+    if (mask === this.unknownLogicMask && !force) return;
+    this.unknownLogicMask = mask;
+    this.circuit.clock = this.currentCycleTimeUs();
+    const pins = new Set<number>();
+    for (let pin = 0; pin < 20; pin++) if (mask & (1 << pin)) pins.add(pin);
+    this.circuit.setUnknownLogicPins(pins);
+  }
+
   /**
    * Set the Circuit's pin model from the *authoritative* AVR register state.
    * DDR/PORT decide INPUT / INPUT_PULLUP / OUTPUT; the driven level comes
@@ -383,6 +426,11 @@ export class FirmwareEngine {
         level: state === 1 ? 1 : 0,
       });
     }
+    // The port listener runs inside avrInstruction, not at a rendered frame.
+    // Stamp its *whole port* atomically at the AVR cycle that issued the write.
+    // One 16 MHz cycle is 62.5 ns; Circuit exports nearest-nanosecond VCD.
+    this.circuit.clock = this.currentCycleTimeUs();
+    this.refreshPeripheralProbeMask();
     this.circuit.applyAvrPins(updates);
     // INPUT_PULLUP can be enabled mid-frame. Refresh the external PIN levels
     // before the *next* instruction reads them, not only at worker boundaries.
@@ -411,6 +459,8 @@ export class FirmwareEngine {
         level: state === 1 ? 1 : 0,
       });
     }
+    this.circuit.clock = this.clock;
+    this.refreshPeripheralProbeMask(true);
     this.circuit.applyAvrPins(updates);
 
     // ADC: give the AVR the circuit's analogue answer for each channel, in
@@ -489,11 +539,15 @@ export class FirmwareEngine {
         // Execute until the firmware raises the delay flag (or the segment
         // budget elapses), exactly like the interpreter yielding at delay().
         const cyclesBefore = cpu.cycles;
-        const ran = this.executeUntilDelay(cpu);
-        this.instructions += ran;
-        // Real instruction work: cpu.cycles counts AVR clock cycles, so the
-        // simulated time is instruction-accurate at 16 MHz.
-        this.clock += Math.round((cpu.cycles - cyclesBefore) / 16);
+        this.segmentStartCycles = cyclesBefore;
+        try {
+          this.instructions += this.executeUntilDelay(cpu);
+        } finally {
+          this.segmentStartCycles = null;
+        }
+        // Keep fractional microseconds: rounding a whole segment would erase
+        // the cycle timing of sub-frame GPIO edges in the logic analyzer.
+        this.clock += (cpu.cycles - cyclesBefore) / 16;
       }
 
       const consumed = this.clock - before;
@@ -529,6 +583,7 @@ export class FirmwareEngine {
       if (cpu.data[BRIDGE_DELAY_FLAG] !== 0) break;
       step(this.sandbox as AvrSandbox);
       ran++;
+      if (this.circuit.hasLogicAnalyzers) this.refreshPeripheralProbeMask();
     }
     return ran;
   }
@@ -549,6 +604,7 @@ export class FirmwareEngine {
       serial: [...this.circuit.serialLog],
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
+      logicAnalyzers: this.circuit.logicTraces(),
       status: this.status(),
       unsupported: [...new Set([...this.unsupported, ...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()])],
     };

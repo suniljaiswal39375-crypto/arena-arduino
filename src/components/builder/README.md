@@ -10,7 +10,7 @@
 | `SchematicCanvas` | the SVG scene: pan, zoom, snap, drag, rotate, wire pin-to-pin |
 | `PartGlyph` | the live visual for one part — LED glow, servo angle, LCD text, relay state |
 | `CodePane` | the sketch editor (Monaco, with an offline textarea fallback) |
-| `BottomDock` | Serial, Plotter, Inputs, Diagnostics, ephemeral AVR Build logs (SSE) |
+| `BottomDock` + `LogicPanel` | Serial, Plotter, eight-channel Logic waveform/VCD, Inputs, Diagnostics, ephemeral AVR Build logs (SSE) |
 | `Inspector` | pins, attributes, live state and findings for the selected part |
 | `StepTracker` | mission steps, hints, stuck detection, locked reference sketch |
 
@@ -20,7 +20,10 @@
 - `SchematicCanvas` renders a scene graph to SVG — no drawing library. That is a spec requirement
   and it is also why pins can be focusable and fault pulses can be animated per pin.
 - `PartGlyph` switches on the `PartState` variant from the simulator. A new adapter needs a case
-  here or the part renders as a plain box.
+  here or the part renders as a plain box. The logic analyzer glyph and inspector
+  display only known GPIO levels or `X`; they never invent a waveform on SPI,
+  timer PWM or floating wires. VCD downloads are explicit, worker-memory-only,
+  and not part of project persistence.
 - Keyboard shortcuts are documented on `/docs` and must stay in sync with `SchematicCanvas`.
 
 **Offline note.** Monaco loads from same-origin `/vendor/monaco/vs` assets copied by predev/prebuild; `CodePane` falls back to a line-numbered

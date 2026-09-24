@@ -87,9 +87,12 @@ Phase 10 status and remaining order:
    the CI image build, isolated container compile, SSE and avr8js execution **passed**
    in run 36048759643. A dedicated operator deployment, abuse controls, network/TLS
    configuration and security review are not claimed by a CI test.
-3. Only after the build boundary, add accurately timed instruments/VCD, then typed-tool AI,
-   generated Chaos exercises, chip authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP.
-   Non-AVR architectures (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
+3. **Phase 12 started after the build boundary:** the first modelled instrument now captures
+   eight observed GPIO nets at virtual write/cycle time, displays live waves and exports VCD.
+   It is not a physical 1 GHz sampler: triggers, analogue scope/multimeter and broader bus
+   probes remain. Only afterward pursue typed-tool AI, generated Chaos exercises, chip
+   authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP. Non-AVR architectures
+   (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
 
 Unsupported remains explicit for multi-device MAX7219 cascades, BCD decode mode, alternative
 seven-segment topologies, non-8N1/non-ASCII serial, unmodelled I2C buses and physical motor
@@ -109,9 +112,16 @@ Foundation implemented: optional PostgreSQL + Drizzle + Auth.js Google/database 
 
 This is what makes it a lab rather than a simulator.
 
-- **Logic analyser**, 8 channels, 1 GHz, with VCD export. Needs real bus timing, so it depends on
-  Phase 10.
-- **Multimeter, oscilloscope and power supply** instruments against the netlist.
+- **Eight-channel digital logic analyser + VCD — first bounded model shipped.** Requires
+  a grounded `emu-logic-analyzer` and observable board GPIO nets; AVR port edges receive
+  16 MHz cycle timestamps, functional writes virtual µs. Live waves, source labels,
+  unknown (`X`) for unsupported/floating/averaged/peripheral-owned nets and deterministic
+  1 ns-timescale VCD export are implemented. Captures are worker-memory-only, two probes
+  × 2,048 edges max; overflow and rewire resets are visible. A VCD 1 ns timescale does
+  **not** imply a physical 1 GHz sampler. Edge/level triggering, further digital bus
+  probes and calibrated sampling remain unimplemented.
+- **Multimeter, analogue oscilloscope and power supply** instruments against the netlist remain.
+  Model voltage/uncertainty and timebase honestly before advertising any analogue accuracy.
 - **GDB bridge** once there is a real core to attach to.
 
 ## Phase 13 — P1: the learning surface
@@ -140,7 +150,8 @@ This is what makes it a lab rather than a simulator.
 - VS Code extension and MCP server, so a project can be driven from an agent. (The CLI and the
   GitHub Action exist; the MCP server would wrap the same `runScenario` / `SimEngine` surface.)
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
-  They need a renderer, a touchscreen part, an MQTT broker and a logic analyser respectively.
+  They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
+  pattern assertions against the new bounded capture respectively.
 - PWA install, accessibility audit, performance budget, pricing and school/org billing.
 
 ---
@@ -309,3 +320,27 @@ browser checks and all standard jobs. The next step is a protected operator
 deployment/security review before real untrusted public compilation; within
 product development, proceed to timing-accurate instruments/VCD, then the
 remaining later phases in the order above.
+
+### Inspect-bench first instrument — 25 September 2026 (Phase 12 partial)
+
+The Logic Analyzer (8 ch) now observes D0–D7 nets relative to a wired GND on either
+engine, recording transitions at functional virtual-write time or executed AVR
+instruction-cycle offsets. The Logic dock shows live steps, source pins and recent
+changes; the retained bounded window exports deterministic 1 ns-timescale VCD.
+Single-board GPIO, directly wired button pull-ups and rails are decoded; floating,
+ambiguous, averaged-PWM and SPI/UART/TWI/Timer-owned signals are `X` with explicit
+limitations. Two analyzers × 2,048 edges are retained; overflows and rewiring resets
+are shown. Captures are transient, not project/browser-storage state.
+
+Local verification for this slice: `npm run typecheck` passed; `npm test` passed
+**671 tests in 59 files**, with 2 CLI/Docker opt-ins skipped locally; `npm run scenarios`
+passed **10/10**; `npm run build` generated **215 static pages**. The new browser
+wiring/VCD-download regression needs CI Chromium; the preceding GitHub Actions
+run 36049923223 passed all four jobs before this instrument was added. Do not
+interpret that run as validation of the new browser test. Cloudflare Workers
+Builds fails independently even on merged baseline PR #2; its external logs
+and deployment require separate operator diagnosis.
+
+Next: verify the browser regression and AVR/container jobs on this commit;
+then design a calibrated virtual-time analogue oscilloscope/multimeter and
+trigger modes. AI/Chaos generation and later phases remain in the order above.

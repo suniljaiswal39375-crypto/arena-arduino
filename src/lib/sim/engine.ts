@@ -1,6 +1,7 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { parseSketch } from './parser';
 import { Circuit, type PartState, type SerialLine } from './runtime';
+import type { LogicTrace } from './instruments/logic-analyzer';
 import { Interpreter } from './interpreter';
 import { RuntimeError } from './interpreter';
 import { SkethError } from './tokens';
@@ -20,6 +21,8 @@ export interface SimSnapshot {
   /** Numeric series harvested from the serial log, for the plotter. */
   plot: number[][];
   plotLabels: Array<string | undefined>;
+  /** In-memory edge captures; never serialised into ProjectDoc. */
+  logicAnalyzers: LogicTrace[];
   error: SimError | null;
   unsupported: string[];
 }
@@ -75,6 +78,7 @@ export class SimEngine {
     this.plot = [];
     this.plotLabels = [];
     this.circuit.update(doc);
+    this.circuit.resetLogicCaptures();
     this.gen = null;
     this.interp = null;
     this.debt = 0;
@@ -222,6 +226,7 @@ export class SimEngine {
       serial: this.circuit.serialLog,
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
+      logicAnalyzers: this.circuit.logicTraces(),
       error: this.error,
       unsupported: [...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()],
     };

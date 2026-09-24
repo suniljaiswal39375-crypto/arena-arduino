@@ -69,7 +69,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
 | 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
-| Accounts, classrooms, 3D workbench, photo scanning, AI mentor, multiplayer, logic analyser | ⏳ see ROADMAP |
+| Eight-channel virtual logic analyzer: grounded GPIO edge capture, live waveform, bounded VCD export on either engine | ✅ modelled slice · see limits below |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, oscilloscope/multimeter, AI mentor, multiplayer, 3D/scanning | ⏳ see ROADMAP |
 
 ---
 
@@ -150,6 +151,19 @@ The optional build farm runs each sketch in a disposable, no-network Docker cont
 **Build logs** panel, with JSON compatibility. Docker integration **passed in GitHub Actions CI** (run 36048759643); it cannot
 be run in this sandbox, which has no Docker. See `ROADMAP.md` Phase 10 for limits.
 
+**Inspect bench (first instrument, Phase 12 partial).** Add *Logic Analyzer (8 ch)* from the
+palette; wire its GND to board GND and D0–D7 to board GPIO nets. Open the **Logic** dock tab
+to see live event-driven step traces, source pins and the most recent edges; **Export VCD**
+downloads a standard 1 ns-timescale VCD for the retained window. Up to two analyzers hold
+2,048 edges each in worker memory, never in the project/autosave or service-worker cache.
+Older edges are visibly counted when evicted. AVR GPIO port writes are stamped at their
+16 MHz instruction-cycle position (62.5 ns cycles, rounded to 1 ns); the functional engine
+stamps writes at its virtual microsecond time. This is **not a physical 1 GHz sampler** or
+a trigger; floating/contended nets, missing ground and peripheral-owned SPI/UART/TWI/Timer
+waveforms are unknown (`X`), not guessed. Functional averaged PWM also appears as `X`.
+Wiring changes reset the affected capture. See `src/lib/sim/instruments/` for scope/tests.
+Multimeter, analogue oscilloscope and physical instrument calibration remain to do.
+
 ---
 
 ## File formats
@@ -185,13 +199,15 @@ Parts Wokwi has no model for are named at export time rather than silently dropp
 npm test
 ```
 
-Current AVR/build-farm checkpoint: `npm run typecheck` passed; `npm test` passed
-**659 tests across 57 files**, with **2 opt-in integration tests skipped locally**
-(no CLI or Docker); `npm run scenarios` passed **10/10**; `npm run build`
-passed (**215 static pages**). GitHub Actions run 36048759643 passed typecheck,
-tests, production build, browser regressions, scenarios, an official-CLI build
-and the **real Docker-container/SSE-to-avr8js** integration check. Neither a
-public deployment nor live OAuth/PostgreSQL is asserted.
+Current local logic-instrument checkpoint: `npm run typecheck` passed; `npm test`
+passed **671 tests across 59 files**, with **2 opt-in integration tests skipped locally**
+(no CLI or Docker); `npm run scenarios` passed **10/10** and `npm run build`
+passed (**215 static pages**). Browser checks for this instrument require the
+CI-provided Chromium (see `e2e/logic-analyzer.spec.ts`). The previous [CI run 36049923223](https://github.com/suniljaiswal39375-crypto/arena-arduino/actions/runs/36049923223)
+passed all four GitHub Actions jobs (including official CLI/Core, real Docker/SSE-to-avr8js,
+and browser regressions) **before** the new instrument was added. This is neither a
+public deployment nor live OAuth/PostgreSQL validation. An external Cloudflare Workers
+Builds check also fails on the merged baseline and requires separate operator diagnosis.
 
 The suite does not only test units, it tests promises. Every piece of seed content is executed:
 

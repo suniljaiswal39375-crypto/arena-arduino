@@ -11,7 +11,7 @@ import { templateDoc, templates } from '@/lib/templates';
 import { MISSIONS } from '@/lib/missions/missions';
 import { SimEngine } from '@/lib/sim/engine';
 import { ALL_PARTS } from '@/lib/parts';
-import { makePart } from '@/lib/doc/factory';
+import { makePart, makeWire } from '@/lib/doc/factory';
 import type { ProjectDoc } from '@/lib/doc/types';
 
 /**
@@ -122,7 +122,7 @@ describe('builder render with live simulator state', () => {
     expect(snap.serial.length).toBeGreaterThan(0);
 
     const seen = new Set<string>();
-    const tabs: DockTab[] = ['serial', 'plotter', 'inputs', 'diagnostics', 'build'];
+    const tabs: DockTab[] = ['serial', 'plotter', 'logic', 'inputs', 'diagnostics', 'build'];
     for (const tab of tabs) {
       useLab.setState({ dock: tab });
       const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
@@ -144,6 +144,36 @@ describe('builder render with live simulator state', () => {
     expect(html).toContain('&lt;script&gt;bad&lt;/script&gt;');
     expect(html).not.toContain('<script>bad</script>');
     useLab.setState({ dock: 'serial' });
+  });
+
+  it('renders a real captured wave, labelled net, and VCD export in the Logic tab', () => {
+    const doc = templateDoc('uno-blink')!;
+    const board = doc.diagram.parts.find((p) => p.type === 'arduino-uno')!;
+    const probe = makePart('emu-logic-analyzer', 450, 100, { label: '<unsafe>' });
+    doc.diagram.parts.push(probe);
+    doc.diagram.connections.push(
+      makeWire({ part: board.id, pin: 'D13' }, { part: probe.id, pin: 'D0' }),
+      makeWire({ part: board.id, pin: 'GND' }, { part: probe.id, pin: 'GND' }),
+    );
+    useLab.getState().loadDoc(doc);
+    const engine = new SimEngine(doc);
+    engine.load(doc, doc.files['sketch.ino'] ?? '');
+    engine.start();
+    engine.tick(600);
+    const snap = engine.snapshot();
+    useLab.setState({ dock: 'logic', selection: probe.id });
+    const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
+    const inspector = render(<Inspector states={snap.parts} />);
+    const glyph = render(<SchematicCanvas states={snap.parts} />);
+    expect(html).toContain('Export VCD');
+    expect(html).toContain('Latest observed changes');
+    expect(html).toMatch(/D0<!-- -->: <!-- -->[01x]/);
+    expect(html).toContain('Arduino Uno D13');
+    expect(html).toContain('&lt;unsafe&gt;');
+    expect(html).not.toContain('<unsafe>');
+    expect(inspector).toContain('retained edges');
+    expect(glyph).toContain('edges');
+    useLab.setState({ dock: 'serial', selection: null });
   });
 
   it('shows the serial output of the run in the Serial tab', () => {
