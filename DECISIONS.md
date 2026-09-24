@@ -227,3 +227,12 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - Limits use atomic PostgreSQL counters rather than Redis for this bounded first service. Add edge abuse controls, retention/deletion tooling, auditing, consent policy and school privacy/security review before real student deployment.
 - The initial online-only classroom client uses direct same-origin fetch with no-store rather than TanStack Query: no background polling, optimistic private-data cache or persisted classroom state is needed. Private routes are excluded from the service worker. Explicitly downloaded snapshots remain the user's responsibility.
 - Remaining work: live integration validation, authenticated UI expansion/localization, class heatmaps, membership removal, retention/export/deletion, magic links and project sharing.
+
+
+## Submission progress and privacy controls — 24 September 2026
+
+- Show a submission/review matrix, not a mastery or mistake heatmap: source snapshots are untrusted and no server-side simulation/evidence pipeline exists. Late marks the latest submitted version against its advisory deadline.
+- Use existing SQL foreign-key cascades and row-locked member removal for active-database erasure; no soft-delete tombstones retain project source. Owner deletion cascades student work, which is explicitly warned about and confirmed. Removal is not a join-code ban.
+- Account export is accurately labelled metadata; project source remains separately downloadable per submission, avoiding an unbounded combined JSON payload. No OAuth/session secrets or other learners' data enter the export.
+- No automatic retention schedule is invented for schools. Public notice explains that operator backups/downloaded copies/local builder data are not erased by account deletion. Operator identity, consent, backup expiry and audit policy remain deployment responsibilities.
+- Private client state is cleared across tabs through BroadcastChannel (no personal payload or persistence); pending classroom refreshes are invalidated by a session generation counter. This is UI privacy hygiene, not a substitute for server session checks.

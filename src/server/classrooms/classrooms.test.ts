@@ -172,3 +172,109 @@ describe('configuration and validation', () => {
     for (const value of [null, {}, { email: 'user@example.test' }, { email: 'user@example.test', email_verified: 'true' }]) expect(verifiedGoogleProfile(value)).toBe(false);
   });
 });
+
+describe('progress and privacy controls', () => {
+  it('shows missing, submitted, reviewed and needs-work cells without project source', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    const before = await service.progress(teacher, c.id);
+    expect(before).toHaveLength(2);
+    expect(before.every(row => row.cells[0]?.status === 'not-submitted')).toBe(true);
+    await service.submit(student, c.id, a.id, createProject());
+    expect((await service.progress(student, c.id))[0]?.cells[0]?.status).toBe('submitted');
+    await service.review(teacher, c.id, a.id, student.id, { version: 1, status: 'needs-work', feedback: 'Try again' });
+    expect((await service.progress(student, c.id))[0]?.cells[0]?.status).toBe('needs-work');
+    await service.review(teacher, c.id, a.id, student.id, { version: 1, status: 'reviewed', feedback: 'Done' });
+    expect((await service.progress(student, c.id))[0]?.cells[0]?.status).toBe('reviewed');
+    expect(JSON.stringify(await service.progress(teacher, c.id))).not.toContain('project');
+  });
+  it('scopes student progress to self, denies outsiders, and flags late latest snapshots', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await db.update(schema.assignments).set({ dueAt: new Date('2020-01-01') }).where(eq(schema.assignments.id, a.id));
+    await service.submit(student, c.id, a.id, createProject());
+    const rows = await service.progress(student, c.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: student.id, cells: [{ late: true, version: 1 }] });
+    expect(JSON.stringify(rows)).not.toContain(peer.id);
+    await expect(service.progress(stranger, c.id)).rejects.toMatchObject({ status: 404 });
+    expect((await service.detail(student, c.id)).progress).toEqual(rows);
+  });
+  it('exports only personal metadata, never peer records, project source or auth secrets', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await service.submit(student, c.id, a.id, createProject({ name: 'PRIVATE_SOURCE_MARKER' }));
+    await service.submit(peer, c.id, a.id, createProject());
+    await db.insert(schema.sessions).values({ userId: student.id, sessionToken: 'SESSION_SECRET_MARKER', expires: new Date('2030-01-01') });
+    const value = await service.exportPersonal(student);
+    expect(value.account.id).toBe(student.id);
+    expect(value.submissions).toHaveLength(1);
+    const text = JSON.stringify(value);
+    for (const secret of [peer.id, 'PRIVATE_SOURCE_MARKER', 'SESSION_SECRET_MARKER', c.joinCode]) expect(text).not.toContain(secret);
+    expect(value).toHaveProperty('snapshotNotice');
+  });
+  it('lets a student leave and erase only their work, including from archived classes', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await service.submit(student, c.id, a.id, createProject());
+    await service.submit(peer, c.id, a.id, createProject());
+    await service.update(teacher, c.id, { archived: true });
+    await expect(service.removeMember(student, c.id, peer.id)).rejects.toMatchObject({ status: 404 });
+    await service.removeMember(student, c.id, student.id);
+    await expect(service.detail(student, c.id)).rejects.toMatchObject({ status: 404 });
+    expect(await service.submission(teacher, c.id, a.id, peer.id)).toBeDefined();
+    expect((await db.select().from(schema.submissions))).toHaveLength(1);
+  });
+  it('allows only owners to remove others and preserves other classrooms', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    const other = await service.create(stranger, 'Other class');
+    await service.join(student, other.joinCode);
+    await service.submit(student, c.id, a.id, createProject());
+    await expect(service.removeMember(stranger, c.id, student.id)).rejects.toMatchObject({ status: 404 });
+    await expect(service.removeMember(teacher, c.id, teacher.id)).rejects.toMatchObject({ status: 404 });
+    await service.removeMember(teacher, c.id, student.id);
+    expect((await service.list(student)).map(row => row.id)).toEqual([other.id]);
+    expect(await db.select().from(schema.submissions)).toHaveLength(0);
+  });
+  it('permanently deletes only an owned classroom and cascades its records', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await service.submit(student, c.id, a.id, createProject());
+    const other = await service.create(stranger, 'Keep');
+    await expect(service.deleteClass(student, c.id)).rejects.toMatchObject({ status: 404 });
+    await expect(service.deleteClass(stranger, c.id)).rejects.toMatchObject({ status: 404 });
+    await service.deleteClass(teacher, c.id);
+    expect(await db.select().from(schema.submissions)).toEqual([]);
+    expect(await db.select().from(schema.assignments)).toEqual([]);
+    expect((await service.detail(stranger, other.id)).classroom.name).toBe('Keep');
+  });
+  it('deletes student identity, sessions, work and counters without deleting peers or classes', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await service.submit(student, c.id, a.id, createProject());
+    await db.insert(schema.sessions).values({ userId: student.id, sessionToken: 'test-token', expires: new Date('2030-01-01') });
+    await db.insert(schema.accounts).values({ userId: student.id, type: 'oauth', provider: 'google', providerAccountId: 'test-google' });
+    await consumeLimit(db, student.id, 'read', 120, 60);
+    await service.deleteAccount(student);
+    expect(await principalFor(db, student.id)).toBeNull();
+    expect(await principalFor(db, peer.id)).not.toBeNull();
+    for (const table of [schema.sessions, schema.accounts, schema.submissions, schema.rateLimits]) expect(await db.select().from(table)).toEqual([]);
+    expect((await service.detail(teacher, c.id)).students).toHaveLength(1);
+  });
+  it('deleting an owner also deletes owned classes and member work, not member accounts', async () => {
+    const { classroom: c, assignment: a } = await fixture();
+    await service.submit(student, c.id, a.id, createProject());
+    await service.deleteAccount(teacher);
+    expect(await db.select().from(schema.classrooms)).toEqual([]);
+    expect(await db.select().from(schema.submissions)).toEqual([]);
+    expect(await principalFor(db, student.id)).not.toBeNull();
+  });
+  it('requires exact confirmations and origin for destructive HTTP calls', async () => {
+    const { classroom: c } = await fixture();
+    for (const path of [['privacy', 'delete'], [c.id, 'delete'], [c.id, 'leave'], [c.id, 'members', student.id, 'remove']]) {
+      expect((await handleClassrooms(request('POST', {}), path, deps())).status).toBe(400);
+      expect((await handleClassrooms(request('POST', { confirmation: 'DELETE MY ACCOUNT' }, 'https://evil.test'), path, deps())).status).toBe(403);
+    }
+    const exported = await handleClassrooms(request('GET'), ['privacy', 'export'], deps(student));
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('cache-control')).toContain('no-store');
+    expect((await handleClassrooms(request('GET'), [c.id, 'progress'], deps(student))).status).toBe(200);
+    expect((await handleClassrooms(request('POST', { confirmation: 'REMOVE MEMBERSHIP' }), [c.id, 'leave'], deps(student))).status).toBe(200);
+    expect((await handleClassrooms(request('POST', { confirmation: 'DELETE CLASSROOM' }), [c.id, 'delete'], deps())).status).toBe(200);
+    expect((await handleClassrooms(request('POST', { confirmation: 'DELETE MY ACCOUNT' }), ['privacy', 'delete'], deps(student))).status).toBe(200);
+  });
+});

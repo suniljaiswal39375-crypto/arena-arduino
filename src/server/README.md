@@ -31,6 +31,12 @@ Prefix `/api/classrooms`:
 | GET | `/:classId/assignments/:assignmentId` | Assignment and authorized submission metadata |
 | POST | `/:classId/assignments/:assignmentId/submission` | Member uploads `{project}` |
 | GET / PATCH | `/:classId/assignments/:assignmentId/submissions/:studentId` | Authorized snapshot / owner review `{version,status,feedback}` |
+| GET | `/:classId/progress` | Owner matrix or member's own row; also included in classroom detail |
+| GET | `/privacy/export` | Current user's account/class/submission metadata, not project source or auth tokens |
+| POST | `/privacy/delete` | Delete current account with `{confirmation:"DELETE MY ACCOUNT"}` |
+| POST | `/:classId/delete` | Owner deletes classroom with `{confirmation:"DELETE CLASSROOM"}` |
+| POST | `/:classId/leave` | Member leaves with `{confirmation:"REMOVE MEMBERSHIP"}` |
+| POST | `/:classId/members/:studentId/remove` | Owner removes member with `{confirmation:"REMOVE MEMBERSHIP"}` |
 
 Review status is `reviewed` or `needs-work`. Students see only their snapshots/feedback, not peer rosters, emails, invitation codes or submissions. Owners can see their roster and submitted projects, not student email addresses. Resubmitting increments the version and clears the previous review; stale reviews return 409. Codes use cryptographic randomness, exclude ambiguous characters and can be replaced. Archives block new joins, assignments, submissions and reviews. Replacing codes does not remove existing members.
 
@@ -40,8 +46,18 @@ Limits: 20 classes per teacher, 250 members per class, 100 assignments per class
 
 Private API/auth/classroom routes are not service-worker cached. The client does not store private classroom data in localStorage or IndexedDB. Downloads are explicitly initiated, remain on the user's device and are outside application retention control. Native project files may contain sensitive source/provenance: warn students not to upload secrets. Google OAuth bearer/refresh/ID tokens are discarded before account persistence; email, name, identity linkage and database sessions are retained. Cookies are managed by Auth.js; database sessions expire after seven days. Role changes revoke sessions.
 
-Before use with real students: establish consent, retention/deletion/export procedures, operator access auditing, backups/restore tests, least-privilege database access, Google Workspace policy, incident response and a privacy/security review. Archive is not deletion. No public sharing, member removal, self-service deletion, automated retention job, mail login, teacher heatmap or live collaborative workbench is implemented yet. Auth.js 5 is a pinned **beta**; review upgrades before production. No real Google OAuth exchange or network PostgreSQL load/concurrency test has been performed in this sandbox.
+Before use with real students: establish consent, retention/deletion/export procedures, operator access auditing, backups/restore tests, least-privilege database access, Google Workspace policy, incident response and a privacy/security review. Archive is not deletion. No public sharing, automated retention job, mail login, diagnostic/skill heatmap or live collaborative workbench is implemented yet. Self-service account deletion, member removal/leaving, classroom deletion, personal metadata export and a submission-status matrix are implemented; they are not a complete legal compliance program. Auth.js 5 is a pinned **beta**; review upgrades before production. No real Google OAuth exchange or network PostgreSQL load/concurrency test has been performed in this sandbox.
 
 ## Tests
 
 `npm test -- --run src/server/classrooms/classrooms.test.ts` executes the actual migration and Drizzle queries on PGlite (PostgreSQL WASM), including permissions, joins/collisions, archive, snapshot isolation/versioning, stale reviews, rate limits, SQL constraints and HTTP boundaries. `npm run typecheck`, `npm run build`, `npm test`, and `npm run test:e2e` cover integration with the local lab. PGlite is a test dependency only, not a production storage fallback.
+
+## Progress and deletion semantics
+
+Progress is the latest submission/review state, not verified behaviour, mastery or a grade. Cells show not submitted / awaiting review / reviewed / needs work; late compares the latest upload timestamp against the advisory due date. Students receive only their own row, teachers their current roster. No source snapshots or feedback text are included in matrix cells.
+
+Privacy operations work on archived classes too. Leaving/removing deletes that membership and its submissions/feedback atomically; other classes are untouched. Removal is not a ban: replace the invitation code to limit rejoining. Classroom deletion and account deletion cascade through dependent active database records. Deleting a teacher account also deletes owned classrooms and every student's work in them; the UI explicitly warns about this. Student accounts survive deletion of their teacher. Account deletion also removes sessions, OAuth identity links and rate-limit counters. There is no undo/soft-delete. Re-registering starts a new student account.
+
+Personal exports intentionally contain metadata, not a potentially unbounded archive of source snapshots; download each snapshot separately before deletion. Other learners, invitation codes and authentication secrets are excluded. The workspace clears private state on deletion/sign-out and broadcasts a non-personal sign-out event to other same-origin tabs; restored back/forward-cache pages reload. Server authorization remains the security boundary.
+
+Public `/privacy` documents storage and limits. No automatic data-expiry job or operator audit pipeline has been implemented. Operators must publish their identity/contact, lawful basis/consent, retention schedule and backup expiry before real student use. App deletion cannot erase independently downloaded copies, browser-local builder data or backups. No new schema migration was required for these controls.

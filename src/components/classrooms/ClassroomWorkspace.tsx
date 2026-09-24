@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PrivacyControls } from './PrivacyControls';
+import { ProgressView } from './ProgressView';
 import { signIn, signOut } from 'next-auth/react';
 import type { ClassroomService, Principal } from '@/server/classrooms/service';
 
@@ -16,9 +18,15 @@ async function api<T>(path = '', method = 'GET', body?: unknown): Promise<T> {
   if (!response.ok) throw new RequestError(value.error?.message ?? 'Request failed. Please try again.', response.status);
   return value;
 }
+function notifyLogout() {
+  if (typeof BroadcastChannel === 'undefined') return;
+  const channel = new BroadcastChannel('sparklab-classroom-session');
+  channel.postMessage('signed-out'); channel.close();
+}
 const field = (form: HTMLFormElement, name: string) => String(new FormData(form).get(name) ?? '');
 
 export function ClassroomWorkspace({ missions }: { missions: { slug: string; title: string }[] }) {
+  const sessionGeneration = useRef(0);
   const [list, setList] = useState<List | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [task, setTask] = useState<Task | null>(null);
@@ -27,7 +35,7 @@ export function ClassroomWorkspace({ missions }: { missions: { slug: string; tit
   const [anonymous, setAnonymous] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const clear = () => { setList(null); setDetail(null); setTask(null); setReview(null); };
+  const clear = () => { sessionGeneration.current++; setList(null); setDetail(null); setTask(null); setReview(null); };
   function fail(error: unknown) {
     if (error instanceof RequestError && error.status === 401) { clear(); setAnonymous(true); }
     setError(error instanceof Error ? error.message : 'Could not contact classrooms. Try again.');
@@ -37,7 +45,9 @@ export function ClassroomWorkspace({ missions }: { missions: { slug: string; tit
     api<List>().then(value => { if (active) setList(value); }).catch(error => { if (active) fail(error); }).finally(() => { if (active) setBusy(false); });
     const restore = (event: PageTransitionEvent) => { if (event.persisted) window.location.reload(); };
     window.addEventListener('pageshow', restore);
-    return () => { active = false; window.removeEventListener('pageshow', restore); };
+    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('sparklab-classroom-session') : null;
+    if (channel) channel.onmessage = event => { if (event.data === 'signed-out') { active = false; clear(); setAnonymous(true); setBusy(false); setNotice('Signed out in another tab.'); } };
+    return () => { active = false; channel?.close(); window.removeEventListener('pageshow', restore); };
     // The initial request is intentionally made once; subsequent refreshes are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -46,9 +56,11 @@ export function ClassroomWorkspace({ missions }: { missions: { slug: string; tit
     try { await action(); } catch (error) { fail(error); } finally { setBusy(false); }
   }
   async function refresh(classId?: string, assignmentId?: string) {
+    const generation = sessionGeneration.current;
     const nextList = await api<List>();
     const nextDetail = classId ? await api<Detail>(`/${classId}`) : null;
     const nextTask = classId && assignmentId ? await api<Task>(`/${classId}/assignments/${assignmentId}`) : null;
+    if (generation !== sessionGeneration.current) return;
     setList(nextList); setDetail(nextDetail); setTask(nextTask); setReview(null); setAnonymous(false);
   }
   function submit(event: FormEvent<HTMLFormElement>, action: (form: HTMLFormElement) => Promise<void>) {
@@ -68,8 +80,9 @@ export function ClassroomWorkspace({ missions }: { missions: { slug: string; tit
       <div className="flex flex-wrap items-center gap-3">
         {list && <p className="mr-auto">{list.user.name} · {list.user.role}</p>}
         <button className="btn" onClick={() => void run(() => refresh(classId, task?.assignment.id))}>Refresh</button>
-        {list && <button className="btn" onClick={() => void run(async () => { clear(); await signOut({ redirectTo: '/classrooms' }); })}>Sign out</button>}
+        {list && <button className="btn" onClick={() => void run(async () => { notifyLogout(); clear(); await signOut({ redirectTo: '/classrooms' }); })}>Sign out</button>}
       </div>
+      {list && <PrivacyControls request={api} run={run} deleted={() => { notifyLogout(); clear(); setAnonymous(true); setNotice('Account and associated server data deleted. Local builder projects were not changed.'); }} />}
       {list && !detail && <>
         <div className="grid gap-6 md:grid-cols-2">
           <form className="panel p-5 space-y-3" onSubmit={event => submit(event, async form => {
@@ -96,10 +109,24 @@ export function ClassroomWorkspace({ missions }: { missions: { slug: string; tit
             <p>Private join code: <strong className="font-mono tracking-widest">{detail.classroom.joinCode}</strong>. Share only with your class.</p>
             <div className="flex flex-wrap gap-3"><button className="btn" onClick={() => void run(async () => { await api(`/${classId}/join-code`, 'POST', {}); await refresh(classId); setNotice('Join code replaced. The previous code no longer works.'); })}>Replace join code</button>
               <button className="btn" onClick={() => void run(async () => { await api(`/${classId}`, 'PATCH', { archived: !detail.classroom.archived }); await refresh(classId); })}>{detail.classroom.archived ? 'Restore classroom' : 'Archive classroom'}</button></div>
-            <details><summary>Class roster ({detail.students?.length ?? 0})</summary><ul className="mt-3 space-y-2">{detail.students?.map(s => <li key={s.id}>{s.name ?? 'Learner'}</li>)}</ul></details>
+            <details><summary>Class roster ({detail.students?.length ?? 0})</summary><ul className="mt-3 space-y-2">{detail.students?.map(s => <li key={s.id} className="flex flex-wrap items-center gap-3">{s.name ?? 'Learner'}<button className="btn" onClick={() => {
+              if (!window.confirm('Remove this member and permanently delete their submissions in this classroom? They can rejoin if they know the code. Replace the join code first if needed.')) return;
+              void run(async () => { await api(`/${classId}/members/${s.id}/remove`, 'POST', { confirmation: 'REMOVE MEMBERSHIP' }); await refresh(classId); setNotice('Member and their classroom submissions removed.'); });
+            }}>Remove member</button></li>)}</ul></details>
           </>}
           <p className="text-sm text-[var(--color-text-dim)]">Submissions are project snapshots, not automatically verified grades. Due dates are advisory; late work is accepted. Archived classes are read-only.</p>
         </section>
+        {detail.progress && <ProgressView rows={detail.progress} />}
+        <details className="panel p-5 space-y-3"><summary className="cursor-pointer font-semibold">Classroom privacy controls</summary>
+          <p className="mt-3">{owner ? 'Permanent deletion removes this classroom, memberships, assignments and every student submission. Archive instead if you want to retain read-only records.' : 'Leaving permanently deletes your submitted work and feedback in this classroom. Download your snapshots first. You can rejoin with a current code, but deleted work will not return.'}</p>
+          {owner ? <form className="space-y-3" onSubmit={event => submit(event, async form => {
+            await api(`/${classId}/delete`, 'POST', { confirmation: field(form, 'confirmation') }); await refresh(); setNotice('Classroom and associated records permanently deleted.');
+          })}><label className="block">Type DELETE CLASSROOM to confirm<input className="input mt-2" name="confirmation" required pattern="DELETE CLASSROOM" autoComplete="off" /></label><button className="btn">Permanently delete classroom</button></form> :
+            <button className="btn" onClick={() => {
+              if (!window.confirm('Leave this classroom and permanently delete your submissions and feedback here?')) return;
+              void run(async () => { await api(`/${classId}/leave`, 'POST', { confirmation: 'REMOVE MEMBERSHIP' }); await refresh(); setNotice('You left the classroom. Your submissions there were deleted.'); });
+            }}>Leave classroom and delete my work</button>}
+        </details>
         {owner && !detail.classroom.archived && <form className="panel p-5 space-y-3" onSubmit={event => submit(event, async form => {
           const due = field(form, 'due'); await api(`/${classId}/assignments`, 'POST', { title: field(form, 'title'), missionSlug: field(form, 'mission'), dueAt: due ? new Date(due).toISOString() : null }); await refresh(classId);
         })}><h3 className="text-lg font-semibold">Assign a mission</h3>

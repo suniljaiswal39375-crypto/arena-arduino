@@ -24,3 +24,7 @@ export function parse<S extends z.ZodTypeAny>(schema: S, value: unknown): z.outp
   return result.data;
 }
 export function resourceId(value: unknown): string { return parse(z.string().uuid(), value); }
+
+export const deleteAccountInput = z.object({ confirmation: z.literal('DELETE MY ACCOUNT') }).strict();
+export const deleteClassInput = z.object({ confirmation: z.literal('DELETE CLASSROOM') }).strict();
+export const removeMemberInput = z.object({ confirmation: z.literal('REMOVE MEMBERSHIP') }).strict();

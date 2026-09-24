@@ -30,14 +30,7 @@ being broad.
 
 ## Phase 9 — P0: make the editor work everywhere
 
-- **Bundle Monaco locally.** It currently loads its worker from a CDN with a 7-second fallback to
-  a plain textarea. Ship `monaco-editor` as a real dependency, configure the loader to serve it
-  from `/public`, and delete the fallback path. Until then the "offline on a Chromebook" pillar is
-  only half true.
-- **Service worker and offline shell.** Cache the app shell, the catalogue and the last project so
-  a student who loses the network keeps working.
-- **Mobile and tablet layout.** The builder hides its palette below `lg` and its right rail below
-  `xl`. It needs drawer versions, not just hidden ones.
+Implemented: local Monaco assets, offline shell/public route caching, mobile/tablet panels, keyboard wiring, core Hindi controls and all 16 Hindi mission lessons. Remaining: install/update/eviction UX, low-end Chromebook measurements and a full accessibility audit. Earlier session notes below are historical, not a current missing-feature list.
 
 ## Phase 10 — P0: the firmware emulator
 
@@ -191,3 +184,21 @@ AI feature that talks without touching the simulator.
 - Online workspace: create/join, private invitations and roster, archive/restore, assign canonical missions, upload/download snapshots and manual feedback with stale-version protection. Private data is excluded from offline caching. Local lab remains zero-config.
 - Validation: 471 unit/render/database/HTTP tests; 20 browser tests in the disabled configuration plus 2 configured workspace tests with intercepted API responses; 10 CLI scenarios; production build/typecheck and dependency audit. No live OAuth or hosted PostgreSQL verification.
 - Next: real deployment integration and school privacy/retention controls, classroom progress views, remaining localization, then firmware/AI/3D/collaboration phases. Magic links, heatmaps, public sharing and automated grading are not delivered in this pass.
+
+## End-of-session progress/privacy checkpoint — 24 September 2026
+
+- Implemented owner submission-status matrix and student self-only progress, textual counts, latest-upload late/version markers. This is not diagnostic analytics or verified mastery.
+- Implemented personal metadata download, self-service account deletion, owner classroom deletion, owner member removal, student leaving and deletion cascades. Destructive operations require exact confirmation and existing same-origin/auth/authorization boundaries. Cross-tab sign-out clearing and back/forward-cache reload protect stale UI state.
+- Added public `/privacy` with active-database deletion versus backups/downloads/local-data boundaries; no automatic retention schedule or compliance claim. Source snapshots remain separate explicit authorized downloads.
+- No schema migration required. Live Google OAuth, hosted PostgreSQL and school-specific consent/retention/backup/audit procedures remain deployment requirements.
+
+### Next-session implementation priority
+
+1. Validate deployment integration where real services are available; never invent credentials or fake OAuth success. Add retention automation/operator audit design and true mission-evidence progress before calling the class matrix a learning heatmap.
+2. Tackle Phase 10: isolated/bounded AVR compilation, real firmware core and a parity test through the existing SimClient/worker seam. The functional interpreter is not firmware emulation. RP2040/ESP32 follow separately.
+3. Add real-timing instruments/VCD only when the execution engine can support the claimed timing; then typed-tool Saksham, generated Chaos exercises and chip-authoring workflow.
+4. Continue editable/uncertainty-aware 3D/scanning, Yjs collaboration, sharing, mail login, remaining localization and integrations as documented above and in the original PDF.
+
+The complete PDF roadmap is not finished by this checkpoint. Prefer correct tested slices over unsupported fidelity claims or placeholder integrations.
+
+Verification for this checkpoint: 482 unit/render/PostgreSQL-WASM/HTTP tests passed (24 files), 20 zero-config browser tests passed, and all 5 configured workspace browser tests passed using intercepted API responses (25 distinct browser tests across both modes). Ten CLI scenarios, production build, typecheck, dependency audit (0 vulnerabilities), and whitespace checks passed. New coverage in this pass: 9 database/HTTP tests, 2 progress-render tests and 3 browser privacy/progress tests. These are not live OAuth, multi-connection PostgreSQL or legal-compliance certifications.

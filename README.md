@@ -260,3 +260,5 @@ now hydrate offline correctly with Next's URL-encoded dynamic-route chunk names.
 ### Optional online classrooms
 
 The local lab still needs no account or database. `/classrooms` now supports operator-approved teachers, six-character joins, mission assignments and private versioned project submissions with manual reviews once PostgreSQL and Google sign-in are enabled. See [server setup and API documentation](src/server/README.md) for migrations, approval commands and deployment/privacy prerequisites. Live OAuth and hosted database verification are deployment steps, not completed sandbox checks.
+
+Classroom progress now includes owner/student-scoped submission status matrices. Privacy controls include account metadata export, account/classroom deletion, member removal and leaving. See `/privacy` and `src/server/README.md` for exact deletion scope and deployment responsibilities; this does not certify privacy compliance or verify learning mastery.

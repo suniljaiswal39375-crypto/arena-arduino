@@ -12,6 +12,8 @@ test('unconfigured classrooms explain setup without blocking the local lab', asy
   }
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Classroom data and privacy', exact: true })).toBeVisible();
 });
 
 test('configured student workspace joins, submits a snapshot and shows feedback', async ({ page }) => {
@@ -82,4 +84,94 @@ test('configured teacher creates an assignment and submits a version-checked rev
   await page.getByRole('button', { name: 'Save review', exact: true }).click();
   await expect(page.getByText('Teacher feedback: Check the ground wire')).toBeVisible();
   expect(reviewed).toBe(true);
+});
+
+test('student progress is labelled honestly and leaving requires confirmation', async ({ page }) => {
+  test.skip(!process.env.CLASSROOM_UI_TESTS, 'Requires configured test server and intercepted API.');
+  let left = false;
+  await page.route('**/api/classrooms**', async route => {
+    const path = new URL(route.request().url()).pathname.replace('/api/classrooms', '');
+    let data: unknown;
+    if (path === '/c/leave') { expect(route.request().postDataJSON()).toEqual({ confirmation: 'REMOVE MEMBERSHIP' }); left = true; data = { removed: true }; }
+    else if (!path) data = { user: { id: 's', name: 'Student', role: 'student' }, classrooms: left ? [] : [{ id: 'c', name: 'My class', relationship: 'student' }] };
+    else data = { classroom: { id: 'c', name: 'My class', archived: false }, relationship: 'student', assignments: [], progress: [{ id: 's', name: 'Student', cells: [{ assignmentId: 'a', title: 'Blink', status: 'needs-work', version: 2, late: true, submittedAt: new Date().toISOString() }] }] };
+    await route.fulfill({ json: data });
+  });
+  await page.goto('/classrooms');
+  await page.getByRole('button', { name: 'My class · student' }).click();
+  await expect(page.getByRole('heading', { name: 'Submission progress' })).toBeVisible();
+  await expect(page.getByText(/not verified mission completion/)).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Needs work.*Version 2.*Late/ })).toBeVisible();
+  await page.getByText('Classroom privacy controls', { exact: true }).click();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: 'Leave classroom and delete my work' }).click();
+  expect(left).toBe(false);
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Leave classroom and delete my work' }).click();
+  await expect(page.getByText('You left the classroom. Your submissions there were deleted.')).toBeVisible();
+  expect(left).toBe(true);
+});
+
+test('personal metadata downloads and account deletion clears other open tabs', async ({ page, context }) => {
+  test.skip(!process.env.CLASSROOM_UI_TESTS, 'Requires configured test server and intercepted API.');
+  let deleted = false;
+  let holdNextList = false;
+  let releasePending: (() => void) | undefined;
+  await context.route('**/api/classrooms**', async route => {
+    const path = new URL(route.request().url()).pathname.replace('/api/classrooms', '');
+    let data: unknown;
+    if (path === '/privacy/export') data = { account: { name: 'Private learner' }, submissions: [] };
+    else if (path === '/privacy/delete') { expect(route.request().postDataJSON()).toEqual({ confirmation: 'DELETE MY ACCOUNT' }); deleted = true; data = { deleted: true }; }
+    else data = { user: { id: 's', name: 'Private learner', role: 'student' }, classrooms: [] };
+    if (!path && holdNextList) { holdNextList = false; await new Promise<void>(resolve => { releasePending = resolve; }); }
+    await route.fulfill({ json: data });
+  });
+  await page.goto('/classrooms');
+  const other = await context.newPage(); await other.goto('/classrooms');
+  await expect(other.getByText('Private learner · student')).toBeVisible();
+  await page.getByText('Privacy and account controls', { exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export my account metadata' }).click();
+  expect((await download).suggestedFilename()).toBe('classroom-personal-data.json');
+  const remove = page.getByRole('button', { name: 'Permanently delete my account', exact: true });
+  await expect(remove).toBeDisabled();
+  await page.getByLabel('Type DELETE MY ACCOUNT to confirm').fill('DELETE MY ACCOUNT');
+  holdNextList = true;
+  await other.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect.poll(() => !!releasePending).toBe(true);
+  await remove.click();
+  await expect(page.getByRole('heading', { name: 'Sign in to your classroom' })).toBeVisible();
+  await expect(other.getByText('Private learner · student')).toHaveCount(0);
+  await expect(other.getByRole('heading', { name: 'Sign in to your classroom' })).toBeVisible();
+  releasePending?.();
+  await expect(other.getByRole('status')).not.toHaveText('Working…');
+  await expect(other.getByText('Private learner · student')).toHaveCount(0);
+  expect(deleted).toBe(true);
+});
+
+test('teacher removal and permanent classroom deletion expose explicit warnings', async ({ page }) => {
+  test.skip(!process.env.CLASSROOM_UI_TESTS, 'Requires configured test server and intercepted API.');
+  let removed = false;
+  let deleted = false;
+  await page.route('**/api/classrooms**', async route => {
+    const path = new URL(route.request().url()).pathname.replace('/api/classrooms', '');
+    let data: unknown;
+    if (path === '/c/members/s/remove') { expect(route.request().postDataJSON()).toEqual({ confirmation: 'REMOVE MEMBERSHIP' }); removed = true; data = { removed: true }; }
+    else if (path === '/c/delete') { expect(route.request().postDataJSON()).toEqual({ confirmation: 'DELETE CLASSROOM' }); deleted = true; data = { deleted: true }; }
+    else if (!path) data = { user: { id: 't', name: 'Teacher', role: 'teacher' }, classrooms: deleted ? [] : [{ id: 'c', name: 'My class', relationship: 'owner' }] };
+    else data = { classroom: { id: 'c', name: 'My class', joinCode: 'ABC234', archived: false }, relationship: 'owner', assignments: [], students: removed ? [] : [{ id: 's', name: 'Member' }], progress: [] };
+    await route.fulfill({ json: data });
+  });
+  await page.goto('/classrooms');
+  await page.getByRole('button', { name: 'My class · owner' }).click();
+  await page.getByText('Class roster (1)', { exact: true }).click();
+  page.once('dialog', dialog => { expect(dialog.message()).toContain('permanently delete'); return dialog.accept(); });
+  await page.getByRole('button', { name: 'Remove member' }).click();
+  await expect(page.getByText('Class roster (0)', { exact: true })).toBeVisible();
+  expect(removed).toBe(true);
+  await page.getByText('Classroom privacy controls', { exact: true }).click();
+  await page.getByLabel('Type DELETE CLASSROOM to confirm').fill('DELETE CLASSROOM');
+  await page.getByRole('button', { name: 'Permanently delete classroom', exact: true }).click();
+  await expect(page.getByText('Classroom and associated records permanently deleted.')).toBeVisible();
+  expect(deleted).toBe(true);
 });

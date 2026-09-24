@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import { and, asc, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 import type { Database } from '@/server/db/types';
 import { assignments, classrooms, memberships, rateLimits, submissions, users } from '@/server/db/schema';
 import type { ProjectDoc } from '@/lib/doc/types';
@@ -94,8 +94,62 @@ export class ClassroomService {
     return {
       classroom: { id: classroom.id, name: classroom.name, archived: classroom.archived, createdAt: classroom.createdAt,
         ...(owner ? { joinCode: classroom.joinCode } : {}) },
-      relationship: owner ? 'owner' as const : 'student' as const, assignments: tasks, ...(students ? { students } : {}),
+      relationship: owner ? 'owner' as const : 'student' as const, assignments: tasks, progress: await this.progress(actor, classId), ...(students ? { students } : {}),
     };
+  }
+  /** Snapshot/review status only: never presented as simulator-verified mastery. */
+  async progress(actor: Principal, classId: string) {
+    const { owner } = await this.access(classId, actor);
+    const tasks = await this.db.select().from(assignments).where(eq(assignments.classroomId, classId)).orderBy(asc(assignments.createdAt));
+    const members = await this.db.select({ id: users.id, name: users.name }).from(memberships)
+      .innerJoin(users, eq(users.id, memberships.userId)).where(and(eq(memberships.classroomId, classId), owner ? undefined : eq(memberships.userId, actor.id)));
+    const work = await this.db.select({ assignmentId: submissions.assignmentId, studentId: submissions.studentId, version: submissions.version, submittedAt: submissions.submittedAt, reviewStatus: submissions.reviewStatus }).from(submissions).innerJoin(assignments, eq(assignments.id, submissions.assignmentId))
+      .where(and(eq(assignments.classroomId, classId), owner ? undefined : eq(submissions.studentId, actor.id)));
+    const lookup = new Map(work.map(row => [`${row.studentId}:${row.assignmentId}`, row]));
+    return members.map(member => ({ ...member, cells: tasks.map(task => {
+      const row = lookup.get(`${member.id}:${task.id}`);
+      return { assignmentId: task.id, title: task.title, status: row?.reviewStatus ?? 'not-submitted',
+        version: row?.version ?? null, submittedAt: row?.submittedAt ?? null,
+        late: !!(row && task.dueAt && row.submittedAt > task.dueAt) };
+    }) }));
+  }
+  async removeMember(actor: Principal, classId: string, studentId: string) {
+    return this.db.transaction(async tx => {
+      const scoped = new ClassroomService(tx);
+      const { classroom, owner } = await scoped.access(classId, actor, true);
+      if ((!owner && studentId !== actor.id) || studentId === classroom.ownerId) throw missing();
+      const [member] = await tx.select().from(memberships).where(and(eq(memberships.classroomId, classId), eq(memberships.userId, studentId)));
+      if (!member) throw missing();
+      const tasks = tx.select({ id: assignments.id }).from(assignments).where(eq(assignments.classroomId, classId));
+      await tx.delete(submissions).where(and(eq(submissions.studentId, studentId), inArray(submissions.assignmentId, tasks)));
+      await tx.delete(memberships).where(and(eq(memberships.classroomId, classId), eq(memberships.userId, studentId)));
+      return { removed: true };
+    });
+  }
+  async deleteClass(actor: Principal, classId: string) {
+    return this.db.transaction(async tx => {
+      await new ClassroomService(tx).owned(classId, actor, true);
+      await tx.delete(classrooms).where(eq(classrooms.id, classId));
+      return { deleted: true };
+    });
+  }
+  /** Portable account metadata. Large source snapshots remain separate authorized downloads. */
+  async exportPersonal(actor: Principal) {
+    const [account] = await this.db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).where(eq(users.id, actor.id));
+    if (!account) throw missing();
+    const classes = await this.list(actor);
+    const work = await this.db.select({ ...meta, classroomId: assignments.classroomId, title: assignments.title })
+      .from(submissions).innerJoin(assignments, eq(assignments.id, submissions.assignmentId)).where(eq(submissions.studentId, actor.id));
+    return { formatVersion: 1, exportedAt: new Date(), account, classrooms: classes, submissions: work,
+      snapshotNotice: 'Project source is not included in this metadata export. Download each snapshot from its classroom before leaving or deleting your account. Local builder data and downloaded files are stored on your device, not in this account.' };
+  }
+  async deleteAccount(actor: Principal) {
+    // FK cascades erase sessions, identities, memberships, submissions and owned classrooms.
+    await this.db.transaction(async tx => {
+      await tx.delete(rateLimits).where(sql`left(${rateLimits.key}, ${actor.id.length + 1}) = ${actor.id + ':'}`);
+      await tx.delete(users).where(eq(users.id, actor.id));
+    });
+    return { deleted: true };
   }
   async update(actor: Principal, classId: string, changes: { name?: string; archived?: boolean }) {
     await this.owned(classId, actor);

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Database } from '@/server/db/types';
 import { ApiError } from './errors';
 import { ClassroomService, consumeLimit, type Principal } from './service';
-import { assignmentInput, classInput, classUpdate, emptyInput, joinInput, parse, resourceId, reviewInput, submissionInput } from './validation';
+import { deleteAccountInput, deleteClassInput, removeMemberInput, assignmentInput, classInput, classUpdate, emptyInput, joinInput, parse, resourceId, reviewInput, submissionInput } from './validation';
 
 export const MAX_BODY_BYTES = 1_048_576;
 const headers = { 'Cache-Control': 'private, no-store, max-age=0', Vary: 'Cookie', 'X-Content-Type-Options': 'nosniff' };
@@ -57,6 +57,13 @@ export async function handleClassrooms(request: Request, path: string[], deps: D
     const db = deps.database();
     await consumeLimit(db, actor.id, mutation ? 'write' : 'read', mutation ? 30 : 120, 60);
     const service = new ClassroomService(db);
+    if (path.length === 2 && path[0] === 'privacy') {
+      if (path[1] === 'export' && request.method === 'GET') return reply(await service.exportPersonal(actor));
+      if (path[1] === 'delete' && request.method === 'POST') {
+        parse(deleteAccountInput, await readJson(request));
+        return reply(await service.deleteAccount(actor));
+      }
+    }
     if (path.length === 0) {
       if (request.method === 'GET') return reply({ user: actor, classrooms: await service.list(actor) });
       if (request.method === 'POST') return reply(await service.create(actor, parse(classInput, await readJson(request)).name), 201);
@@ -71,6 +78,19 @@ export async function handleClassrooms(request: Request, path: string[], deps: D
       if (path.length === 1) {
         if (request.method === 'GET') return reply(await service.detail(actor, classId));
         if (request.method === 'PATCH') return reply(await service.update(actor, classId, parse(classUpdate, await readJson(request))));
+      }
+      if (path.length === 2 && path[1] === 'progress' && request.method === 'GET') return reply(await service.progress(actor, classId));
+      if (path.length === 2 && path[1] === 'delete' && request.method === 'POST') {
+        parse(deleteClassInput, await readJson(request));
+        return reply(await service.deleteClass(actor, classId));
+      }
+      if (path.length === 2 && path[1] === 'leave' && request.method === 'POST') {
+        parse(removeMemberInput, await readJson(request));
+        return reply(await service.removeMember(actor, classId, actor.id));
+      }
+      if (path.length === 4 && path[1] === 'members' && path[3] === 'remove' && request.method === 'POST') {
+        parse(removeMemberInput, await readJson(request));
+        return reply(await service.removeMember(actor, classId, resourceId(path[2])));
       }
       if (path.length === 2 && path[1] === 'join-code' && request.method === 'POST') {
         parse(emptyInput, await readJson(request));
