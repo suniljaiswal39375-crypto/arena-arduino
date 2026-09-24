@@ -216,7 +216,7 @@ void loop() {
         id: 's8',
         instruction: 'Add an LED and a 220 Ω resistor, and wire NO → resistor → LED anode, LED cathode → GND.',
         hint: 'Put the resistor in series with the LED, in either order.',
-        whyItMatters: 'Without the resistor the LED draws unlimited current and burns out.',
+        whyItMatters: 'Without current limiting, excessive current can damage the LED or the board pin.',
         validate: noFault('thermal-overload'),
       },
       {
@@ -723,8 +723,8 @@ void loop() {
       {
         id: 's3',
         instruction: 'Power the servo and connect its signal wire to D9.',
-        hint: 'SIG to D9, which is a PWM pin.',
-        whyItMatters: 'A servo is positioned by pulse width, so it needs a PWM-capable pin.',
+        hint: 'Connect SIG to D9; the Servo library generates the control pulses.',
+        whyItMatters: 'A servo is positioned by pulse width. The Servo library can generate these pulses on a digital pin; hardware PWM is not required.',
         validate: wire('servo-sg90', 'SIG', 'arduino-uno', 'D9'),
       },
       {
@@ -1305,7 +1305,7 @@ void loop() {
       {
         id: 's3',
         instruction: 'Wire the relay: DC+ to 5V, DC− to GND, IN to D8, and NO through the LED to GND.',
-        hint: 'The load side is separate from the control side.',
+        hint: 'The load side is separate from the control side. Feed COM from 5V and place the resistor in series with the LED.',
         whyItMatters: 'Keeping the load off the pin is what makes this safe.',
         validate: wire('relay-1ch', 'IN', 'arduino-uno', 'D8'),
       },
@@ -1988,7 +1988,7 @@ void loop() {
       {
         id: 's3',
         instruction: 'Wire the relay IN to D8, the buzzer + to D7, and the reset button to D2.',
-        hint: 'Three outputs and one input.',
+        hint: 'The relay and buzzer are outputs; the reset button is an input.',
         whyItMatters: 'The valve, the alarm and the reset are three separate concerns.',
         validate: wire('relay-1ch', 'IN', 'arduino-uno', 'D8'),
       },
@@ -2048,7 +2048,7 @@ void loop() {
     ],
     learningObjectives: [
       'Coordinate several actuators from one loop',
-      'Balance temperature, moisture and light in one decision',
+      'Coordinate temperature and soil moisture decisions',
       'Write a control loop that runs unattended',
     ],
     realWorldUse:
@@ -2160,7 +2160,7 @@ void loop() {
       {
         id: 's3',
         instruction: 'Wire the servo vent to D9 and the pump relay to D8.',
-        hint: 'Servo signal is PWM; the relay is a plain digital pin.',
+        hint: 'The Servo library creates timed pulses; the relay uses a digital level.',
         whyItMatters: 'Two actuators, two kinds of output.',
         validate: wire('relay-1ch', 'IN', 'arduino-uno', 'D8'),
       },

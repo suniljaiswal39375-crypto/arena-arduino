@@ -56,7 +56,7 @@ export default function AccessibilityPage() {
             animate much, but the few animations do not yet respect prefers-reduced-motion everywhere.
           </li>
           <li>
-            <strong>Partial Hindi translation.</strong> Navigation, simulation controls, keyboard wiring and mission action buttons are translated. Lesson text, component names, inspector details, import/export menus and diagnostic explanations remain English, with language attributes identifying English sections.
+            <strong>Partial Hindi translation.</strong> Navigation, core lab controls and all 16 guided missions—including instructions, hints, goals and explanations—are translated. Component names, skill descriptions, inspector details, import/export menus and diagnostic explanations remain English, with language attributes identifying English sections. Hindi teaching copy still needs educator review.
           </li>
           <li>
             <strong>Not yet audited.</strong> No automated axe scan or screen-reader test (NVDA, VoiceOver)

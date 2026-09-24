@@ -11,7 +11,7 @@ test('Hindi controls persist while the saved project and sketch stay unchanged',
   const original = await readProject();
   await page.getByLabel('Language / भाषा').selectOption('hi');
   await expect(page.getByRole('textbox', { name: 'परियोजना का नाम' })).toHaveValue(original.name);
-  await expect(page.getByText('मुख्य नियंत्रण हिंदी में हैं।', { exact: false })).toBeVisible();
+  await expect(page.getByText('मुख्य नियंत्रण और सभी 16 निर्देशित अभ्यास हिंदी में हैं।', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'कीबोर्ड से तार जोड़ें' }).click();
   await expect(page.getByRole('button', { name: 'पिन जोड़ें' })).toBeVisible();
   await expect(page.locator('main')).toHaveAttribute('lang', 'hi');
@@ -41,7 +41,7 @@ test('site navigation language persists across a full page navigation', async ({
   await page.getByLabel('Language / भाषा').selectOption('hi');
   await expect(page.getByRole('navigation', { name: 'मुख्य नेविगेशन' })).toBeVisible();
   await page.getByRole('link', { name: 'अभ्यास', exact: true }).first().click();
-  await expect(page.getByRole('heading', { name: 'Missions', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'अभ्यास', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('navigation', { name: 'मुख्य नेविगेशन' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');

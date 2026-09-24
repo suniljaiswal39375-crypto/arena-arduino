@@ -53,3 +53,13 @@ A mission whose reference answer does not work is worse than no mission, and thi
 catches it.
 
 `workspace.ts::missionWorkspace(slug)` creates an unwired BOM and starter sketch for an explicitly selected mission. Loading an existing project must not invoke it: saved circuits and confirmations are restored from their document.
+
+## Hindi teaching content
+
+- `hi-a.ts`, `hi-b.ts`: Hindi titles, summaries, goals, real-world use, curriculum anchors and all three text fields of every step (16 missions / 121 steps). No executable logic belongs in these files.
+- `localization-types.ts`: display-only translation type and data helpers.
+- `localize.ts`: `missionPresentation(mission, locale)` returns `{ content, lang }`; `missionMatches(mission, query)` searches English and Hindi together; `LEVEL_MESSAGES` maps canonical difficulty values to UI keys.
+- The presenter preserves source code, wiring, placement, identifiers, skills, prerequisites and each validation object. Manual confirmation notes remain canonical English keys, not translated persistence values. A missing mission or missing step translation falls back to the whole English mission with `lang: 'en'`.
+- `hi-source-hashes.json` pins the English teaching copy and validators at translation authoring time. The test fails if either changes: review the affected Hindi entry, then update that fingerprint using the projection in `localize.test.ts`. Do not blindly refresh fingerprints. These hashes are drift checks, not educator certification.
+
+Run `npm test -- src/lib/missions/localize.test.ts` for exact coverage, nonempty Hindi prose, source drift, identity preservation, bilingual search and equivalent checker status on all reference circuits. Native-language educator review is still required; skill taxonomy descriptions and component catalogue content remain English.

@@ -204,3 +204,15 @@ Reuse the existing tracker/inspector rather than mounting a second mobile copy t
 evidence effects. A small-screen view switch hides the work area with CSS, keeping simulation and
 editor state mounted. Focus enters the panel and returns on Escape/back. Phone menus are viewport-
 positioned, scrollable disclosures, not modal dialogs; no focus trap or modal semantics are claimed.
+
+
+## Mission translations are presentation data
+Hindi mission copy is keyed by canonical slug and step ID, not by array position. A typed display-only
+schema excludes executable fields; the presenter explicitly overlays only text. Validators, source,
+wiring and persistence IDs retain identity. English metadata and routes remain stable. Tests pin
+coverage, source fingerprints and checker results; fingerprints do not imply educator sign-off.
+
+## Encoded dynamic-route assets in the offline manifest
+A browser test exposed that Next requests `%5Bslug%5D` chunk URLs while the precache originally stored
+literal brackets. Encode every filesystem path segment when generating asset URLs (never encode the
+path separators). Added a build-script fixture test and real offline mission-page hydration coverage.

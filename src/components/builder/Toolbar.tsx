@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useLab } from '@/store/lab';
 import { templateDoc, templates } from '@/lib/templates';
 import { missionWorkspace } from '@/lib/missions/workspace';
+import { missionPresentation, LEVEL_MESSAGES } from '@/lib/missions/localize';
 import { MISSIONS } from '@/lib/missions/missions';
 import { Eraser, Play, Redo2, RotateCcw, Square, Undo2 } from 'lucide-react';
 import type { SimSnapshot } from '@/lib/sim/engine';
@@ -152,11 +153,13 @@ export function Toolbar({
         </button>
         {menu === 'missions' && (
           <div className="fixed inset-x-2 top-28 z-30 max-h-[65dvh] overflow-y-auto sm:absolute sm:inset-x-auto sm:left-0 sm:top-9 sm:max-h-80 sm:w-72 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-            {MISSIONS.map((m) => (
+            {MISSIONS.map((m) => {
+              const { content: display, lang } = missionPresentation(m, locale);
+              return (
               <button
                 key={m.slug}
                 type="button"
-                lang="en"
+                lang={lang}
                 className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-3)]"
                 onClick={() => {
                   loadDoc(missionWorkspace(m.slug));
@@ -164,13 +167,14 @@ export function Toolbar({
                 }}
               >
                 <span className="block text-[12.5px] font-medium">
-                  {m.emoji} {m.title}
+                  {m.emoji} {display.title}
                 </span>
                 <span className="block text-[11px] text-[var(--color-text-dim)]">
-                  {m.level} · {m.estMinutes} min
+                  {t(LEVEL_MESSAGES[m.level])} · {t('minutes', { count: m.estMinutes })}
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

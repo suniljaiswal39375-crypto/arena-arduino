@@ -10,7 +10,7 @@ function files(dir) {
   });
 }
 const assets = files(staticDir).filter(p => /\.(js|css|woff2?)$/.test(p))
-  .map(p => '/_next/static/' + relative(staticDir, p).split('\\').join('/'));
+  .map(p => '/_next/static/' + relative(staticDir, p).split(/[\\/]/).map(encodeURIComponent).join('/'));
 const version = readFileSync(join(root, '.next/BUILD_ID'), 'utf8').trim();
 const template = readFileSync(join(root, 'scripts/service-worker.js'), 'utf8');
 writeFileSync(join(root, 'public/sw.js'), template

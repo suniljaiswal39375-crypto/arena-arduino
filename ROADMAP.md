@@ -165,3 +165,21 @@ AI feature that talks without touching the simulator.
   English, with scoped language attributes for translated and untranslated regions.
 - Still pending: real-device/touch and screen-reader testing, firmware execution, classroom/auth
   services, AI, 3D/scan and collaboration. None are claimed as delivered in this pass.
+
+
+## Hindi guided-learning pass
+- Shipped Hindi teaching text for all 16 missions and 121 steps: titles, summaries, objectives,
+  real-world use, curriculum anchors, instructions, hints and explanations. Directory filters,
+  detail headings, prerequisites, next links and builder mission selection use the saved language.
+- Bilingual search checks both language corpora and canonical component names; no translated code,
+  wire/pin/skill IDs, validators or confirmation keys are persisted. Hints and confirmations survive
+  switching languages. Source hashes require translation review when teaching text/validators change.
+- Corrected teaching copy around Servo timing, LED current limiting, relay COM supply, gas-alarm
+  I/O counts and greenhouse goals. Added explicit educational/non-safety-critical use notices.
+- Fixed offline precaching of URL-encoded dynamic-route assets (`[slug]` / `[id]`); verified a cached
+  Hindi mission hydrates and its hints open without page or worker networking.
+- Verification: 448 tests / 22 Vitest files, 19 Chromium tests, 10 CLI scenarios; strict typecheck,
+  production build and dependency audit. This supersedes earlier notes saying lessons are English-only.
+- Next: classroom/auth backend foundation and remaining catalogue/diagnostic/skill localization.
+  Educator translation review, real-device and screen-reader testing remain. Firmware emulation,
+  backend services, AI, 3D/scan and collaboration are not delivered by this content pass.

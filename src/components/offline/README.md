@@ -11,3 +11,5 @@
 **Updates:** no forced activation. A waiting worker displays a close-tabs-and-reopen notice; old version caches are removed only when the replacement activates. Browser storage/cache can be evicted. Cache failures do not discard successful network responses. Export projects regularly; CacheStorage is not project storage.
 
 **Tests:** `npm test -- src/components/offline/offline.test.ts` tests policy, fallback, isolation, quota handling and version cleanup. `npm run test:e2e` exercises production registration, client-navigation caching, offline reload/run and uncached fallback in Chromium. Real Chromebook storage pressure, multi-tab upgrades and screen readers remain unverified.
+
+Asset URLs encode each filesystem path segment, including Next dynamic-route brackets and spaces. `build-cache.test.ts` executes the generator against a miniature build tree to prevent manifest/request key mismatches.

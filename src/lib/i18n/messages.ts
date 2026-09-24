@@ -3,9 +3,18 @@ export const LANGUAGE_KEY = 'sparklab:language';
 export function parseLocale(value: unknown): Locale { return value === 'hi' ? 'hi' : 'en'; }
 
 export const en = {
+  allMissions: 'All missions', startMission: 'Start mission', stepsHeading: 'Steps',
+  whyMatters: 'Why this matters', learningGoals: 'What you will learn', billOfMaterials: 'Bill of materials',
+  skillsBuilt: 'Skills this builds', curriculumLinks: 'Curriculum links', beforeStart: 'Before you start', upNext: 'Up next',
+  missionIntro: 'Guided builds with steps that check themselves against your live circuit. Start with the beginner ones; later missions build on earlier skills.',
+  missionSearch: 'Search missions', missionSearchPlaceholder: 'Search missions or parts',
+  allLevels: 'All', levelBeginner: 'Beginner', levelIntermediate: 'Intermediate', levelAdvanced: 'Advanced',
+  missionCount: '{shown} of {total}', minutes: '{count} min', stepCount: '{count} steps', skillCount: '{count} skills',
+  noMissions: 'No mission matches that. Try “relay”, “ultrasonic” or “OLED”.',
+  missionSafety: 'Learning simulation only. Use low-voltage training circuits; do not use these sketches for mains wiring, gas safety or other safety-critical systems.',
   labControls: 'Lab controls', mainNav: 'Main', builder: 'Builder', missions: 'Missions', showcase: 'Showcase', chaos: 'Chaos Lab',
   components: 'Components', skills: 'Skills', docs: 'Docs', language: 'Language / भाषा',
-  partial: 'Core controls are translated. Lessons, component names and diagnostic explanations remain in English.',
+  partial: 'Core controls and all 16 guided missions are translated. Component names, skill descriptions and diagnostic explanations remain in English.',
   projectName: 'Project name', saving: 'Saving…', saved: 'Saved locally',
   saveError: 'Browser storage is unavailable or full. Export your project to keep a copy.',
   run: 'Run', stop: 'Stop', reset: 'Reset', speed: 'Speed', simulationSpeed: 'Simulation speed',
@@ -34,9 +43,18 @@ export const en = {
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
+  allMissions: 'सभी अभ्यास', startMission: 'अभ्यास शुरू करें', stepsHeading: 'चरण',
+  whyMatters: 'यह क्यों महत्वपूर्ण है', learningGoals: 'आप क्या सीखेंगे', billOfMaterials: 'आवश्यक घटक',
+  skillsBuilt: 'इससे बनने वाले कौशल', curriculumLinks: 'पाठ्यक्रम से संबंध', beforeStart: 'शुरू करने से पहले', upNext: 'अगला अभ्यास',
+  missionIntro: 'इन निर्देशित अभ्यासों के चरण आपके सर्किट से जांचे जाते हैं। शुरुआती अभ्यासों से शुरू करें; आगे के अभ्यास पहले सीखे कौशलों पर आधारित हैं।',
+  missionSearch: 'अभ्यास खोजें', missionSearchPlaceholder: 'अभ्यास या घटक खोजें',
+  allLevels: 'सभी', levelBeginner: 'शुरुआती', levelIntermediate: 'मध्यम', levelAdvanced: 'उन्नत',
+  missionCount: '{total} में से {shown}', minutes: '{count} मिनट', stepCount: '{count} चरण', skillCount: '{count} कौशल',
+  noMissions: 'कोई अभ्यास नहीं मिला। रिले, दूरी, relay, ultrasonic या OLED खोजकर देखें।',
+  missionSafety: 'केवल सीखने का सिमुलेशन। कम वोल्टेज के प्रशिक्षण सर्किट ही उपयोग करें; इन कोड उदाहरणों को घरेलू मेन्स, गैस सुरक्षा या अन्य सुरक्षा-महत्वपूर्ण प्रणालियों में न लगाएं।',
   labControls: 'लैब नियंत्रण', mainNav: 'मुख्य नेविगेशन', builder: 'सर्किट बनाएं', missions: 'अभ्यास', showcase: 'परियोजनाएं', chaos: 'खराबी खोजें',
   components: 'घटक', skills: 'कौशल', docs: 'दस्तावेज़', language: 'Language / भाषा',
-  partial: 'मुख्य नियंत्रण हिंदी में हैं। पाठ, घटकों के नाम और खराबियों के विवरण अभी अंग्रेज़ी में हैं।',
+  partial: 'मुख्य नियंत्रण और सभी 16 निर्देशित अभ्यास हिंदी में हैं। घटकों के नाम, कौशल विवरण और खराबियों के विवरण अभी अंग्रेज़ी में हैं।',
   projectName: 'परियोजना का नाम', saving: 'सहेजा जा रहा है…', saved: 'इस ब्राउज़र में सहेजा गया',
   saveError: 'ब्राउज़र का संग्रहण उपलब्ध नहीं है या भर गया है। प्रति रखने के लिए परियोजना निर्यात करें।',
   run: 'चलाएं', stop: 'रोकें', reset: 'फिर शुरू करें', speed: 'गति', simulationSpeed: 'सिमुलेशन की गति',
