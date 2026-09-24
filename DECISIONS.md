@@ -459,6 +459,8 @@ has been performed.
   opt-ins skipped), 10/10 scenarios, build (215 static pages), and 21 Chromium tests
   (5 configured-classroom opt-ins skipped) passed after fixing an ambiguous test
   selector. The first CI run for this instrument (36052576969) passed AVR/Docker/
-  scenarios but failed the browser selector; its corrected revision needs a fresh
-  green run. Local CLI/Docker remain unavailable; a public farm deployment and
-  Cloudflare Workers build have not been verified.
+  scenarios but failed the browser selector. Corrected code `54be785` passed all
+  four GitHub Actions jobs in PR run 36058543324, including the browser regression,
+  official CLI/Core and real Docker AVR-to-avr8js/SSE integration. Local CLI/Docker
+  remain unavailable; a public farm deployment and Cloudflare Workers build have
+  not been verified.

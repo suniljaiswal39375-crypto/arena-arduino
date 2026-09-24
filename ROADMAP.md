@@ -337,12 +337,12 @@ Local verification for this slice: `npm run typecheck` passed; `npm test` passed
 passed **10/10**; `npm run build` generated **215 static pages**. Local
 `npm run test:e2e` with packaged Chromium 143 passed **21 browser tests, 5 opt-in
 configured-classroom tests skipped**, including native wiring and VCD download.
-GitHub Actions run 36052576969 passed AVR/Docker/scenarios but its browser job
-failed on a strict selector in the new regression; that selector is fixed and
-passes locally. Recheck all CI jobs on the corrected commit before claiming
-remote validation. Cloudflare Workers Builds also fails independently on merged
-baseline PR #2; its external logs/deployment require separate operator diagnosis.
+Initial GitHub Actions run 36052576969 passed AVR/Docker/scenarios but failed on
+a strict browser selector in the new regression. The corrected instrument code at
+`54be785` passed **all four jobs** in [PR run 36058543324](https://github.com/suniljaiswal39375-crypto/arena-arduino/actions/runs/36058543324),
+including real CLI/Core, Docker AVR-to-avr8js/SSE, and browser/offline tests.
+Cloudflare Workers Builds still fails independently on merged baseline PR #2;
+its external logs/deployment require separate operator diagnosis.
 
-Next: verify the corrected browser regression and AVR/container jobs on this commit;
-then design a calibrated virtual-time analogue oscilloscope/multimeter and
+Next: design a calibrated virtual-time analogue oscilloscope/multimeter and
 trigger modes. AI/Chaos generation and later phases remain in the order above.
