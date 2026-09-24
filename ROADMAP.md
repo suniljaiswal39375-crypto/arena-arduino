@@ -34,17 +34,27 @@ Implemented: local Monaco assets, offline shell/public route caching, mobile/tab
 
 ## Phase 10 — P0: the firmware emulator
 
-The seam exists (`doc.engine`, `fidelity.engine`, `unsupported-part-in-engine`); the engine does
-not.
+**AVR slice shipped (this session).** `src/lib/sim/firmware/` executes real compiled Intel HEX
+on the avr8js ATmega328P core (the MIT AVR core Wokwi ships): Intel HEX decode, GPIO B/C/D,
+timers 0/1/2, USART0 -> serial log, ADC -> analogRead, and a visible/editable "clock bridge"
+that paces `delay()`/`millis()` at the host exactly like the functional engine. The parity
+acceptance test (`src/lib/sim/parity/blink-parity.test.ts`) proves the same project blinks
+identically on both engines. The compile side is a gated `arduino-cli` seam
+(`firmware/compile.ts`): version gate, resource limits, checksummed cache key, honest
+toolchain-absent discovery. Fidelity labels are honest — see `firmware/README.md`.
 
-- Containerised compile service with `arduino-cli` (AVR), `platformio`/ESP-IDF (Xtensa, RISC-V) and
-  `pico-sdk` (RP2040). Artifacts cached by `sha256(sketch + libraries.txt + board + fqbn)`.
-- `sim-core` as WASM: AVR8 first, then RP2040, then ESP32. `sim-fabric` for the pin electrical
-  model, I2C/SPI/UART/PWM/ADC and timers.
-- Swap the worker, keep the client: `SimClient` already speaks a message protocol, so the engine
-  change should be invisible above `src/lib/sim/client.ts`.
-- **The acceptance test that matters:** the same project produces the same observable behaviour on
-  both engines. Write that as a differential test the day the emulator first runs.
+Still to do (same order as before):
+
+- Real `arduino-cli` + ArduinoCore-avr compile *execution* (the seam is tested with a fake
+  executor; real binaries could not be downloaded in the sandbox that built this — CDN blocked).
+- `sim-core` as WASM beyond AVR8: RP2040, then ESP32 (Xtensa / RISC-V); STM32 cores.
+- Peripheral models the AVR slice v0 deliberately reports as unsupported rather than guessing:
+  I2C displays (`lcd`/`oled`), matrix/seven-seg decode, `servo` pulse timing, `stepper`.
+- The containerised compile service, SSE build logs, and the shared/fast build queues.
+- ESP32/Pico virtual WiFi, SD, and the debugger/GDB later phases.
+- Swap the worker, keep the client: `SimClient` already speaks a message protocol, and the
+  firmware worker mirrors it (`firmware/worker.ts`), so wiring `doc.engine === 'firmware'` into
+  the builder is mechanical and remains unshipped UI.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
 
@@ -195,10 +205,26 @@ AI feature that talks without touching the simulator.
 ### Next-session implementation priority
 
 1. Validate deployment integration where real services are available; never invent credentials or fake OAuth success. Add retention automation/operator audit design and true mission-evidence progress before calling the class matrix a learning heatmap.
-2. Tackle Phase 10: isolated/bounded AVR compilation, real firmware core and a parity test through the existing SimClient/worker seam. The functional interpreter is not firmware emulation. RP2040/ESP32 follow separately.
+2. **Firmware emulation (Phase 10) is now started, not finished:** the AVR slice runs real machine code with the parity test green. Next: execute the arduino-cli compile path on a host that can download the toolchain, wire `doc.engine === 'firmware'` into the builder (worker seam is ready), then peripheral models the slice reports as unsupported, then RP2040/ESP32 separately.
 3. Add real-timing instruments/VCD only when the execution engine can support the claimed timing; then typed-tool Saksham, generated Chaos exercises and chip-authoring workflow.
 4. Continue editable/uncertainty-aware 3D/scanning, Yjs collaboration, sharing, mail login, remaining localization and integrations as documented above and in the original PDF.
 
 The complete PDF roadmap is not finished by this checkpoint. Prefer correct tested slices over unsupported fidelity claims or placeholder integrations.
 
-Verification for this checkpoint: 482 unit/render/PostgreSQL-WASM/HTTP tests passed (24 files), 20 zero-config browser tests passed, and all 5 configured workspace browser tests passed using intercepted API responses (25 distinct browser tests across both modes). Ten CLI scenarios, production build, typecheck, dependency audit (0 vulnerabilities), and whitespace checks passed. New coverage in this pass: 9 database/HTTP tests, 2 progress-render tests and 3 browser privacy/progress tests. These are not live OAuth, multi-connection PostgreSQL or legal-compliance certifications.
+### Firmware-slice checkpoint — 24 September 2026 (AVR execution)
+
+- Implemented real `avr8js`-backed ATmega328P firmware execution: Intel HEX decode, GPIO B/C/D,
+  timers 0/1/2, USART0 -> serial, ADC -> analogRead, an editable clock bridge reproducing the
+  functional engine's `delay()`/`millis()` pacing, and host-bounded frames for non-cooperative
+  firmware.
+- Added the gated `arduino-cli` compile seam (limits before I/O, checksummed cache key, version
+  gate, honest toolchain discovery) and the firmware worker mirroring `SimClient`'s protocol.
+- Added the PDF's parity acceptance test: the same blink project produces the identical LED trace
+  on the functional interpreter and on real AVR machine code.
+- Honest boundaries: I2C displays, matrix/seven-seg, servo/stepper are reported by name as
+  unsupported on the AVR bus rather than guessed; `arduino-cli` binaries could not be downloaded
+  in this sandbox (release CDN blocked), so compile **execution** is tested behind a fake
+  executor, never claimed as a live build. RP2040/ESP32/STM32 remain future work.
+
+Verification this session: 520 unit/render tests pass (28 files, up from 482); the parity test
+and 40 firmware/compile/hex tests are new; strict typecheck and production build pass.

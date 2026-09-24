@@ -39,6 +39,11 @@ engine.tick(250, 1);        // advance 250 ms of simulated time
 engine.snapshot();
 ```
 
+The firmware slice (`./firmware/`) runs real compiled AVR machine code on the
+avr8js ATmega328P core behind the same worker/client seam — see
+`./firmware/README.md`. It is the hardware-accurate layer; this interpreter is
+the educational, toolchain-free layer.
+
 **How the virtual clock works.** `tick(realMs, speed)` converts real elapsed time into a
 microsecond budget and runs the interpreter's generator until the budget is spent. Time the sketch
 did not consume is credited as idle so `millis()` tracks reality even in a `loop()` with no
@@ -63,6 +68,8 @@ plotter eating the monitor's output.
 
 ```bash
 npm test -- src/lib/sim
+npm test -- src/lib/sim/firmware
+npm test -- src/lib/sim/parity
 ```
 
 `sim.test.ts` covers parsing, blinking, `millis()`, compile errors and sensors. `runtime.test.ts`
