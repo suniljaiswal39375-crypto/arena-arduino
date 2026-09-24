@@ -186,7 +186,7 @@ npm test
 ```
 
 Current AVR/build-farm checkpoint: `npm run typecheck` passed; `npm test` passed
-**658 tests across 57 files**, with **2 opt-in integration tests skipped locally**
+**659 tests across 57 files**, with **2 opt-in integration tests skipped locally**
 (no CLI or Docker); `npm run scenarios` passed **10/10**; `npm run build`
 passed (**215 static pages**). GitHub Actions run 36048759643 passed typecheck,
 tests, production build, browser regressions, scenarios, an official-CLI build

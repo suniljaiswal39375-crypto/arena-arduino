@@ -4,7 +4,7 @@
  * reset and the honest refusal surface.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { FirmwareRuntime } from './firmware-runtime';
+import { FirmwareRuntime, compileInputFor } from './firmware-runtime';
 import { KNOWN_PROGRAMS } from './known-programs';
 import { blinkFixture } from './fixtures/blink';
 import { templateDoc } from '@/lib/templates';
@@ -41,6 +41,18 @@ describe('FirmwareRuntime', () => {
     const res = rt.load(doc, { nodeMode: true });
     // The uno-blink template matches the baseline sketch the catalog ships.
     expect(res).toMatchObject({ ok: true });
+  });
+
+  it('refuses an unsupported board instead of compiling it as an Uno', () => {
+    const { doc } = blinkFixture();
+    const board = doc.diagram.parts.find((part) => part.type === 'arduino-uno');
+    expect(board).toBeDefined();
+    board!.type = 'arduino-mega';
+    doc.files['sketch.ino'] = KNOWN_PROGRAMS.find((p) => p.key === 'blink')!.sketchSource;
+    expect(compileInputFor(doc).boardFqbn).toBe('arduino-mega');
+    const rt = new FirmwareRuntime(doc);
+    expect(rt.load(doc)).toMatchObject({ ok: false });
+    expect(rt.hasImage).toBe(false);
   });
 
   it('stop then reset restores a running image', () => {

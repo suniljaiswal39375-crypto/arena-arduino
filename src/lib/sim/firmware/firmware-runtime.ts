@@ -40,7 +40,10 @@ export interface FirmwareLoadResult {
 export function compileInputFor(doc: ProjectDoc): { boardFqbn: string; sketch: string; libraries: string[] } {
   const boardPart = doc.diagram.parts.find((p) => p.type.startsWith('arduino') || p.type.startsWith('emu'));
   const boardType = boardPart?.type ?? doc.board;
-  const fqbn = avrBoardFor(boardType)?.fqbn ?? 'arduino:avr:uno';
+  // Never silently compile an unsupported board's sketch for an Uno.
+  // An unrecognised part type is intentionally rejected by both the server's
+  // FQBN allowlist and the offline stub instead of becoming runnable AVR HEX.
+  const fqbn = avrBoardFor(boardType)?.fqbn ?? boardType;
   const librarySource = doc.files['libraries.txt'] ?? '';
   const libraries = librarySource
     .split('\n')

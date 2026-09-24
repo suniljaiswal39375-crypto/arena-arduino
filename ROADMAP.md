@@ -74,7 +74,7 @@ e2e fixtures and cross-engine parity cover each. Additional parity covers I2C LC
 serial/plot, ADC0 raw 0/512/1023, button pull-ups and relay contacts with downstream load.
 Unwired, ambiguous, unsupported, misconfigured and non-AVR behaviours are not inferred.
 
-Still to do, in order:
+Phase 10 status and remaining order:
 
 1. **Completed:** official `arduino-cli` 1.5.1 + Arduino AVR core compiled a Uno sketch
    through `compileSketch` on GitHub Actions, and avr8js executed its HEX. Local sandbox
@@ -244,7 +244,7 @@ AI feature that talks without touching the simulator.
 ### Next-session implementation priority
 
 1. Validate deployment integration where real services are available; never invent credentials or fake OAuth success. Add retention automation/operator audit design and true mission-evidence progress before calling the class matrix a learning heatmap.
-2. **Firmware emulation (Phase 10) remains partial:** the AVR slice and builder engine selector run real machine code; I2C displays, servo, seven-seg, MAX7219 and ULN2003 GPIO decoders have parity tests. See the live Phase 10 status above for the still-unverified official CLI and the build-farm/SSE prerequisite. RP2040/ESP32 are later.
+2. **Firmware emulation (Phase 10) remains AVR-only:** the AVR slice and builder engine selector run real machine code; I2C displays, servo, seven-seg, MAX7219 and ULN2003 GPIO decoders have parity tests. The later Phase 10 status above records passed official-CLI and isolated-container/SSE CI checks; deployment verification and non-AVR architectures remain. RP2040/ESP32 are later.
 3. Add real-timing instruments/VCD only when the execution engine can support the claimed timing; then typed-tool Saksham, generated Chaos exercises and chip-authoring workflow.
 4. Continue editable/uncertainty-aware 3D/scanning, Yjs collaboration, sharing, mail login, remaining localization and integrations as documented above and in the original PDF.
 
@@ -301,7 +301,7 @@ and 40 firmware/compile/hex tests are new; strict typecheck and production build
   private token, firewall/TLS, deployed rate limits and operational monitoring remain required.
 
 Final local verification for this checkpoint: `npm run typecheck` passed;
-`npm test` passed **658 tests / 57 files** with **2 intentionally skipped**
+`npm test` passed **659 tests / 57 files** with **2 intentionally skipped**
 real-toolchain/Docker integration tests; `npm run scenarios` passed **10/10**;
 `npm run build` compiled successfully and generated **215 static pages**.
 GitHub Actions run 36048759643 passed official CLI/Core, Docker/SSE-to-avr8js,

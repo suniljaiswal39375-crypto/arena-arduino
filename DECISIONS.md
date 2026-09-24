@@ -404,7 +404,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
   image should be pinned to a digest by a deploying operator after CI verification.
 - **Honest scopes:** only Uno/Nano 328P plus installed core `Wire`/`SPI`/`EEPROM`/
   `SoftwareSerial` libraries; non-installed libraries and other boards get 422 before a
-  spawn. Arbitrary package installation, shared caches, external hardware architectures,
+  spawn. Unknown document boards also refuse instead of being silently mapped to an Uno.
+  Arbitrary package installation, shared caches, external hardware architectures,
   internet access while compiling and unrestricted build logs are intentionally absent.
   The local `SPARKLAB_ARDUINO_CLI` process path is development-only; production returns
   503 without the isolated farm, not a silently unconfined compile.
@@ -420,7 +421,7 @@ path separators). Added a build-script fixture test and real offline mission-pag
   and container/host monitoring. CI's real Docker-image build/SSE/avr8js check passed;
   Docker cannot run in this sandbox. Do not label it deployed yet.
 
-Verification: local strict typecheck, 658 Vitest tests across 57 files
+Verification: local strict typecheck, 659 Vitest tests across 57 files
 (2 toolchain/Docker opt-ins skipped locally), 10/10 automation scenarios and
 a production build with 215 static pages passed. GitHub Actions run
 36048759643 passed the official CLI/Core, isolated Docker/SSE-to-avr8js and
