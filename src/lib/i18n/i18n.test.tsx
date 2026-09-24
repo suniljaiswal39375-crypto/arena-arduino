@@ -58,12 +58,13 @@ describe('translated controls', () => {
     expect(html).toContain('uno D13 से r1 1 तक का तार हटाएं');
     expect(JSON.stringify(useLab.getState().doc)).toBe(before);
   });
-  it('translates toolbar actions and disables unavailable firmware mode', () => {
+  it('translates toolbar actions and offers the AVR firmware mode', () => {
     const html = renderToString(<LanguageProvider initialLocale="hi"><Toolbar running={false} snapshot={null}
       onRun={() => undefined} onStop={() => undefined} onReset={() => undefined} onSpeed={() => undefined} speed={1} /></LanguageProvider>);
     expect(html).toContain('चलाएं');
     expect(html).toContain('परियोजना का नाम');
     expect(html).toContain('aria-label="पूर्ववत करें"');
-    expect(html).toContain('value="firmware" disabled=""');
+    expect(html).toContain('value="firmware"');
+    expect(html).not.toContain('value="firmware" disabled=""');
   });
 });

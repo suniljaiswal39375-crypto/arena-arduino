@@ -34,27 +34,48 @@ Implemented: local Monaco assets, offline shell/public route caching, mobile/tab
 
 ## Phase 10 — P0: the firmware emulator
 
-**AVR slice shipped (this session).** `src/lib/sim/firmware/` executes real compiled Intel HEX
-on the avr8js ATmega328P core (the MIT AVR core Wokwi ships): Intel HEX decode, GPIO B/C/D,
-timers 0/1/2, USART0 -> serial log, ADC -> analogRead, and a visible/editable "clock bridge"
-that paces `delay()`/`millis()` at the host exactly like the functional engine. The parity
-acceptance test (`src/lib/sim/parity/blink-parity.test.ts`) proves the same project blinks
-identically on both engines. The compile side is a gated `arduino-cli` seam
+**AVR slice shipped.** `src/lib/sim/firmware/` executes real compiled Intel HEX on the avr8js
+ATmega328P core (the MIT AVR core Wokwi ships): Intel HEX decode, GPIO B/C/D, timers 0/1/2,
+USART0 -> serial log, ADC -> analogRead, and a visible/editable "clock bridge" that paces
+`delay()`/`millis()` at the host exactly like the functional engine. The parity acceptance test
+(`src/lib/sim/parity/blink-parity.test.ts`) proves the same project blinks identically on both
+engines. `sparklab-cli --firmware <hex>` runs that engine headlessly with the wokwi-cli
+expect/fail/serial/timeout contract (`src/lib/cli/firmware-run.ts`); `--elf` is honestly rejected
+(no ELF parser — convert with `avr-objcopy`). The compile side is a gated `arduino-cli` seam
 (`firmware/compile.ts`): version gate, resource limits, checksummed cache key, honest
 toolchain-absent discovery. Fidelity labels are honest — see `firmware/README.md`.
 
+**Now running in the builder.** `SimClient` routes `doc.engine === 'firmware'` to the firmware
+worker (or its inline fallback) and projects the firmware snapshot onto the same `SimSnapshot`
+the builder renders, so the Toolbar engine selector is live. Without a toolchain a zero-config
+host still runs firmware for the **known baseline sketches** through an honest offline stub
+(`firmware/compiler.ts` + `known-programs.ts`): it resolves those two sketches to *pre-built real
+AVR machine code* and refuses anything else with a precise reason — no fake JavaScript compiler is
+claimed. The I2C character LCD is now **decoded on the real TWI bus** (`firmware/peripherals.ts`),
+sliced into the shared circuit's display surface, with an e2e test that drives it from real AVR
+TWI firmware.
+
+**Compile transport shipped.** `POST /api/firmware-compile` (`src/server/firmware/`,
+`src/app/api/firmware-compile/`) is the server-side, resource-bounded arduino-cli 1.x compile
+path: zod-validated `{boardFqbn, sketch, libraries}`, 64 KiB streamed-body cap, private temp-dir
+sketch (never shell-interpolated), heartbeat + deadline, honest `503 no-arduino-cli` when the
+toolchain is absent. The firmware worker tries it in the browser and falls back to the offline
+baseline; tests drive the real spawn path against a fake arduino-cli script and prove the
+produced HEX runs on the AVR core with the same blink as the parity fixture.
+
 Still to do (same order as before):
 
-- Real `arduino-cli` + ArduinoCore-avr compile *execution* (the seam is tested with a fake
-  executor; real binaries could not be downloaded in the sandbox that built this — CDN blocked).
+- A real `arduino-cli` + ArduinoCore-avr *binary* on a host (the transport is fully exercised
+  with a fake CLI and has not been run against a real toolchain — download CDNs were blocked in
+  the sandboxes that built this).
+- The containerised build farm (`BUILD_FARM_URL`) and SSE build logs; the local-CLI transport is
+  the single-node form of the same contract.
 - `sim-core` as WASM beyond AVR8: RP2040, then ESP32 (Xtensa / RISC-V); STM32 cores.
-- Peripheral models the AVR slice v0 deliberately reports as unsupported rather than guessing:
-  I2C displays (`lcd`/`oled`), matrix/seven-seg decode, `servo` pulse timing, `stepper`.
-- The containerised compile service, SSE build logs, and the shared/fast build queues.
+- Peripheral models the AVR slice still reports as unsupported rather than guessing:
+  matrix/seven-seg decode, `servo` pulse timing, `stepper`. (The SSD1306 OLED is now
+  decoded from the TWI bus — see `peripherals.ts` `Ssd1306Decoder` + `font5x7.ts` —
+  with parity support for `Adafruit_SSD1306::print`/`println` text.)
 - ESP32/Pico virtual WiFi, SD, and the debugger/GDB later phases.
-- Swap the worker, keep the client: `SimClient` already speaks a message protocol, and the
-  firmware worker mirrors it (`firmware/worker.ts`), so wiring `doc.engine === 'firmware'` into
-  the builder is mechanical and remains unshipped UI.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
 

@@ -245,3 +245,78 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - The engine ports `SimEngine.tick`'s debt loop, including its carry-over and negative-debt behaviour, so both engines sample an identical blink at 100 ms — parity by construction.
 - Peripherals the AVR slice cannot yet decode (I2C LCD/OLED, matrix, seven-seg, servo, stepper) are reported by name as `unsupported` rather than guessed, matching the interpreter's unsupported-call convention. RP2040/ESP32/STM32 are later phases.
 - The firmware worker mirrors `SimClient`'s message vocabulary, so wiring `doc.engine === 'firmware'` into the builder is the remaining unshipped UI step; the engine seam itself is tested headlessly.
+
+## Firmware CLI (`--firmware`) and the `--elf` rejection — 24 September 2026
+
+- `sparklab-cli --firmware <hex>` runs the real `FirmwareEngine` headlessly, reusing the
+  wokwi-cli `--expect-text` / `--fail-text` / `--timeout` / `--serial-log-file` contract so CI
+  assertions are identical for interpreter and firmware runs. Every option goes through
+  `runFirmware` (`src/lib/cli/firmware-run.ts`), never through the interpreter.
+- `--elf` is rejected with a usage error. The AVR slice decodes Intel HEX (`avr-objcopy` output);
+  adding an ELF reader would be a false promise until the compile service actually produces ELF
+  and a symbol path exists. Converting is one documented command away.
+- The headless runner advances 10 simulated ms per frame with the engine's own clock, so
+  `delay(500)`-style firmware reaches `--expect-text` under a bounded `--timeout` exactly like a
+  sketch. The `--firmware` contract lives even when the compile toolchain is absent: a
+  pre-built HEX is a first-class input.
+
+## Offline compiler stub, live engine selector, I2C LCD decode — 24 September 2026
+
+- **No fake compiler.** The zero-config host cannot run arduino-cli, so the
+  offline fallback (`firmware/compiler.ts`) is a *recogniser*, not a C
+  compiler: it maps the two known baseline sketches (blink, blink-serial) to
+  pre-built real AVR machine code assembled from committed AVR source
+  (`known-programs.ts` / `program-image.ts`), and refuses every other sketch,
+  library list or non-328P board with a precise reason. Reworking this into a
+  JavaScript "compiler" would be a lie; real compilation stays on the
+  containerised arduino-cli seam (`compile.ts`).
+- **Snapshot projection, never renaming.** `SimClient` now routes
+  `doc.engine === 'firmware'` to the firmware worker (or an inline fallback)
+  and projects `FirmwareSnapshot` onto the existing `SimSnapshot` shape
+  (`firmware/adapt.ts`) so the builder renders one shape for both engines. The
+  firmware engine is never presented as the interpreter; a failed compile is a
+  load-error, not silent.
+- **I2C LCD is decoded, genuinely.** The LCD is a native bus-width device, so
+  the engine slices real TWI signals (START / SLA+W / PCF8574 expander bytes
+  with EN-pulse latching / STOP) into the shared `lcdCommand` surface
+  (`firmware/peripherals.ts`). The e2e test clocks "HI" in from real TWI
+  firmware. Timing-only devices (servo pulse width, stack-sized 7-seg/matrix,
+  stepper) stay honestly unsupported until a timing model exists.
+
+## Compile transport (`POST /api/firmware-compile`) — 24 September 2026
+
+- The HTTP compile route is the **"toolchain present" upgrade only**: it compiles
+  through gated arduino-cli 1.x when `SPARKLAB_ARDUINO_CLI` is set, and answers
+  an honest `503 {error:{code:"no-arduino-cli"}}` otherwise. It never fakes a
+  build. The browser falls back to the offline baseline stub (which itself
+  never fakes a compile), so the two honest fallbacks compose.
+- The sketch is written to a private temp dir as a file and passed as a path —
+  never shell-interpolated. Compile deadline (default 20 s) and heartbeat
+  (default 5 s) bound every request; both are env-tunable.
+- Resource bounds mirror the offline stub's: 64 KiB request body, 8 KiB sketch,
+  16 libraries, 256-char library lines — enforced before filesystem I/O.
+- Origin/cross-site checks reuse the classrooms policy (403 on mismatch). The
+  route is server-only Node.js; the browser-safe contract split
+  (`compile-contract.ts` vs `compile.ts`) ensured the client bundle never
+  carries `node:child_process`.
+- The transport's `CompileResult.toolchain` is `{path, version}`; the `path`
+  is a local binary path, disclosed in the response only when the toolchain is
+  explicitly configured by the operator, never a browser-supplied value.
+
+## SSD1306 OLED TWI decode (text surface) — 24 September 2026
+
+- The OLED is decoded off the real TWI bus (`Ssd1306Decoder` in
+  `peripherals.ts`), never by intercepting library calls: it consumes the same
+  Adafruit_SSD1306 wire framing (control byte 0x00 command / 0x40 display RAM,
+  1024-byte page-major framebuffer from `display()`) that a real part sees.
+- Text recovery embeds the byte-exact Adafruit_GFX 5x7 font (`font5x7.ts`,
+  transcribed from `glcdfont.c`): each glyph is five columns, bit j = glyph
+  row j, at a 6-column advance — the exact layout `drawChar` blits. This makes
+  `print`/`println` round-trip exact, which the functional engine also models,
+  so the two engines stay parity-compatible.
+- Scope is *text*: arbitrary `drawPixel`/`drawLine`/bitmap regions are not
+  rasterised, matching the functional engine's OLED model (which also models
+  text only). This is stated in the fidelity list rather than approximated.
+- The decoder recovers an unchanged framebuffer as one `oledCommand('render',
+  [lines])` per fresh frame; it overwrites rather than accumulates, unlike the
+  functional engine's append-only `print`/`println` model.

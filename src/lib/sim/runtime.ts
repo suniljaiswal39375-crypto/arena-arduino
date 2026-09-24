@@ -624,6 +624,13 @@ export class Circuit implements SimHost {
     if (!target) return;
     const lines = this.oleds.get(target.id) ?? [];
     switch (command) {
+      case 'render': {
+        // Firmware decoder path: the bus decoder recovered concrete text lines
+        // from the framebuffer; replace wholesale (equivalent to clear+print).
+        const recovered = Array.isArray(args[0]) ? (args[0] as unknown[]).map(String) : [];
+        this.oleds.set(target.id, recovered);
+        break;
+      }
       case 'clearDisplay':
         this.oleds.set(target.id, []);
         break;

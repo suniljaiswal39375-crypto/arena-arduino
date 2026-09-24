@@ -48,6 +48,21 @@ Private API/auth/classroom routes are not service-worker cached. The client does
 
 Before use with real students: establish consent, retention/deletion/export procedures, operator access auditing, backups/restore tests, least-privilege database access, Google Workspace policy, incident response and a privacy/security review. Archive is not deletion. No public sharing, automated retention job, mail login, diagnostic/skill heatmap or live collaborative workbench is implemented yet. Self-service account deletion, member removal/leaving, classroom deletion, personal metadata export and a submission-status matrix are implemented; they are not a complete legal compliance program. Auth.js 5 is a pinned **beta**; review upgrades before production. No real Google OAuth exchange or network PostgreSQL load/concurrency test has been performed in this sandbox.
 
+## Firmware compile service
+
+`POST /api/firmware-compile` is the "toolchain present" upgrade path for the
+AVR firmware slice (`src/server/firmware/`, `src/app/api/firmware-compile/`).
+It accepts `{boardFqbn, sketch, libraries}` (bounded: 64 KiB body, 8 KiB
+sketch, 16 libraries, 256-char lines), compiles through gated arduino-cli 1.x
+when `SPARKLAB_ARDUINO_CLI` is set, and returns Intel HEX. When the toolchain
+is absent the route answers an honest `503 {error:{code:"no-arduino-cli"}}` —
+never a fake build — and the browser falls back to the offline baseline stub
+(`src/lib/sim/firmware/compiler.ts`). The sketch is written to a private
+temp-dir file, never shell-interpolated; compile deadline and heartbeat are
+bounded. Tests drive the real spawn path against a fake arduino-cli script
+(`src/server/firmware/*.test.ts`) and prove the produced HEX runs on the AVR
+core with the same blink as the parity fixture.
+
 ## Tests
 
 `npm test -- --run src/server/classrooms/classrooms.test.ts` executes the actual migration and Drizzle queries on PGlite (PostgreSQL WASM), including permissions, joins/collisions, archive, snapshot isolation/versioning, stale reviews, rate limits, SQL constraints and HTTP boundaries. `npm run typecheck`, `npm run build`, `npm test`, and `npm run test:e2e` cover integration with the local lab. PGlite is a test dependency only, not a production storage fallback.

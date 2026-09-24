@@ -71,13 +71,31 @@ describe('FirmwareEngine blink (real machine code)', () => {
     expect(() => fw.load(doc, assembleHex(BLINK_ASM), 'arduino-mega')).toThrow(/no AVR firmware model/);
   });
 
-  it('reports non-decoded peripherals by name instead of guessing', () => {
+  it('reports timing-only peripherals by name instead of guessing', () => {
+    const { doc, hex } = blinkFixture();
+    const servo = makePart('servo-sg90', 500, 80);
+    doc.diagram.parts.push(servo);
+    const fw = new FirmwareEngine(doc);
+    fw.load(doc, hex, 'arduino-uno');
+    expect([...fw.snapshot().unsupported].join(' ')).toMatch(/servo/);
+  });
+
+  it('does not report the decoded I2C LCD as unsupported', () => {
     const { doc, hex } = blinkFixture();
     const lcd = makePart('lcd-16x2-i2c', 500, 80);
     doc.diagram.parts.push(lcd);
     const fw = new FirmwareEngine(doc);
     fw.load(doc, hex, 'arduino-uno');
-    expect([...fw.snapshot().unsupported].join(' ')).toMatch(/lcd/);
+    expect([...fw.snapshot().unsupported].join(' ')).not.toMatch(/lcd/);
+  });
+
+  it('does not report the decoded SSD1306 OLED as unsupported', () => {
+    const { doc, hex } = blinkFixture();
+    const oled = makePart('oled-128x64', 500, 80);
+    doc.diagram.parts.push(oled);
+    const fw = new FirmwareEngine(doc);
+    fw.load(doc, hex, 'arduino-uno');
+    expect([...fw.snapshot().unsupported].join(' ')).not.toMatch(/oled/);
   });
 });
 

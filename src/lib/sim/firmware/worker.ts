@@ -4,17 +4,20 @@
  * `SimClient` already speaks `{load,update,start,stop,reset,serial,speed}` to a
  * worker; this worker keeps that exact vocabulary for the firmware slice so the
  * engine change is invisible above `client.ts`, per the PDF's "swap the worker,
- * keep the client" seam. The light new message types (`set-image`,
- * `set-heartbeat`) are the compiled-image transport the firmware worker needs.
+ * keep the client" seam. `set-image` carries a *sketch* (not a binary) when the
+ * client is offline: the worker resolves it to known-baseline machine code via
+ * `FirmwareRuntime` in `nodeMode`, or receives pre-compiled HEX from the build
+ * service when a toolchain exists.
  */
 /// <reference lib="webworker" />
 import type { ProjectDoc } from '@/lib/doc/types';
-import { FirmwareEngine } from './engine';
+import { FirmwareRuntime } from './firmware-runtime';
 import type { FirmwareSnapshot } from './interfaces';
 
 export type FirmwareWorkerRequest =
-  | { type: 'load'; doc: ProjectDoc; source: string }
+  | { type: 'load'; doc: ProjectDoc; source: string; nodeMode?: boolean }
   | { type: 'set-image'; doc: ProjectDoc; hex: string; boardType: string }
+  | { type: 'set-source'; doc: ProjectDoc; nodeMode?: boolean }
   | { type: 'update'; doc: ProjectDoc }
   | { type: 'start' }
   | { type: 'stop' }
@@ -31,7 +34,7 @@ export type FirmwareWorkerResponse =
 
 const FRAME_MS = 16;
 
-let engine: FirmwareEngine | null = null;
+let runtime: FirmwareRuntime | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let last = 0;
 let speed = 1;
@@ -51,11 +54,11 @@ function startLoop(): void {
   if (timer !== null) return;
   last = Date.now();
   timer = setInterval(() => {
-    if (!engine) return;
+    if (!runtime) return;
     const now = Date.now();
     const elapsed = Math.min(100, now - last);
     last = now;
-    const run = engine.run(elapsed * speed);
+    const run = runtime.run(elapsed * speed);
     if (run.err && run.snapshot.status.kind !== 'running') {
       stopLoop();
     }
@@ -66,44 +69,53 @@ function startLoop(): void {
 self.onmessage = (event: MessageEvent<FirmwareWorkerRequest>): void => {
   const msg = event.data;
   switch (msg.type) {
-    case 'load': {
+    case 'load':
+    case 'set-source': {
       stopLoop();
-      engine = new FirmwareEngine(msg.doc);
-      post({ type: 'state', snapshot: engine.snapshot() });
+      runtime = new FirmwareRuntime(msg.doc);
+      const useNodeMode = msg.nodeMode !== false;
+      const endpoint = useNodeMode ? undefined : '/api/firmware-compile';
+      void runtime.loadViaCompile(msg.doc, { nodeMode: useNodeMode, compileEndpoint: endpoint }).then((res) => {
+        if (!runtime) return;
+        if (!res.ok) {
+          post({ type: 'state', snapshot: runtime.snapshot() });
+          post({ type: 'load-error', message: res.message });
+          return;
+        }
+        runtime.start();
+        startLoop();
+        post({ type: 'state', snapshot: runtime.snapshot() });
+      });
       break;
     }
     case 'set-image': {
-      if (!engine) engine = new FirmwareEngine(msg.doc);
-      try {
-        engine.load(msg.doc, msg.hex, msg.boardType);
-        engine.start();
-        stopLoop();
-        startLoop();
-        post({ type: 'state', snapshot: engine.snapshot() });
-      } catch (err) {
-        post({
-          type: 'load-error',
-          message: err instanceof Error ? err.message : String(err),
-        });
+      if (!runtime) runtime = new FirmwareRuntime(msg.doc);
+      const res = runtime.loadHex(msg.doc, msg.hex, msg.boardType);
+      if (!res.ok) {
+        post({ type: 'load-error', message: res.message });
+        break;
       }
+      runtime.start();
+      stopLoop();
+      startLoop();
+      post({ type: 'state', snapshot: runtime.snapshot() });
       break;
     }
     case 'update':
-      engine?.update(msg.doc);
+      runtime?.update(msg.doc);
       break;
     case 'start':
-      engine?.start();
+      runtime?.start();
       startLoop();
       break;
     case 'stop':
-      engine?.stop();
+      runtime?.stop();
       break;
     case 'reset':
-      engine?.reset();
-      engine?.start();
+      runtime?.reset();
       break;
     case 'serial':
-      engine?.pushSerialInput(msg.text);
+      runtime?.pushSerial(msg.text);
       break;
     case 'speed':
       speed = msg.value;
@@ -114,7 +126,7 @@ self.onmessage = (event: MessageEvent<FirmwareWorkerRequest>): void => {
       break;
     case 'dispose':
       stopLoop();
-      engine = null;
+      runtime = null;
       break;
   }
 };

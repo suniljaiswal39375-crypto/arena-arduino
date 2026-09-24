@@ -11,6 +11,8 @@ import { toWokwiDiagram, librariesTxt } from '@/lib/interop/wokwi';
 import { bomCsv, kicadNetlist } from '@/lib/interop/exports';
 import { findScenarios, loadProject } from './project-dir';
 import { junitReport } from './junit';
+import { runFirmware } from './firmware-run';
+import { boardTypeOf } from '@/lib/sim/firmware/doc';
 
 /**
  * sparklab-cli, as a pure function of its arguments. The bin wrapper
@@ -40,6 +42,11 @@ Usage:
 
 Run options:
   --scenario <file>          run an automation scenario instead of free-running
+  --firmware <hex-file>      run real compiled firmware (Intel HEX) on the AVR
+                             engine, with the same expect/fail/serial options
+  --elf <file>               NOT SUPPORTED: the AVR slice decodes Intel HEX,
+                             not ELF; use avr-objcopy to produce a .hex
+  --board <type>             board model for --firmware (default: from diagram)
   --timeout <ms>             stop after this much simulated time (default 30000)
   --timeout-exit-code <n>    exit code when the timeout is hit (default 42)
   --expect-text <text>       succeed as soon as the serial output contains text
@@ -59,6 +66,9 @@ interface Flags {
 
 const VALUE_FLAGS = new Set([
   'scenario',
+  'firmware',
+  'elf',
+  'board',
   'timeout',
   'timeout-exit-code',
   'expect-text',
@@ -155,6 +165,37 @@ function run(target: string, flags: Flags, io: CliIO): number {
   const project = loadProject(resolve(io.cwd, target), flags.values.get('diagram-file'));
   for (const w of project.warnings) io.err(`warning: ${w}`);
   const quiet = flags.switches.has('quiet');
+
+  // ELF is explicitly unsupported: the AVR slice decodes Intel HEX. Say so
+  // rather than silently no-op or mis-parse a binary.
+  if (flags.values.has('elf')) {
+    io.err('--elf is not supported: the AVR firmware engine decodes Intel HEX. Convert with `avr-objcopy -O ihex firmware.elf firmware.hex` and pass --firmware.');
+    return EXIT.usage;
+  }
+
+  const firmwareHex = flags.values.get('firmware');
+  if (firmwareHex !== undefined) {
+    const timeoutMs = intFlag(flags, 'timeout', DEFAULT_TIMEOUT_MS);
+    const timeoutCode = intFlag(flags, 'timeout-exit-code', EXIT.timeout);
+    const board = flags.values.get('board') ?? boardTypeOf(project.doc) ?? 'arduino-uno';
+    const res = runFirmware({
+      doc: project.doc,
+      boardType: board,
+      hexSource: firmwareHex,
+      timeoutMs,
+      timeoutCode,
+      expect: flags.values.get('expect-text'),
+      fail: flags.values.get('fail-text'),
+      quiet,
+      out: io.out,
+      err: io.err,
+      cwd: io.cwd,
+      serialLogFile: flags.values.get('serial-log-file'),
+      jsonSummary: flags.values.get('json-summary'),
+      source: project.source,
+    });
+    return res.code;
+  }
 
   const scenarioPath = flags.values.get('scenario');
   if (scenarioPath) {

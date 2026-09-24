@@ -101,7 +101,7 @@ export function Toolbar({
         >
           <option value="auto">{t('auto')}</option>
           <option value="functional">{t('functional')}</option>
-          <option value="firmware" disabled>{t('firmware')}</option>
+          <option value="firmware">{t('firmware')}</option>
         </select>
       </label>
 

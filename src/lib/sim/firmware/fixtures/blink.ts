@@ -5,7 +5,7 @@
  */
 import { createProject, makePart, makeWire } from '@/lib/doc/factory';
 import type { ProjectDoc } from '@/lib/doc/types';
-import { assemble } from 'avr8js/dist/cjs/utils/assembler.js';
+import { assembleProgram } from '../program-image';
 
 export const BLINK_SKETCH = `void setup() {
   pinMode(13, OUTPUT);
@@ -87,26 +87,7 @@ export const SERIAL_ASM = [
 ].join('\n');
 
 export function assembleHex(source: string): string {
-  const asm = assemble(source);
-  if (asm.errors.length) throw new Error(`assembler failed: ${asm.errors.join('; ')}`);
-  const out: string[] = [];
-  const pushRec = (addr: number, type: number, data: number[]): void => {
-    let sum = data.length + (addr >> 8) + (addr & 0xff) + type;
-    for (const b of data) sum += b;
-    const chk = (0x100 - (sum & 0xff)) & 0xff;
-    out.push(
-      ':' +
-        [data.length, (addr >> 8) & 0xff, addr & 0xff, type, ...data, chk]
-          .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
-          .join(''),
-    );
-  };
-  const bytes = asm.bytes;
-  const padded = new Uint8Array(Math.ceil(bytes.length / 2) * 2);
-  padded.set(bytes);
-  for (let a = 0; a < padded.length; a += 16) pushRec(a, 0x00, Array.from(padded.slice(a, a + 16)));
-  pushRec(0, 0x01, []);
-  return out.join('\n');
+  return assembleProgram(source);
 }
 
 export interface BlinkFixture {

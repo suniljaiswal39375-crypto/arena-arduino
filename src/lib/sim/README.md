@@ -42,7 +42,11 @@ engine.snapshot();
 The firmware slice (`./firmware/`) runs real compiled AVR machine code on the
 avr8js ATmega328P core behind the same worker/client seam — see
 `./firmware/README.md`. It is the hardware-accurate layer; this interpreter is
-the educational, toolchain-free layer.
+the educational, toolchain-free layer. `SimClient` routes a
+`doc.engine === 'firmware'` project to the firmware worker (or its inline
+fallback) and projects the firmware snapshot onto the same `SimSnapshot` the
+builder renders, so the Toolbar engine selector is live: baseline sketches run
+real AVR instructions, other sketches get an honest compile refusal.
 
 **How the virtual clock works.** `tick(realMs, speed)` converts real elapsed time into a
 microsecond budget and runs the interpreter's generator until the budget is spent. Time the sketch

@@ -20,7 +20,7 @@
  */
 import type { ProjectDoc } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
-import { Circuit, type PartState } from '../runtime';
+import { Circuit, type PartState, type SerialLine } from '../runtime';
 import { INPUT, INPUT_PULLUP, OUTPUT } from '../host';
 import {
   avrBoardFor,
@@ -38,6 +38,7 @@ import {
   type IntelHexImage,
 } from './avr';
 import type { FirmwareStatus, FirmwareSnapshot } from './interfaces';
+import { I2cLcdDecoder, Ssd1306Decoder, type I2cLcdEvent, type TwiEvent } from './peripherals';
 
 export const FW_LIMITS = {
   /** Instructions per debt-loop segment (mirrors the interpreter's OP_BUDGET yield). */
@@ -54,8 +55,9 @@ export const FW_LIMITS = {
 
 /** Adapters the AVR slice v0 does not yet decode on the bus. */
 const UNWIRED_ADAPTERS: ReadonlySet<string> = new Set([
-  'lcd',
-  'oled',
+  // 'lcd' and 'oled' are now decoded from the TWI bus: see peripherals.ts
+  // (I2cLcdDecoder / Ssd1306Decoder). A document must carry an OLED part with
+  // the decoder's address before its display is rendered.
   'matrix',
   'seven-seg',
   'stepper',
@@ -93,6 +95,10 @@ export class FirmwareEngine {
   /** Board pins the firmware has set as outputs since the last load. */
   private pinOutputs = new Set<number>();
   private lastHex = '';
+  private i2cLcd = new I2cLcdDecoder();
+  private pendingLcdEvents: I2cLcdEvent[] = [];
+  /** Per-address SSD1306 decoders, keyed by 7-bit slave address. */
+  private ssd1306 = new Map<number, Ssd1306Decoder>();
 
   constructor(doc: ProjectDoc) {
     this.doc = doc;
@@ -126,6 +132,39 @@ export class FirmwareEngine {
     const sandbox = prepareAvrProgram(image);
     sandbox.usart.onByteTransmit = (value) => this.onUsartByte(value);
     sandbox.usart.onLineTransmit = null;
+    this.i2cLcd = new I2cLcdDecoder();
+    this.pendingLcdEvents = [];
+    this.ssd1306.clear();
+    for (const part of doc.diagram.parts) {
+      const def = getPart(part.type);
+      if (def?.adapter === 'oled') {
+        const address = Number(def.defaults?.address ?? 60);
+        if (!this.ssd1306.has(address)) this.ssd1306.set(address, new Ssd1306Decoder(address));
+      }
+    }
+    const twi = sandbox.twi;
+    twi.eventHandler = {
+      // A real PCF8574 keeps ACKing every byte; complete the peripheral
+      // handshake so the TWI state machine advances and TWINT rises for the
+      // firmware's polling loop.
+      start: () => {
+        twi.completeStart();
+        this.onTwi({ kind: 'start' });
+      },
+      stop: () => {
+        twi.completeStop();
+        this.onTwi({ kind: 'stop' });
+      },
+      connectToSlave: (addr, write) => {
+        twi.completeConnect(true);
+        this.onTwi({ kind: 'connect', addr, write });
+      },
+      writeByte: (value) => {
+        twi.completeWrite(true);
+        this.onTwi({ kind: 'write', value });
+      },
+      readByte: () => twi.completeRead(0xff),
+    };
 
     this.sandbox = sandbox;
     this.board = board;
@@ -197,6 +236,30 @@ export class FirmwareEngine {
       return;
     }
     this.partial += String.fromCharCode(value & 0x7f);
+  }
+
+  /* ------------------------------------------------------------- twi/i2c -- */
+
+  private onTwi(event: TwiEvent): void {
+    this.pendingLcdEvents.push(...this.i2cLcd.onEvent(event));
+    for (const decoder of this.ssd1306.values()) decoder.onEvent(event);
+  }
+
+  /** Apply decoded I2C LCD events to the shared circuit once per frame. */
+  private drainI2cLcdEvents(): void {
+    for (const event of this.pendingLcdEvents) {
+      this.circuit.lcdCommand(event.address, event.command, event.args);
+    }
+    this.pendingLcdEvents = [];
+  }
+
+  /** Apply decoded SSD1306 text (when the framebuffer changed) once per frame. */
+  private drainOledEvents(): void {
+    for (const decoder of this.ssd1306.values()) {
+      for (const event of decoder.takeEvents()) {
+        this.circuit.oledCommand(event.command, event.args);
+      }
+    }
   }
 
   private flushSerialLine(): void {
@@ -372,6 +435,8 @@ export class FirmwareEngine {
     }
 
     this.syncPinModel();
+    this.drainI2cLcdEvents();
+    this.drainOledEvents();
     return { snapshot: this.snapshot(), err: null };
   }
 
@@ -476,6 +541,22 @@ export class FirmwareEngine {
   }
 
   /* -------------------------------------------------------------- misc -- */
+
+  /** Serial transcript, mirroring SimEngine's shape for CLI/scenario readers. */
+  serialTranscript(): { total: number; lines: SerialLine[]; partial: string } {
+    return {
+      total: this.circuit.serialTotal,
+      lines: [...this.circuit.serialLog],
+      partial: this.circuit.pendingText,
+    };
+  }
+
+  /** Digital level the firmware drives on any board's pin, for assertions. */
+  boardPinLevel(boardId: string, pinName: string): number {
+    const drive = this.boardDigitalDrive(boardId, pinName);
+    if (drive !== -1) return drive;
+    return this.boardDigitalInput(boardId, pinName);
+  }
 
   pushSerialInput(text: string): void {
     // USART Rx is not wired in slice 0; route through the shared model so the
