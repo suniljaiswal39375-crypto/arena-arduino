@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, arena/01a0d4ab-arena-arduino]
   pull_request:
 
 permissions:
@@ -37,6 +37,34 @@ jobs:
 
       - name: Browser and offline regressions
         run: npm run test:e2e
+
+  real-avr:
+    name: Official arduino-cli / Arduino AVR core integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned official Arduino action; the sandbox itself cannot reach the
+      # GitHub release-asset / downloads.arduino.cc hosts.
+      - uses: arduino/setup-arduino-cli@7ef629dcdf0f458ab7ae83149d629443deac6eac # v2.0.0
+        with:
+          version: '1.5.1'
+
+      - run: arduino-cli core update-index && arduino-cli core install arduino:avr
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Compile a real sketch and execute its HEX on avr8js
+        env:
+          SPARKLAB_REAL_ARDUINO_CLI: arduino-cli
+          SPARKLAB_ARDUINO_CLI: arduino-cli
+          SPARKLAB_FW_COMPILE_MS: '120000'
+        run: npm test -- src/server/firmware/real-cli.integration.test.ts
 
   scenarios:
     name: Automation scenarios

@@ -58,8 +58,9 @@ when `SPARKLAB_ARDUINO_CLI` is set, and returns Intel HEX. When the toolchain
 is absent the route answers an honest `503 {error:{code:"no-arduino-cli"}}` —
 never a fake build — and the browser falls back to the offline baseline stub
 (`src/lib/sim/firmware/compiler.ts`). The sketch is written to a private
-temp-dir file, never shell-interpolated; compile deadline and heartbeat are
-bounded. Tests drive the real spawn path against a fake arduino-cli script
+temp-dir file, never shell-interpolated; a compile deadline is enforced. It
+is a local process, **not** a hardened container or streamed SSE build service.
+Tests drive the real spawn path against a fake arduino-cli script
 (`src/server/firmware/*.test.ts`) and prove the produced HEX runs on the AVR
 core with the same blink as the parity fixture.
 

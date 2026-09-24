@@ -14,6 +14,8 @@ export interface SimHost {
 
   pinMode(pin: number, mode: PinMode): void;
   digitalWrite(pin: number, value: number): void;
+  /** Coalesce the four outputs of a functional Stepper.step phase (not cycle timing). */
+  digitalWritePins(pins: ReadonlyArray<{ pin: number; value: number }>): void;
   digitalRead(pin: number): number;
   analogRead(pin: number): number;
   analogWrite(pin: number, value: number): void;
@@ -61,6 +63,7 @@ export class NullHost implements SimHost {
   }
   pinMode(): void {}
   digitalWrite(): void {}
+  digitalWritePins(): void {}
   digitalRead(): number {
     return 0;
   }

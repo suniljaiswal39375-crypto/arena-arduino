@@ -58,24 +58,36 @@ TWI firmware.
 **Compile transport shipped.** `POST /api/firmware-compile` (`src/server/firmware/`,
 `src/app/api/firmware-compile/`) is the server-side, resource-bounded arduino-cli 1.x compile
 path: zod-validated `{boardFqbn, sketch, libraries}`, 64 KiB streamed-body cap, private temp-dir
-sketch (never shell-interpolated), heartbeat + deadline, honest `503 no-arduino-cli` when the
+sketch (never shell-interpolated), compile deadline and honest `503 no-arduino-cli` when the
 toolchain is absent. The firmware worker tries it in the browser and falls back to the offline
-baseline; tests drive the real spawn path against a fake arduino-cli script and prove the
-produced HEX runs on the AVR core with the same blink as the parity fixture.
+baseline. Local transport tests spawn a **fake CLI** and load its HEX; the opt-in CI test
+compiles with the official CLI + Arduino AVR core and executes that HEX on avr8js.
+This opt-in check must pass before treating the real compile path as validated.
 
-Still to do (same order as before):
+**AVR pin-device milestone.** The seven-segment common-cathode display reads the a..dp
+net drives; a single MAX7219 decodes latched 16-bit GPIO bit-bang or AVR hardware-SPI words
+(shutdown, scan limit, display-test and no-decode mode); and the ULN2003 reads only IN1–IN4
+GPIO masks for known half/full phase tables. A coil mask/transition count is **not motor
+motion**. Shared `Circuit` pin decoders drive both engines. Unit tests, real AVR instruction
+e2e fixtures and cross-engine parity cover each. Additional parity covers I2C LCD, USART0
+serial/plot, ADC0 raw 0/512/1023, button pull-ups and relay contacts with downstream load.
+Unwired, ambiguous, unsupported, misconfigured and non-AVR behaviours are not inferred.
 
-- A real `arduino-cli` + ArduinoCore-avr *binary* on a host (the transport is fully exercised
-  with a fake CLI and has not been run against a real toolchain — download CDNs were blocked in
-  the sandboxes that built this).
-- The containerised build farm (`BUILD_FARM_URL`) and SSE build logs; the local-CLI transport is
-  the single-node form of the same contract.
-- `sim-core` as WASM beyond AVR8: RP2040, then ESP32 (Xtensa / RISC-V); STM32 cores.
-- Peripheral models the AVR slice still reports as unsupported rather than guessing:
-  matrix/seven-seg decode and `stepper`. (The SSD1306 OLED is decoded from the TWI bus —
-  `Ssd1306Decoder` + `font5x7.ts` — and servo pulse timing is decoded from Timer1's real
-  registers — `servo.ts` — both with cross-engine parity.)
-- ESP32/Pico virtual WiFi, SD, and the debugger/GDB later phases.
+Still to do, in order:
+
+1. Validate the compile service with a real **official** `arduino-cli` and installed Arduino AVR
+   core: local release asset download and core CDN failed in this sandbox. An opt-in integration
+   test and GitHub Actions job were added; report an actual pass/failure before claiming validation.
+2. Only after that, deliver and validate a genuinely isolated, containerised build farm plus
+   streamed SSE build logs. The current local process is **not** sandboxed, and its heartbeat
+   timer emits no logs; do not expose arbitrary uploaded C++ compilation to untrusted users.
+3. Only after the build boundary, add accurately timed instruments/VCD, then typed-tool AI,
+   generated Chaos exercises, chip authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP.
+   Non-AVR architectures (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
+
+Unsupported remains explicit for multi-device MAX7219 cascades, BCD decode mode, alternative
+seven-segment topologies, non-8N1/non-ASCII serial, unmodelled I2C buses and physical motor
+motion. More catalogue parts are not automatically firmware-supported.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
 
@@ -226,7 +238,7 @@ AI feature that talks without touching the simulator.
 ### Next-session implementation priority
 
 1. Validate deployment integration where real services are available; never invent credentials or fake OAuth success. Add retention automation/operator audit design and true mission-evidence progress before calling the class matrix a learning heatmap.
-2. **Firmware emulation (Phase 10) is now started, not finished:** the AVR slice runs real machine code with the parity test green. Next: execute the arduino-cli compile path on a host that can download the toolchain, wire `doc.engine === 'firmware'` into the builder (worker seam is ready), then peripheral models the slice reports as unsupported, then RP2040/ESP32 separately.
+2. **Firmware emulation (Phase 10) remains partial:** the AVR slice and builder engine selector run real machine code; I2C displays, servo, seven-seg, MAX7219 and ULN2003 GPIO decoders have parity tests. See the live Phase 10 status above for the still-unverified official CLI and the build-farm/SSE prerequisite. RP2040/ESP32 are later.
 3. Add real-timing instruments/VCD only when the execution engine can support the claimed timing; then typed-tool Saksham, generated Chaos exercises and chip-authoring workflow.
 4. Continue editable/uncertainty-aware 3D/scanning, Yjs collaboration, sharing, mail login, remaining localization and integrations as documented above and in the original PDF.
 
@@ -242,11 +254,24 @@ The complete PDF roadmap is not finished by this checkpoint. Prefer correct test
   gate, honest toolchain discovery) and the firmware worker mirroring `SimClient`'s protocol.
 - Added the PDF's parity acceptance test: the same blink project produces the identical LED trace
   on the functional interpreter and on real AVR machine code.
-- Honest boundaries: the I2C displays and the servo are now decoded from the real AVR bus
-  (`peripherals.ts` / `servo.ts`); matrix/seven-seg and steppers are reported by name as
-  unsupported rather than guessed. `arduino-cli` binaries could not be downloaded in this
-  sandbox (release CDN blocked), so compile **execution** is tested behind a fake executor,
-  never claimed as a live build. RP2040/ESP32/STM32 remain future work.
+- At that checkpoint matrix/seven-seg/stepper were unsupported; the later AVR pin-device
+  milestone above supersedes that *historical* missing-feature list. Official release asset
+  downloads were blocked locally. RP2040/ESP32/STM32 remain future work.
 
 Verification this session: 520 unit/render tests pass (28 files, up from 482); the parity test
 and 40 firmware/compile/hex tests are new; strict typecheck and production build pass.
+
+### AVR GPIO-device and parity checkpoint — 24 September 2026
+
+- Added shared pin-level decoders and visual states for common-cathode seven-segment,
+  single MAX7219 dot matrix (bit-bang + hardware SPI), and ULN2003 IN1–IN4 step phases.
+  The latter is plain-GPIO **observed phase decoding**, not shaft/step/angle estimation.
+  Fixed the ULN2003 OUT1–OUT4 catalogue pin directions; supply pins remain supply.
+- Added unit, executed-AVR e2e and cross-engine parity for each; additional parity now
+  includes I2C LCD, ADC0 analogRead at 0/512/1023, USART0 serial/plot, GPIO input pull-up
+  and active-low relay contacts/downstream LED. Power cycles and floating inputs are tested.
+- `npm run typecheck` and `npm run scenarios` passed; `npm test` passed **637 tests / 54 files**
+  before adding the opt-in official-CLI test (locally skipped without the CLI).
+- Official Arduino CLI v1.5.1 release and AVR core CDNs are unreachable from this sandbox.
+  A real-toolchain GitHub Actions integration check has been added, but until its run result
+  is observed, no real compile success or containerised farm/SSE is claimed.

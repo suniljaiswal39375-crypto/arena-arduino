@@ -7,10 +7,9 @@ the server-side implementation behind `POST /api/firmware-compile`.
 ```
 compile-service.ts   discoverLocalCli()  version-gated discovery of
                      SPARKLAB_ARDUINO_CLI
-                     compileSketch()     spawn gated arduino-cli, bounded by
-                                         heartbeat + deadline, write a private
-                                         temp sketch.ino (never a shell string),
-                                         read back the Intel HEX
+                     compileSketch()     spawn arduino-cli with a deadline,
+                                         write a private sketch file (never
+                                         shell-interpolated), read Intel HEX
 http.ts              handleFirmwareCompile()  zod-validated, streamed-body-capped,
                                          origin-checked; honest 503 when the
                                          toolchain is absent
@@ -26,10 +25,16 @@ http.ts              handleFirmwareCompile()  zod-validated, streamed-body-cappe
 
 The offline lab never depends on this endpoint: when it 503s, the firmware
 worker falls back to `compiler.ts`, which runs the known baseline sketches from
-pre-built real AVR machine code.
+pre-built real AVR machine code. This is currently **one local child process**, not
+a container sandbox or SSE build-log stream. The heartbeat interval in the
+executor is reserved but does not publish events. Do not expose the endpoint to
+untrusted public sketch compilation without an isolated build worker.
 
 ## Tests
 
 `npm test -- src/server/firmware` exercises the real `spawn` path against a
 fake arduino-cli script written per test, and proves the produced HEX runs on
 the AVR core (`http.test.ts`), plus the HTTP status mapping and refusal paths.
+`real-cli.integration.test.ts` is opt-in: CI installs the official arduino-cli
+and Arduino AVR core, compiles a minimal Uno sketch and executes its HEX on
+avr8js. A fake executable alone does not validate actual toolchain support.

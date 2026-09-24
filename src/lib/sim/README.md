@@ -45,8 +45,12 @@ avr8js ATmega328P core behind the same worker/client seam — see
 the educational, toolchain-free layer. `SimClient` routes a
 `doc.engine === 'firmware'` project to the firmware worker (or its inline
 fallback) and projects the firmware snapshot onto the same `SimSnapshot` the
-builder renders, so the Toolbar engine selector is live: baseline sketches run
-real AVR instructions, other sketches get an honest compile refusal.
+builder renders, so the Toolbar engine selector is live: offline baselines run
+real AVR instructions, while other sketches need a configured arduino-cli + AVR
+core or get an honest compile refusal. The shared `Circuit` also decodes
+common-cathode seven-segment nets, one MAX7219 (GPIO/SPI), and ULN2003
+**observed GPIO input phases**, not physical motor motion. Decoder, executed-AVR
+and parity tests constrain the supported topologies.
 
 **How the virtual clock works.** `tick(realMs, speed)` converts real elapsed time into a
 microsecond budget and runs the interpreter's generator until the budget is spent. Time the sketch

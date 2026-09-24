@@ -228,18 +228,35 @@ export function PartGlyph({ def, state, width, height }: Props) {
     }
 
     case 'seven-seg': {
+      // Illuminate the *observed segments*, even when they do not form a digit.
+      // A text glyph would invent a character for partial/shorted wiring.
+      const segments: Array<[number, number, number, number]> = [
+        [-7, -13, 14, 2], [8, -11, 2, 10], [8, 1, 2, 10],
+        [-7, 12, 14, 2], [-10, 1, 2, 10], [-10, -11, 2, 10], [-7, -1, 14, 2],
+      ];
       return (
         <g>
-          <rect x={width / 2 - 26} y={cy - 14} width={52} height={28} rx={4} fill="#2a0d10" stroke="var(--color-border)" />
-          <text
-            x={width / 2}
-            y={cy + 7}
-            fontSize={17}
-            textAnchor="middle"
-            fill="#ff5a5f"
-            fontFamily="var(--font-mono)"
-          >
-            {state.value || '-'}
+          <rect x={width / 2 - 26} y={cy - 17} width={52} height={34} rx={4} fill="#2a0d10" stroke="var(--color-border)" />
+          {segments.map(([dx, dy, w, h], i) => (
+            <rect key={i} x={width / 2 + dx!} y={cy + dy!} width={w} height={h}
+              fill={state.segments & (1 << i) ? '#ff5a5f' : '#4c1a20'} rx={0.7} />
+          ))}
+          <circle cx={width / 2 + 14} cy={cy + 12} r={1.6}
+            fill={state.segments & 0x80 ? '#ff5a5f' : '#4c1a20'} />
+        </g>
+      );
+    }
+
+    case 'stepper': {
+      return (
+        <g>
+          {[0, 1, 2, 3].map((bit) => (
+            <circle key={bit} cx={width / 2 - 18 + bit * 12} cy={cy - 5} r={3.5}
+              fill={state.coils !== null && (state.coils & (1 << bit)) !== 0 && state.powered ? 'var(--color-accent)' : 'var(--color-border-strong)'} />
+          ))}
+          <text x={width / 2} y={cy + 15} fontSize={9} textAnchor="middle"
+            fill="var(--color-text-muted)" fontFamily="var(--font-mono)">
+            {state.powered ? state.coils === null ? 'GPIO ?' : `GPIO ${state.transitions > 0 ? '+' : ''}${state.transitions}` : 'unpowered'}
           </text>
         </g>
       );

@@ -45,13 +45,13 @@ maintenance cost, not a head start.
 
 ## Simulation
 
-### One canvas, two engines — but only one engine exists yet
-`doc.engine` (`auto` / `functional` / `firmware`) and the per-part `fidelity.engine` field are in
-the schema, and the ERC emits `unsupported-part-in-engine` when a firmware-only part is used on
-the functional runtime. The firmware emulator itself is Phase 5.
-
-**Why not stub it:** a fake "EXACT" badge would violate the honesty pillar, which is the thing
-that makes the rest of the product trustworthy. Better to have the seam and no badge.
+### One canvas, two actual engines — AVR is a supported slice, not a blanket guarantee
+`doc.engine` (`auto` / `functional` / `firmware`) routes through the builder to either the
+educational interpreter or real AVR machine-code execution on avr8js. The per-part
+`fidelity.engine` and ERC mark unsupported parts; any missing firmware image, board or decoder
+must say so rather than silently substitute the interpreter. Without an installed toolchain,
+only the two known pre-built AVR baseline images can run in firmware mode. Other programs are
+explicitly refused. A fake "EXACT" badge would violate the honesty pillar.
 
 ### The functional runtime is a real interpreter, not a pattern matcher
 Tokenizer → recursive-descent parser → AST → tree-walking interpreter with a virtual clock.
@@ -243,8 +243,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - A documented **clock bridge** (three reserved SRAM cells 0x0200/0x0204/0x0205, defined in visible editable C) is the single thing that does not exist on silicon. It reproduces the functional engine's `delay()`/`millis()` pacing so `delay(1000)` does not burn 16M busy-wait cycles, and so the differential parity test is meaningful. Anything banked on the bridge is labelled emulator-only instrumentation, never magic bytes.
 - **Compile is a gated seam, not a bundled binary.** `arduino-cli` binaries and `downloads.arduino.cc` were blocked in the sandbox that built the slice, so `compile.ts` implements the typed contract — version gate (1.x), resource limits before I/O, FNV-1a checksummed cache key (honestly named `fnv1a`, not SHA-256), and device discovery. Tests use a fake executor; a live build is NOT claimed.
 - The engine ports `SimEngine.tick`'s debt loop, including its carry-over and negative-debt behaviour, so both engines sample an identical blink at 100 ms — parity by construction.
-- Peripherals the AVR slice cannot yet decode (I2C LCD/OLED, matrix, seven-seg, servo, stepper) are reported by name as `unsupported` rather than guessed, matching the interpreter's unsupported-call convention. RP2040/ESP32/STM32 are later phases.
-- The firmware worker mirrors `SimClient`'s message vocabulary, so wiring `doc.engine === 'firmware'` into the builder is the remaining unshipped UI step; the engine seam itself is tested headlessly.
+- At the first AVR checkpoint I2C displays/servo/matrix/seven-seg/stepper were unsupported; subsequent dated sections below supersede that list. RP2040/ESP32/STM32 remain later phases.
+- The worker mirrors `SimClient`'s messages; the builder was subsequently connected to the firmware worker. It does **not** run a sketch on the interpreter when AVR compilation fails.
 
 ## Firmware CLI (`--firmware`) and the `--elf` rejection — 24 September 2026
 
@@ -269,7 +269,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
   (`known-programs.ts` / `program-image.ts`), and refuses every other sketch,
   library list or non-328P board with a precise reason. Reworking this into a
   JavaScript "compiler" would be a lie; real compilation stays on the
-  containerised arduino-cli seam (`compile.ts`).
+  optional arduino-cli compile seam (`compile.ts`). The current local service is **not**
+  containerised; a future build farm must be actually isolated before hosting untrusted C++.
 - **Snapshot projection, never renaming.** `SimClient` now routes
   `doc.engine === 'firmware'` to the firmware worker (or an inline fallback)
   and projects `FirmwareSnapshot` onto the existing `SimSnapshot` shape
@@ -280,8 +281,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
   the engine slices real TWI signals (START / SLA+W / PCF8574 expander bytes
   with EN-pulse latching / STOP) into the shared `lcdCommand` surface
   (`firmware/peripherals.ts`). The e2e test clocks "HI" in from real TWI
-  firmware. Timing-only devices (servo pulse width, stack-sized 7-seg/matrix,
-  stepper) stay honestly unsupported until a timing model exists.
+  firmware. Timer1 servo was later decoded from registers and the three
+  GPIO devices were later decoded from observed pins; see the dated sections below.
 
 ## Compile transport (`POST /api/firmware-compile`) — 24 September 2026
 
@@ -291,8 +292,9 @@ path separators). Added a build-script fixture test and real offline mission-pag
   build. The browser falls back to the offline baseline stub (which itself
   never fakes a compile), so the two honest fallbacks compose.
 - The sketch is written to a private temp dir as a file and passed as a path —
-  never shell-interpolated. Compile deadline (default 20 s) and heartbeat
-  (default 5 s) bound every request; both are env-tunable.
+  never shell-interpolated. The compile deadline defaults to 20 s. The current
+  heartbeat interval **does not emit SSE**; do not represent it as streamed logs
+  or a bounded container worker.
 - Resource bounds mirror the offline stub's: 64 KiB request body, 8 KiB sketch,
   16 libraries, 256-char library lines — enforced before filesystem I/O.
 - Origin/cross-site checks reuse the classrooms policy (403 on mismatch). The
@@ -344,3 +346,40 @@ path separators). Added a build-script fixture test and real offline mission-pag
   library constant, not a register fact. The parity fixture therefore uses
   `writeMicroseconds(1500)` ↔ `OCR1A = 3000` (both 1500 µs), not an angle
   claim the register file cannot carry.
+
+## AVR pin-device decoding and cross-engine parity — 24 September 2026
+
+- **Observe pins, not calls.** Common-cathode seven-segment state is read from the a..dp
+  output nets; only exact known bit patterns receive digit labels. The MAX7219 decoder
+  shifts DIN on CLK edges while CS is low, latches the final 16-bit word on CS rise, and
+  also receives completed AVR master-SPI bytes through the same decoder. Only one device
+  with a GPIO CS, shutdown off, scan limit set and decode mode zero is shown. No guessed
+  cascades, BCD digit-mode matrix, LED brightness or partial transfers.
+- **Stepper is plain-GPIO phase decoding.** ULN2003 OUT1–OUT4 are outputs, not power inputs;
+  VCC and GND remain required. Observe the four IN levels, coalescing the functional
+  `Stepper.step` writes at command boundaries while AVR tracks actual port edges. Recognise
+  only adjacent masks in the common half-step and four-wire full-step tables. A mode shared
+  between tables stays unknown until disambiguated. Report raw masks for invalid/undriven
+  inputs; a count is only observed adjacent GPIO phase transitions, **not physical shaft
+  steps, angle, speed, torque or coil current**. Sequential `digitalWrite` transients may
+  form valid intermediate masks, so do not infer the library's intended mechanical step
+  count from firmware activity. Both engines reset display/phase decoders on loss of power.
+- **Parity measures visible results, not matching source.** Executed AVR fixtures cover
+  the three devices as well as TWI LCD, OLED and Timer1 servo. Differential tests compare
+  seven-seg bits/digit, matrix cells, ULN2003 mask/sequence/count, LCD lines, OLED text,
+  servo pulse/angle, USART serial lines/plot labels, ADC0 raw 0/512/1023, button pull-up
+  reads and a relay's downstream load against interpreter behaviour. Neither a test-only
+  fake CLI nor pre-assembled AVR images certify real `arduino-cli` compilation.
+
+## Real-toolchain validation boundary — 24 September 2026
+
+- The sandbox has no `arduino-cli`, AVR compiler, Docker or Podman. Official v1.5.1 release
+  download via `gh release download` failed at `release-assets.githubusercontent.com` (EOF);
+  the Arduino core CDN failed TLS connection. No production toolchain build was observed here.
+- An **opt-in** GitHub Actions check installs the official CLI + Arduino AVR core, compiles a
+  minimal Uno sketch through `compileSketch`, parses its Intel HEX and executes it on avr8js.
+  Until that CI run passes, the existing fake-CLI transport test is the only compile evidence.
+- A future `BUILD_FARM_URL` is a **deployment architecture goal**, not a shipped container.
+  Do not expose the local child-process transport as a public multi-tenant compiler. SSE
+  logs, time/memory limits, process-tree cancellation, redaction and isolated disposable
+  filesystem/network/privileges need verified implementations before claiming a build farm.

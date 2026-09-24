@@ -223,7 +223,7 @@ export class SimEngine {
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
       error: this.error,
-      unsupported: [...this.circuit.unsupportedCalls],
+      unsupported: [...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()],
     };
   }
 }
