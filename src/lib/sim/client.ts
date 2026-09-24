@@ -3,15 +3,40 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { SimEngine, type SimSnapshot } from './engine';
 import type { WorkerRequest, WorkerResponse } from './worker';
+import type { FirmwareWorkerRequest, FirmwareWorkerResponse } from './firmware/worker';
+import type { FirmwareSnapshot } from './firmware/interfaces';
+import { firmwareSnapshotAsSim, firmwareLoadError } from './firmware/adapt';
+
+/** The subset of `FirmwareRuntime` the inline no-worker fallback calls. */
+interface FirmwareInline {
+  run(elapsed: number, speed?: number): void;
+  snapshot(): FirmwareSnapshot;
+  start(): void;
+  stop(): void;
+  reset(): void;
+  pushSerial(text: string): void;
+  update(doc: ProjectDoc): void;
+}
 
 /**
  * Main-thread handle on the simulation. Runs the engine inside a Web Worker so
- * a long-running sketch cannot stall the canvas, and falls back to an inline
- * engine if workers are unavailable.
+ * a long-running sketch cannot stall the canvas. A `doc.engine === 'firmware'`
+ * project is routed to the firmware worker (real AVR machine-code execution);
+ * everything else keeps the functional interpreter. Both produce the same
+ * `SimSnapshot` shape for the UI, so the builder renders either engine through
+ * one code path.
+ *
+ * The firmware engine (avr8js) is deliberately *not* statically imported here:
+ * it lives in the firmware worker bundle. The inline no-worker fallback loads
+ * it lazily so the main-thread bundle never carries the AVR core.
  */
 export class SimClient {
   private worker: Worker | null = null;
+  private fwWorker: Worker | null = null;
+  private fwHeartbeat: ReturnType<typeof setInterval> | null = null;
   private inline: SimEngine | null = null;
+  private inlineFw: FirmwareInline | null = null;
+  private fwLoadError: { message: string } | null = null;
   private raf: number | null = null;
   private lastFrame = 0;
   private speed = 1;
@@ -35,21 +60,99 @@ export class SimClient {
     this.worker?.postMessage(msg);
   }
 
+  private ensureFirmwareWorker(): void {
+    if (this.fwWorker || typeof window === 'undefined') return;
+    try {
+      const w = new Worker(new URL('./firmware/worker.ts', import.meta.url));
+      this.fwHeartbeat = setInterval(() => {
+        w.postMessage({ type: 'set-heartbeat', ms: 16 } satisfies FirmwareWorkerRequest);
+      }, 2000);
+      w.onmessage = (event: MessageEvent<FirmwareWorkerResponse>) => {
+        const msg = event.data;
+        if (msg.type === 'state') {
+          this.fwLoadError = null;
+          this.onState?.(firmwareSnapshotAsSim(msg.snapshot));
+        } else if (msg.type === 'load-error') {
+          this.fwLoadError = { message: msg.message };
+        }
+      };
+      this.fwWorker = w;
+    } catch {
+      this.fwWorker = null;
+    }
+  }
+
+  private disposeFirmwareWorker(): void {
+    if (this.fwHeartbeat !== null) clearInterval(this.fwHeartbeat);
+    this.fwHeartbeat = null;
+    if (this.fwWorker) {
+      this.fwWorker.postMessage({ type: 'dispose' } satisfies FirmwareWorkerRequest);
+      this.fwWorker.terminate();
+      this.fwWorker = null;
+    }
+  }
+
+  private sendFw(msg: FirmwareWorkerRequest): void {
+    this.fwWorker?.postMessage(msg);
+  }
+
   private startInlineLoop(): void {
     if (this.raf !== null) return;
     this.lastFrame = performance.now();
     const step = (now: number): void => {
       const elapsed = Math.min(100, now - this.lastFrame);
       this.lastFrame = now;
-      this.inline?.tick(elapsed, this.speed);
-      if (this.inline) this.onState?.(this.inline.snapshot());
+      if (this.inlineFw) {
+        this.inlineFw.run(elapsed, this.speed);
+        this.onState?.(firmwareSnapshotAsSim(this.inlineFw.snapshot(), this.errorForLoadError()));
+      } else if (this.inline) {
+        this.inline.tick(elapsed, this.speed);
+        this.onState?.(this.inline.snapshot());
+      }
       this.raf = requestAnimationFrame(step);
     };
     this.raf = requestAnimationFrame(step);
   }
 
+  private errorForLoadError() {
+    return this.fwLoadError ? firmwareLoadError(this.fwLoadError.message) : null;
+  }
+
   load(doc: ProjectDoc, source: string): void {
     this.doc = doc;
+    if (doc.engine === 'firmware') {
+      this.fwLoadError = null;
+      this.inline = null;
+      this.inlineFw = null;
+      if (typeof window !== 'undefined') this.ensureFirmwareWorker();
+      if (this.fwWorker) {
+        // Browser: try the hosted compile service; the worker falls back to
+        // the offline baseline when it answers 503 or is unreachable.
+        this.sendFw({ type: 'load', doc, source, nodeMode: false });
+        return;
+      }
+      if (typeof window === 'undefined') return; // SSR: no engine, no worker.
+      // Last resort: no Worker available. Load the AVR core lazily so it never
+      // sits in the main-thread bundle unless it truly has to run there.
+      void import('./firmware/firmware-runtime').then(({ FirmwareRuntime }) => {
+        const rt = new FirmwareRuntime(doc);
+        void rt.loadViaCompile(doc, { nodeMode: false, compileEndpoint: '/api/firmware-compile' }).then((res) => {
+          if (!res.ok) {
+            this.fwLoadError = { message: res.message };
+            this.onState?.(firmwareSnapshotAsSim(rt.snapshot(), firmwareLoadError(res.message)));
+            return;
+          }
+          this.inlineFw = rt;
+          rt.start();
+          this.startInlineLoop();
+        });
+      });
+      return;
+    }
+
+    this.inlineFw = null;
+    this.fwLoadError = null;
+    this.disposeFirmwareWorker();
     if (this.worker) {
       this.send({ type: 'load', doc, source });
       return;
@@ -62,6 +165,11 @@ export class SimClient {
 
   update(doc: ProjectDoc): void {
     this.doc = doc;
+    if (doc.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'update', doc });
+      else this.inlineFw?.update(doc);
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'update', doc });
       return;
@@ -70,6 +178,11 @@ export class SimClient {
   }
 
   start(): void {
+    if (this.doc?.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'start' });
+      else this.inlineFw?.start();
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'start' });
       return;
@@ -78,6 +191,11 @@ export class SimClient {
   }
 
   stop(): void {
+    if (this.doc?.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'stop' });
+      else this.inlineFw?.stop();
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'stop' });
       return;
@@ -86,6 +204,11 @@ export class SimClient {
   }
 
   reset(): void {
+    if (this.doc?.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'reset' });
+      else this.inlineFw?.reset();
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'reset' });
       return;
@@ -95,6 +218,11 @@ export class SimClient {
   }
 
   sendSerial(text: string): void {
+    if (this.doc?.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'serial', text });
+      else this.inlineFw?.pushSerial(text);
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'serial', text });
       return;
@@ -104,9 +232,12 @@ export class SimClient {
 
   setSpeed(value: number): void {
     this.speed = value;
+    if (this.doc?.engine === 'firmware') {
+      if (this.fwWorker) this.sendFw({ type: 'speed', value });
+      return;
+    }
     if (this.worker) {
       this.send({ type: 'speed', value });
-      return;
     }
   }
 
@@ -114,9 +245,11 @@ export class SimClient {
     this.send({ type: 'dispose' });
     this.worker?.terminate();
     this.worker = null;
+    this.disposeFirmwareWorker();
     if (this.raf !== null) cancelAnimationFrame(this.raf);
     this.raf = null;
     this.inline = null;
+    this.inlineFw = null;
   }
 
   currentDoc(): ProjectDoc | null {

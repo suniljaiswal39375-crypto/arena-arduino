@@ -5,7 +5,8 @@ A browser electronics lab that fuses two products into one canvas:
 - a **curriculum-aligned virtual lab** in the spirit of the Atal Tinkering Labs kit — guided
   missions, auto-checked wiring steps, a skill taxonomy with NCERT anchors, and local skill evidence (teacher classrooms are planned);
 - a **functional Arduino-subset interpreter** with live part state, a serial monitor and a
-  serial plotter. Real firmware compilation and microcontroller emulation are planned, not implemented.
+  serial plotter, plus an **AVR firmware slice** — real compiled ATmega328P machine code
+  executed instruction-by-instruction on the avr8js core (see `src/lib/sim/firmware`).
 
 The working name is **SparkLab**. It is a placeholder held in exactly one constant
 (`PRODUCT_NAME` in `src/lib/brand.ts`), so it can be renamed in one commit.
@@ -37,10 +38,13 @@ npm run cli -- --help
 
 > One canvas, two engines, honest labels.
 
-Today projects run on the **functional runtime**, an interpreter for a subset of Arduino C++.
-The firmware selector is reserved for a future compile-and-emulate engine; it does not provide
-instruction-accurate execution. The 166-part catalogue includes modelled, visual-only and export-only
-parts. Catalogue presence is not a claim that every peripheral is simulated.
+Projects run on the **functional runtime** (an interpreter for a subset of Arduino C++). The
+**firmware slice** (`src/lib/sim/firmware`) additionally runs real compiled ATmega328P machine code
+on the avr8js core with instruction-accurate timing; its parity test proves the same project blinks
+identically on both engines. It is headless/engine-level today — the firmware selector in the UI stays
+disabled until the compile-service transport and remaining peripheral decoders land. The 166-part
+catalogue includes modelled, visual-only and export-only parts. Catalogue presence is not a claim that
+every peripheral is simulated.
 
 ---
 
@@ -62,7 +66,7 @@ parts. Catalogue presence is not a claim that every peripheral is simulated.
 | Chaos Lab: 8 broken-on-purpose projects, each proven solvable | ✅ |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
 | 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
-| Firmware emulation (real compile + emulated core) | ⏳ see ROADMAP |
+| Firmware emulation — AVR slice: real machine code on avr8js, parity test green (compile transport + ESP32/RP2040 later) | ✅ engine level · see ROADMAP |
 | Accounts, classrooms, 3D workbench, photo scanning, AI mentor, multiplayer, logic analyser | ⏳ see ROADMAP |
 
 ---
@@ -130,9 +134,12 @@ costs microseconds of real time. It supports `setup`/`loop`, control flow, `digi
 `LiquidCrystal_I2C`, `Adafruit_SSD1306`, `Stepper` and `DHT` classes. Anything it cannot model
 produces a named message rather than silently doing nothing.
 
-**Firmware emulator** — not yet wired in. The seam is ready: `doc.engine` selects the mode, parts
-declare `fidelity.engine: 'firmware'`, and the ERC already emits `unsupported-part-in-engine`
-telling you to switch. See [`ROADMAP.md`](ROADMAP.md) Phase 5.
+**Firmware emulator** — the AVR slice is real and tested at the engine level
+(`src/lib/sim/firmware/README.md`): Intel HEX decode → avr8js ATmega328P execution → the same
+`Circuit` output model as the interpreter, behind a mirror-image worker protocol. The PDF's parity
+acceptance test (`src/lib/sim/parity/blink-parity.test.ts`) is green. What is NOT yet shipped: the
+builder UI switch stays disabled because the `arduino-cli` compile transport and the remaining
+peripheral decoders (I2C LCD/OLED, matrix, servo, stepper) come next. See `ROADMAP.md` Phase 10.
 
 ---
 
