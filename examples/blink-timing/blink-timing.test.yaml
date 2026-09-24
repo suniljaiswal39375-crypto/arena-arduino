@@ -1,0 +1,19 @@
+name: Blink timing
+version: 1
+author: SparkLab
+steps:
+  - delay: 250ms
+  - expect-pin:
+      part-id: uno
+      pin: 13
+      expected: 1
+  - delay: 500ms
+  - expect-pin:
+      part-id: uno
+      pin: 13
+      expected: 0
+  - delay: 500ms
+  - expect-pin:
+      part-id: led1
+      pin: A
+      expected: 1

@@ -1,0 +1,2 @@
+Adafruit Unified Sensor
+DHT sensor library

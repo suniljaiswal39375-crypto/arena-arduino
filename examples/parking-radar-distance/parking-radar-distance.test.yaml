@@ -1,0 +1,25 @@
+name: Parking radar distance
+version: 1
+author: SparkLab
+steps:
+  - set-control:
+      part-id: sonar
+      control: hcSr04Distance
+      value: 120
+  # 120 cm echoes for 6960 us, and 6960 * 0.034 / 2 truncates to 118: the
+  # sketch's constant is an approximation, so allow for it rather than hide it.
+  - assert-serial-regex:
+      pattern: "^11[789] cm$"
+      timeout: 2s
+  - set-control:
+      part-id: sonar
+      control: hcSr04Distance
+      value: 15
+  - assert-serial-regex:
+      pattern: "^1[456] cm$"
+      timeout: 2s
+  - delay: 200ms
+  - expect-pin:
+      part-id: led
+      pin: A
+      expected: 1

@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "author": "SparkLab",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 160,
+      "left": 80,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn",
+      "top": 100,
+      "left": 400,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r",
+      "top": 140,
+      "left": 640,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led",
+      "top": 140,
+      "left": 760,
+      "attrs": {
+        "color": "red"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "uno:GND.1",
+      "btn:1.l",
+      "black",
+      []
+    ],
+    [
+      "btn:2.l",
+      "uno:2",
+      "green",
+      []
+    ],
+    [
+      "uno:13",
+      "r:1",
+      "green",
+      []
+    ],
+    [
+      "r:2",
+      "led:A",
+      "green",
+      []
+    ],
+    [
+      "led:C",
+      "uno:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {}
+}

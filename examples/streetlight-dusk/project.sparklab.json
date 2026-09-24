@@ -1,0 +1,213 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-streetlight-dusk",
+  "name": "Smart Streetlight",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "ldr",
+        "type": "ldr-module",
+        "x": 400,
+        "y": 80,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "ldr"
+        }
+      },
+      {
+        "id": "relay",
+        "type": "relay-1ch",
+        "x": 400,
+        "y": 250,
+        "rotate": 0,
+        "attrs": {
+          "activeLow": true,
+          "coilCurrent": 70
+        }
+      },
+      {
+        "id": "r",
+        "type": "resistor",
+        "x": 640,
+        "y": 300,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led",
+        "type": "led",
+        "x": 760,
+        "y": 300,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "ldr",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "ldr",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "ldr",
+          "pin": "AO"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "A0"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC+"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC-"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "relay",
+          "pin": "IN"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "COM"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "relay",
+          "pin": "NO"
+        },
+        "to": {
+          "part": "r",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w9",
+        "from": {
+          "part": "r",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w10",
+        "from": {
+          "part": "led",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Smart Streetlight: the lamp decides for itself.\nconst int ldrPin = A0;\nconst int relayPin = 8;\nconst int threshold = 400;   // below this it counts as dark\n\nvoid setup() {\n  pinMode(relayPin, OUTPUT);\n  digitalWrite(relayPin, HIGH);   // relay boards are active LOW: HIGH is off\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int light = analogRead(ldrPin);\n  Serial.println(light);\n\n  if (light < threshold) {\n    digitalWrite(relayPin, LOW);    // dark: switch the lamp on\n  } else {\n    digitalWrite(relayPin, HIGH);   // light: switch it off\n  }\n  delay(200);\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "ldrLux": 320,
+      "resistance": 220
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "smart-streetlight",
+    "step": 13
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

@@ -1,0 +1,209 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-gas-latch-and-reset",
+  "name": "Gas Leak Shutoff",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "gas",
+        "type": "mq2-gas",
+        "x": 400,
+        "y": 70,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "gas"
+        }
+      },
+      {
+        "id": "relay",
+        "type": "relay-1ch",
+        "x": 400,
+        "y": 200,
+        "rotate": 0,
+        "attrs": {
+          "activeLow": true,
+          "coilCurrent": 70
+        }
+      },
+      {
+        "id": "buzzer",
+        "type": "buzzer-active",
+        "x": 400,
+        "y": 310,
+        "rotate": 0,
+        "attrs": {
+          "active": true
+        }
+      },
+      {
+        "id": "btn",
+        "type": "pushbutton",
+        "x": 400,
+        "y": 410,
+        "rotate": 0,
+        "attrs": {}
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "gas",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "gas",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "gas",
+          "pin": "AO"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "A1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC+"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "relay",
+          "pin": "DC-"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "relay",
+          "pin": "IN"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "buzzer",
+          "pin": "+"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D7"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "buzzer",
+          "pin": "-"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w9",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "btn",
+          "pin": "1"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w10",
+        "from": {
+          "part": "btn",
+          "pin": "2"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D2"
+        },
+        "color": "green"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Gas Leak Shutoff: a latched safety system.\nconst int gasPin = A1;\nconst int valvePin = 8;\nconst int buzzerPin = 7;\nconst int resetPin = 2;\n\nconst int tripLevel = 400;    // gas concentration that trips the valve\nconst int clearLevel = 250;   // must fall below this before a reset is allowed\n\nbool latched = false;\n\nvoid setup() {\n  pinMode(valvePin, OUTPUT);\n  pinMode(buzzerPin, OUTPUT);\n  pinMode(resetPin, INPUT_PULLUP);\n  digitalWrite(valvePin, HIGH);   // active LOW relay: valve open\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  int gas = analogRead(gasPin);\n  Serial.println(gas);\n\n  if (gas > tripLevel) latched = true;\n\n  if (latched) {\n    digitalWrite(valvePin, LOW);      // close the valve\n    digitalWrite(buzzerPin, HIGH);    // and sound the alarm\n  } else {\n    digitalWrite(valvePin, HIGH);\n    digitalWrite(buzzerPin, LOW);\n  }\n\n  // A reset only works once the air has actually cleared.\n  if (latched && digitalRead(resetPin) == LOW && gas < clearLevel) {\n    latched = false;\n    delay(400);\n  }\n  delay(100);\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "gasLevel": 140,
+      "buttonPressed": 0
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "gas-leak-shutoff",
+    "step": 8
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

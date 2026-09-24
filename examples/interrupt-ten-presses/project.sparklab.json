@@ -1,0 +1,140 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-interrupt-ten-presses",
+  "name": "Interrupt-Driven Event Counter",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "btn",
+        "type": "pushbutton",
+        "x": 400,
+        "y": 100,
+        "rotate": 0,
+        "attrs": {}
+      },
+      {
+        "id": "r",
+        "type": "resistor",
+        "x": 640,
+        "y": 140,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led",
+        "type": "led",
+        "x": 760,
+        "y": 140,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "btn",
+          "pin": "1"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "btn",
+          "pin": "2"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D2"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "uno",
+          "pin": "D13"
+        },
+        "to": {
+          "part": "r",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "r",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "led",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Interrupt-Driven Event Counter\nconst int buttonPin = 2;\nconst int ledPin = 13;\n\nvolatile int count = 0;\n\nvoid onPress() {\n  count = count + 1;      // handlers must be quick: just count\n}\n\nvoid setup() {\n  pinMode(buttonPin, INPUT_PULLUP);\n  pinMode(ledPin, OUTPUT);\n  attachInterrupt(digitalPinToInterrupt(buttonPin), onPress, FALLING);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  if (count > 0 && count % 10 == 0) {\n    digitalWrite(ledPin, HIGH);\n    Serial.print(\"reached \");\n    Serial.println(count);\n    delay(300);\n    digitalWrite(ledPin, LOW);\n    count = count + 1;    // so the message fires once per ten\n  }\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "buttonPressed": 0,
+      "resistance": 220
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "interrupt-counter",
+    "step": 6
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}

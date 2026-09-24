@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# typescript
+*.tsbuildinfo
+
+# tests
+coverage/
+
+# env
+.env
+.env.local
+.env*.local
+
+# editors and os
+.DS_Store
+*.pem
+.vscode/
+.idea/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Generated from pinned monaco-editor dependency
+public/vendor/monaco/
+
+# Build-versioned service worker
+public/sw.js
+
+# Browser test artifacts
+playwright-report/
+test-results/

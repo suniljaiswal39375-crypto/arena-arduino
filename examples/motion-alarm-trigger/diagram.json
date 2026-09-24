@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "author": "SparkLab",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 160,
+      "left": 80,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-pir-motion-sensor",
+      "id": "pir",
+      "top": 100,
+      "left": 400,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 280,
+      "left": 400,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r",
+      "top": 120,
+      "left": 640,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led",
+      "top": 120,
+      "left": 760,
+      "attrs": {
+        "color": "red"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "uno:5V",
+      "pir:VCC",
+      "red",
+      []
+    ],
+    [
+      "uno:GND.1",
+      "pir:GND",
+      "black",
+      []
+    ],
+    [
+      "pir:OUT",
+      "uno:7",
+      "green",
+      []
+    ],
+    [
+      "buzzer:2",
+      "uno:8",
+      "green",
+      []
+    ],
+    [
+      "buzzer:1",
+      "uno:GND.1",
+      "black",
+      []
+    ],
+    [
+      "uno:13",
+      "r:1",
+      "green",
+      []
+    ],
+    [
+      "r:2",
+      "led:A",
+      "green",
+      []
+    ],
+    [
+      "led:C",
+      "uno:GND.1",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {}
+}

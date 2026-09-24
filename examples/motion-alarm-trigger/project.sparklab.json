@@ -1,0 +1,188 @@
+{
+  "schema": "https://sparklab.dev/schema/project-v1.json",
+  "version": 1,
+  "id": "example-motion-alarm-trigger",
+  "name": "Motion-Activated Alarm",
+  "engine": "auto",
+  "board": "arduino-uno",
+  "diagram": {
+    "version": 1,
+    "parts": [
+      {
+        "id": "uno",
+        "type": "arduino-uno",
+        "x": 80,
+        "y": 160,
+        "rotate": 0,
+        "attrs": {
+          "analogBase": 14,
+          "pwmPins": "3,5,6,9,10,11",
+          "voltage": 5
+        }
+      },
+      {
+        "id": "pir",
+        "type": "pir-motion",
+        "x": 400,
+        "y": 100,
+        "rotate": 0,
+        "attrs": {
+          "sensor": "pir"
+        }
+      },
+      {
+        "id": "buzzer",
+        "type": "buzzer-active",
+        "x": 400,
+        "y": 280,
+        "rotate": 0,
+        "attrs": {
+          "active": true
+        }
+      },
+      {
+        "id": "r",
+        "type": "resistor",
+        "x": 640,
+        "y": 120,
+        "rotate": 0,
+        "attrs": {
+          "resistance": 220
+        }
+      },
+      {
+        "id": "led",
+        "type": "led",
+        "x": 760,
+        "y": 120,
+        "rotate": 0,
+        "attrs": {
+          "colour": "#e63946",
+          "forwardVoltage": 2,
+          "maxCurrent": 20
+        }
+      }
+    ],
+    "connections": [
+      {
+        "id": "w1",
+        "from": {
+          "part": "uno",
+          "pin": "5V"
+        },
+        "to": {
+          "part": "pir",
+          "pin": "VCC"
+        },
+        "color": "red"
+      },
+      {
+        "id": "w2",
+        "from": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "to": {
+          "part": "pir",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w3",
+        "from": {
+          "part": "pir",
+          "pin": "OUT"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D7"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w4",
+        "from": {
+          "part": "buzzer",
+          "pin": "+"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "D8"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w5",
+        "from": {
+          "part": "buzzer",
+          "pin": "-"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      },
+      {
+        "id": "w6",
+        "from": {
+          "part": "uno",
+          "pin": "D13"
+        },
+        "to": {
+          "part": "r",
+          "pin": "1"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w7",
+        "from": {
+          "part": "r",
+          "pin": "2"
+        },
+        "to": {
+          "part": "led",
+          "pin": "A"
+        },
+        "color": "green"
+      },
+      {
+        "id": "w8",
+        "from": {
+          "part": "led",
+          "pin": "K"
+        },
+        "to": {
+          "part": "uno",
+          "pin": "GND"
+        },
+        "color": "black"
+      }
+    ]
+  },
+  "files": {
+    "sketch.ino": "// Motion-Activated Alarm\nconst int pirPin = 7;\nconst int buzzerPin = 8;\nconst int ledPin = 13;\n\nvoid setup() {\n  pinMode(pirPin, INPUT);\n  pinMode(buzzerPin, OUTPUT);\n  pinMode(ledPin, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  if (digitalRead(pirPin) == HIGH) {\n    digitalWrite(ledPin, HIGH);\n    digitalWrite(buzzerPin, HIGH);\n    Serial.println(\"motion detected\");\n  } else {\n    digitalWrite(ledPin, LOW);\n    digitalWrite(buzzerPin, LOW);\n  }\n  delay(100);\n}\n",
+    "libraries.txt": ""
+  },
+  "sim": {
+    "prefsVersion": 2,
+    "inputs": {
+      "motionDetected": 0,
+      "resistance": 220
+    },
+    "speed": 1
+  },
+  "provenance": {
+    "mission": "motion-alarm",
+    "step": 11
+  },
+  "fidelity": {
+    "exact": [],
+    "model": [],
+    "visual": [],
+    "export": []
+  },
+  "updatedAt": 1767225600000
+}
