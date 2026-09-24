@@ -37,7 +37,8 @@ export const en = {
   hint: 'Hint', confirm: 'Confirm myself', selfConfirmed: 'self-confirmed step',
   missionComplete: 'Mission complete. Evidence recorded for {count} skills; see your mastery map.',
   reveal: 'Reveal the reference sketch', locked: 'The reference sketch unlocks when every step is done',
-  serial: 'Serial', plotter: 'Plotter', inputs: 'Inputs', diagnostics: 'Diagnostics',
+  serial: 'Serial', plotter: 'Plotter', inputs: 'Inputs', diagnostics: 'Diagnostics', buildLogs: 'Build logs',
+  buildEmpty: 'Firmware compile progress appears here when an AVR build farm is configured.',
   serialEmpty: 'Serial output appears here. Add Serial.begin(9600) and print something.',
   sendPlaceholder: 'Send to the sketch', sendLabel: 'Send text to the sketch', send: 'Send',
 } as const;
@@ -77,7 +78,8 @@ export const hi: Record<MessageKey, string> = {
   hint: 'संकेत', confirm: 'मैंने जांच लिया', selfConfirmed: 'स्वयं पुष्टि किया गया चरण',
   missionComplete: 'अभ्यास पूरा हुआ। {count} कौशलों का प्रमाण दर्ज हुआ; अपना कौशल मानचित्र देखें।',
   reveal: 'संदर्भ कोड दिखाएं', locked: 'हर चरण पूरा होने पर संदर्भ कोड दिखेगा',
-  serial: 'सीरियल', plotter: 'ग्राफ़', inputs: 'इनपुट', diagnostics: 'खराबी की जांच',
+  serial: 'सीरियल', plotter: 'ग्राफ़', inputs: 'इनपुट', diagnostics: 'खराबी की जांच', buildLogs: 'बिल्ड लॉग',
+  buildEmpty: 'AVR बिल्ड सेवा उपलब्ध होने पर कम्पाइल की जानकारी यहाँ दिखाई देगी.',
   serialEmpty: 'सीरियल आउटपुट यहां दिखेगा। कोड में Serial.begin(9600) जोड़ें और कुछ प्रिंट करें।',
   sendPlaceholder: 'कोड को संदेश भेजें', sendLabel: 'कोड को पाठ भेजें', send: 'भेजें',
 };

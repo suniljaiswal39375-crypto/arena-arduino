@@ -122,7 +122,7 @@ describe('builder render with live simulator state', () => {
     expect(snap.serial.length).toBeGreaterThan(0);
 
     const seen = new Set<string>();
-    const tabs: DockTab[] = ['serial', 'plotter', 'inputs', 'diagnostics'];
+    const tabs: DockTab[] = ['serial', 'plotter', 'inputs', 'diagnostics', 'build'];
     for (const tab of tabs) {
       useLab.setState({ dock: tab });
       const html = render(<BottomDock snapshot={snap} onSend={() => {}} />);
@@ -131,6 +131,18 @@ describe('builder render with live simulator state', () => {
     }
     // Each tab really switched the panel, rather than re-rendering the same one.
     expect(seen.size).toBe(tabs.length);
+    useLab.setState({ dock: 'serial' });
+  });
+
+  it('shows escaped, ephemeral SSE progress in the Build logs tab', () => {
+    useLab.setState({ dock: 'build' });
+    const html = render(<BottomDock snapshot={null} onSend={() => {}} buildEvents={[
+      { type: 'status', text: 'Building AVR' },
+      { type: 'error', text: '<script>bad</script>' },
+    ]} />);
+    expect(html).toContain('Building AVR');
+    expect(html).toContain('&lt;script&gt;bad&lt;/script&gt;');
+    expect(html).not.toContain('<script>bad</script>');
     useLab.setState({ dock: 'serial' });
   });
 

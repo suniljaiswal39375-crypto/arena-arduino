@@ -5,6 +5,7 @@ import { SimEngine, type SimSnapshot } from './engine';
 import type { WorkerRequest, WorkerResponse } from './worker';
 import type { FirmwareWorkerRequest, FirmwareWorkerResponse } from './firmware/worker';
 import type { FirmwareSnapshot } from './firmware/interfaces';
+import type { BuildMessage } from './firmware/build-events';
 import { firmwareSnapshotAsSim, firmwareLoadError } from './firmware/adapt';
 
 /** The subset of `FirmwareRuntime` the inline no-worker fallback calls. */
@@ -41,8 +42,12 @@ export class SimClient {
   private lastFrame = 0;
   private speed = 1;
   private doc: ProjectDoc | null = null;
+  private loadEpoch = 0;
+  private inlineCompileController: AbortController | null = null;
+  private haltedEpoch: number | null = null;
 
   onState: ((snapshot: SimSnapshot) => void) | null = null;
+  onBuildEvent: ((event: BuildMessage) => void) | null = null;
 
   constructor() {
     if (typeof window === 'undefined') return;
@@ -72,6 +77,8 @@ export class SimClient {
         if (msg.type === 'state') {
           this.fwLoadError = null;
           this.onState?.(firmwareSnapshotAsSim(msg.snapshot));
+        } else if (msg.type === 'build-event') {
+          this.onBuildEvent?.(msg.event);
         } else if (msg.type === 'load-error') {
           this.fwLoadError = { message: msg.message };
         }
@@ -119,6 +126,10 @@ export class SimClient {
   }
 
   load(doc: ProjectDoc, source: string): void {
+    const epoch = ++this.loadEpoch;
+    this.haltedEpoch = null;
+    this.inlineCompileController?.abort();
+    this.inlineCompileController = null;
     this.doc = doc;
     if (doc.engine === 'firmware') {
       this.fwLoadError = null;
@@ -135,16 +146,25 @@ export class SimClient {
       // Last resort: no Worker available. Load the AVR core lazily so it never
       // sits in the main-thread bundle unless it truly has to run there.
       void import('./firmware/firmware-runtime').then(({ FirmwareRuntime }) => {
+        if (this.loadEpoch !== epoch) return;
         const rt = new FirmwareRuntime(doc);
-        void rt.loadViaCompile(doc, { nodeMode: false, compileEndpoint: '/api/firmware-compile' }).then((res) => {
+        const controller = new AbortController();
+        this.inlineCompileController = controller;
+        void rt.loadViaCompile(doc, {
+          nodeMode: false, compileEndpoint: '/api/firmware-compile', signal: controller.signal,
+          onBuildEvent: (event) => { if (this.loadEpoch === epoch) this.onBuildEvent?.(event); },
+        }).then((res) => {
+          if (this.loadEpoch !== epoch) return;
           if (!res.ok) {
             this.fwLoadError = { message: res.message };
             this.onState?.(firmwareSnapshotAsSim(rt.snapshot(), firmwareLoadError(res.message)));
             return;
           }
           this.inlineFw = rt;
-          rt.start();
-          this.startInlineLoop();
+          if (this.haltedEpoch !== epoch) {
+            rt.start();
+            this.startInlineLoop();
+          }
         });
       });
       return;
@@ -178,6 +198,7 @@ export class SimClient {
   }
 
   start(): void {
+    this.haltedEpoch = null;
     if (this.doc?.engine === 'firmware') {
       if (this.fwWorker) this.sendFw({ type: 'start' });
       else this.inlineFw?.start();
@@ -192,6 +213,8 @@ export class SimClient {
 
   stop(): void {
     if (this.doc?.engine === 'firmware') {
+      this.haltedEpoch = this.loadEpoch;
+      this.inlineCompileController?.abort();
       if (this.fwWorker) this.sendFw({ type: 'stop' });
       else this.inlineFw?.stop();
       return;
@@ -242,6 +265,9 @@ export class SimClient {
   }
 
   dispose(): void {
+    this.loadEpoch++;
+    this.inlineCompileController?.abort();
+    this.inlineCompileController = null;
     this.send({ type: 'dispose' });
     this.worker?.terminate();
     this.worker = null;

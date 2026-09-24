@@ -66,6 +66,25 @@ jobs:
           SPARKLAB_FW_COMPILE_MS: '120000'
         run: npm test -- src/server/firmware/real-cli.integration.test.ts
 
+  farm-container:
+    name: Networkless Docker AVR build farm and SSE
+    needs: real-avr
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned AVR CLI/core image
+        run: docker build --progress=plain -f build-farm/Dockerfile -t sparklab-avr-builder:ci build-farm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Compile in an isolated container and stream its HEX to avr8js
+        env:
+          SPARKLAB_TEST_FARM_IMAGE: sparklab-avr-builder:ci
+        run: npm test -- src/server/firmware/farm.integration.test.ts
+
   scenarios:
     name: Automation scenarios
     runs-on: ubuntu-latest

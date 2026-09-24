@@ -60,9 +60,10 @@ TWI firmware.
 path: zod-validated `{boardFqbn, sketch, libraries}`, 64 KiB streamed-body cap, private temp-dir
 sketch (never shell-interpolated), compile deadline and honest `503 no-arduino-cli` when the
 toolchain is absent. The firmware worker tries it in the browser and falls back to the offline
-baseline. Local transport tests spawn a **fake CLI** and load its HEX; the opt-in CI test
-compiles with the official CLI + Arduino AVR core and executes that HEX on avr8js.
-This opt-in check must pass before treating the real compile path as validated.
+baseline. The opt-in CI test **passed** against official `arduino-cli` 1.5.1 + the
+Arduino AVR core: it caught and fixed the real CLI requirement that a sketch's
+`.ino` filename match its directory. Its compiled HEX executed on avr8js.
+Local fake-CLI tests still cover transport/refusal paths.
 
 **AVR pin-device milestone.** The seven-segment common-cathode display reads the a..dp
 net drives; a single MAX7219 decodes latched 16-bit GPIO bit-bang or AVR hardware-SPI words
@@ -75,12 +76,16 @@ Unwired, ambiguous, unsupported, misconfigured and non-AVR behaviours are not in
 
 Still to do, in order:
 
-1. Validate the compile service with a real **official** `arduino-cli` and installed Arduino AVR
-   core: local release asset download and core CDN failed in this sandbox. An opt-in integration
-   test and GitHub Actions job were added; report an actual pass/failure before claiming validation.
-2. Only after that, deliver and validate a genuinely isolated, containerised build farm plus
-   streamed SSE build logs. The current local process is **not** sandboxed, and its heartbeat
-   timer emits no logs; do not expose arbitrary uploaded C++ compilation to untrusted users.
+1. **Completed:** official `arduino-cli` 1.5.1 + Arduino AVR core compiled a Uno sketch
+   through `compileSketch` on GitHub Actions, and avr8js executed its HEX. Local sandbox
+   cannot download the release assets or the core, so this was validated remotely.
+2. **In validation:** a separate internal, bearer-authenticated farm service runs each build
+   inside a disposable Docker image with preinstalled CLI/core, no runtime network, read-only
+   root, non-root UID, resource limits, cancellation and private temp cleanup. The Next.js
+   endpoint proxies JSON/SSE; the worker's in-memory Build logs panel streams progress.
+   Production refuses the old unisolated CLI spawn. Docker is unavailable *locally*;
+   the new CI job must build the real image and run the container/SSE/avr8js integration
+   before treating deployment as validated. Operator isolation and abuse controls remain required.
 3. Only after the build boundary, add accurately timed instruments/VCD, then typed-tool AI,
    generated Chaos exercises, chip authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP.
    Non-AVR architectures (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
@@ -272,6 +277,24 @@ and 40 firmware/compile/hex tests are new; strict typecheck and production build
   and active-low relay contacts/downstream LED. Power cycles and floating inputs are tested.
 - `npm run typecheck` and `npm run scenarios` passed; `npm test` passed **637 tests / 54 files**
   before adding the opt-in official-CLI test (locally skipped without the CLI).
-- Official Arduino CLI v1.5.1 release and AVR core CDNs are unreachable from this sandbox.
-  A real-toolchain GitHub Actions integration check has been added, but until its run result
-  is observed, no real compile success or containerised farm/SSE is claimed.
+- Official Arduino CLI v1.5.1 release and AVR core CDNs are unreachable from this sandbox;
+  GitHub Actions **did** install the real toolchain and compile/execute a Uno sketch. The
+  subsequent container/SSE milestone is tracked above; Docker is unavailable locally.
+
+### Official-CLI validation and build-farm implementation — 24 September 2026
+
+- GitHub Actions `Official arduino-cli / Arduino AVR core integration` passed on commit
+  `daa0b64` (run 36045051575). It initially found a real failure: Arduino requires
+  `Sketch/Sketch.ino`, not a random directory containing `sketch.ino`. Fixed the folder,
+  added cleanup of private compiler files and enforced unsupported-version/board/library
+  refusal. The official v1.5.1 compile output drove an LED on avr8js.
+- Built an opt-in private farm service and pinned AVR Dockerfile. Next's same-origin
+  route can proxy JSON or SSE; the browser worker decodes bounded SSE progress and the
+  builder displays transient logs without persisting them. Local CLI spawning is disabled
+  in production. The farm rejects arbitrary external libraries/boards, limits concurrent
+  jobs and executes Docker without root/network/capabilities with CPU/memory/PID/time/
+  output bounds. It deletes request files and cancels disconnected jobs.
+- Docker was **not** available in this sandbox; the new CI `farm-container` job builds the
+  image and tests container compilation and SSE-to-avr8js. Do not mark this milestone
+  production-validated until the CI job passes. A dedicated farm host, private token,
+  firewall/TLS, deployed rate limits and operational monitoring are still requirements.

@@ -376,10 +376,45 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - The sandbox has no `arduino-cli`, AVR compiler, Docker or Podman. Official v1.5.1 release
   download via `gh release download` failed at `release-assets.githubusercontent.com` (EOF);
   the Arduino core CDN failed TLS connection. No production toolchain build was observed here.
-- An **opt-in** GitHub Actions check installs the official CLI + Arduino AVR core, compiles a
-  minimal Uno sketch through `compileSketch`, parses its Intel HEX and executes it on avr8js.
-  Until that CI run passes, the existing fake-CLI transport test is the only compile evidence.
-- A future `BUILD_FARM_URL` is a **deployment architecture goal**, not a shipped container.
-  Do not expose the local child-process transport as a public multi-tenant compiler. SSE
-  logs, time/memory limits, process-tree cancellation, redaction and isolated disposable
-  filesystem/network/privileges need verified implementations before claiming a build farm.
+- An **opt-in** GitHub Actions check installs official `arduino-cli` 1.5.1 + the
+  Arduino AVR core, compiles a minimal Uno sketch through `compileSketch`, parses its HEX and
+  executes it on avr8js. It **passed** (run 36045051575). The first attempt failed on the
+  genuine sketch-directory naming rule, which was fixed; earlier fake-CLI tests alone had
+  not detected it. Compiler temp directories are now removed on success and failure.
+- The optional `SPARKLAB_BUILD_FARM_URL` integration now has an implemented private
+  Docker-backed service, SSE and in-memory builder log panel (see next section). This
+  sandbox has no Docker; the new CI Docker job must pass before calling *container*
+  integration verified. Never expose the old local child-process transport publicly.
+
+## Isolated build farm and in-memory SSE logs — 24 September 2026
+
+- **Separate trust boundary:** the Next.js route alone sees `SPARKLAB_BUILD_FARM_URL` /
+  `SPARKLAB_BUILD_FARM_TOKEN`. It enforces the canonical `AUTH_URL` Origin and bounds
+  the request, then proxies JSON or streamed SSE to a bearer-authenticated *internal*
+  farm. Browser code calls a relative URL only; no token/URL is returned to the user.
+  The farm process is deployed separately from Next.js and is the only service with
+  Docker access; its default listener is loopback. The token is not an end-user login.
+- **One disposable container per accepted job, no runtime downloads:** the Docker image
+  installs official Arduino CLI 1.5.1 + a pinned AVR core at image build time. Each compile
+  is `docker run --network=none --read-only --user <host uid:gid>`, all capabilities dropped,
+  no new privileges, bounded CPU/memory/PIDs/tmpfs/runtime. The only bind mount is a private
+  per-request sketch/build directory, removed afterward. An aborted/expired job removes
+  its named container. Maximum two concurrent jobs by default; excess returns 429. The
+  image should be pinned to a digest by a deploying operator after CI verification.
+- **Honest scopes:** only Uno/Nano 328P plus installed core `Wire`/`SPI`/`EEPROM`/
+  `SoftwareSerial` libraries; non-installed libraries and other boards get 422 before a
+  spawn. Arbitrary package installation, shared caches, external hardware architectures,
+  internet access while compiling and unrestricted build logs are intentionally absent.
+  The local `SPARKLAB_ARDUINO_CLI` process path is development-only; production returns
+  503 without the isolated farm, not a silently unconfined compile.
+- **Actual SSE, not a heartbeat-only placeholder:** `POST /api/firmware-compile` with
+  `Accept: text/event-stream` emits `status`, bounded compiler `log`, `result` (HEX) or
+  `error`; the worker reads it incrementally, verifies the board, and surfaces progress in
+  a new Build logs tab. A JSON response remains for legacy callers. Logs are transient
+  React state, absent from localStorage/projects/service-worker caches, and responses are
+  private/no-store. Replacing a sketch cancels its previous build and ignores late events.
+- **Deployment limitations:** this is not a general cloud compiler or a guarantee of
+  production security. The Docker farm requires a dedicated protected host, TLS on its
+  internal hop where applicable, tight ingress/egress policy, deployed abuse rate limits
+  and container/host monitoring. CI's real Docker-image build/SSE/avr8js check is the
+  validation gate; Docker cannot run in this sandbox. Do not label it deployed yet.

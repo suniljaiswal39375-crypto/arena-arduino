@@ -21,7 +21,8 @@
     "postbuild": "node scripts/prepare-offline.mjs",
     "test:e2e": "playwright test",
     "db:migrate": "node scripts/classroom-admin.mjs migrate",
-    "db:role": "node scripts/classroom-admin.mjs role"
+    "db:role": "node scripts/classroom-admin.mjs role",
+    "firmware:farm": "vite-node --config vitest.config.ts scripts/firmware-build-farm.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",

@@ -46,8 +46,8 @@ the educational, toolchain-free layer. `SimClient` routes a
 `doc.engine === 'firmware'` project to the firmware worker (or its inline
 fallback) and projects the firmware snapshot onto the same `SimSnapshot` the
 builder renders, so the Toolbar engine selector is live: offline baselines run
-real AVR instructions, while other sketches need a configured arduino-cli + AVR
-core or get an honest compile refusal. The shared `Circuit` also decodes
+real AVR instructions, while other sketches need the optional isolated AVR
+build farm (local CLI in development) or get an honest compile refusal. The shared `Circuit` also decodes
 common-cathode seven-segment nets, one MAX7219 (GPIO/SPI), and ULN2003
 **observed GPIO input phases**, not physical motor motion. Decoder, executed-AVR
 and parity tests constrain the supported topologies.

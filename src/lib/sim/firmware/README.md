@@ -140,12 +140,16 @@ resource limits enforced before any I/O, a deterministic FNV-1a cache key
 `checkArduinoCliPath()` for honest "toolchain absent" reporting. In the sandbox
 that built this pass the release CDN was blocked, so live compilation could not
 be downloaded; local transport tests exercise a fake CLI only. An opt-in
-GitHub Actions integration test installs the *official* `arduino-cli` 1.5.1
-plus Arduino AVR core, compiles through `compileSketch` and executes its HEX.
-Until that check passes, a successful real build is not claimed. Compilation
-is NOT required to run firmware: a pre-built Intel HEX image always is.
-The single-process local service is not an isolated build farm or an SSE log
-stream; never expose uploaded sketch compilation publicly on this basis.
+GitHub Actions integration test **passed** with official `arduino-cli` 1.5.1
+and the Arduino AVR core, compiling through `compileSketch` and executing its
+HEX on avr8js (run 36045051575). That check found the required
+`Sketch/Sketch.ino` filename and folder layout. Compilation is NOT required
+to run firmware: a pre-built Intel HEX image always is. The direct local
+process is disabled in production. A separately configured Docker build farm
+runs bounded, networkless AVR builds; `POST /api/firmware-compile` streams
+same-origin SSE progress/logs/HEX into the builder's ephemeral Build logs tab.
+Docker cannot run locally in this sandbox, so the separate image/SSE/avr8js
+CI integration is the validation gate (see `src/server/firmware/README.md`).
 
 ## Tests
 
@@ -171,5 +175,8 @@ npm test -- src/lib/sim/parity
   `analog-serial-parity.test.ts` and `gpio-input-output-parity.test.ts` cover
   TWI LCD, USART0 lines/plot, ADC0/analogRead, pull-up/button and relay load.
 - `src/server/firmware/real-cli.integration.test.ts` — skipped locally unless
-  the official CLI and AVR core are installed and
-  `SPARKLAB_REAL_ARDUINO_CLI`/`SPARKLAB_ARDUINO_CLI` are set to the executable.
+  official CLI + AVR core are installed and both CLI env vars are set; this
+  passed in GitHub Actions. `build-events.test.ts` checks bounded/fractured
+  SSE parsing; `src/server/firmware/farm*.test.ts` checks container invocation
+  and internal HTTP/proxy security. `farm.integration.test.ts` only runs in
+  CI with a built real Docker image.

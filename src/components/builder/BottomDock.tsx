@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLab, type DockTab } from '@/store/lab';
 import { getPart } from '@/lib/parts';
 import type { SimSnapshot } from '@/lib/sim/engine';
+import type { BuildMessage } from '@/lib/sim/firmware/build-events';
 import { AlertTriangle, Info, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -14,14 +15,17 @@ const TABS: Array<{ id: DockTab; label: MessageKey }> = [
   { id: 'plotter', label: 'plotter' },
   { id: 'inputs', label: 'inputs' },
   { id: 'diagnostics', label: 'diagnostics' },
+  { id: 'build', label: 'buildLogs' },
 ];
 
 export function BottomDock({
   snapshot,
   onSend,
+  buildEvents = [],
 }: {
   snapshot: SimSnapshot | null;
   onSend: (text: string) => void;
+  buildEvents?: BuildMessage[];
 }) {
   const { t: text, locale } = useI18n();
   const dock = useLab((s) => s.dock);
@@ -74,6 +78,16 @@ export function BottomDock({
         {dock === 'plotter' && <div lang="en" className="h-full"><PlotterPanel snapshot={snapshot} /></div>}
         {dock === 'inputs' && <div lang="en" className="h-full"><InputsPanel /></div>}
         {dock === 'diagnostics' && <div lang="en" className="h-full"><DiagnosticsPanel /></div>}
+        {dock === 'build' && (
+          <div role="log" aria-label={text('buildLogs')} className="mono h-full overflow-auto p-3 text-[11px] leading-relaxed">
+            {buildEvents.length === 0 ? <p className="text-[var(--color-text-faint)]">{text('buildEmpty')}</p> :
+              buildEvents.map((event, index) => (
+                <div key={index} lang="en" className={cn('whitespace-pre-wrap break-all', event.type === 'error' && 'text-[var(--color-fault)]')}>
+                  {event.text}
+                </div>
+              ))}
+          </div>
+        )}
       </div>
     </div>
   );

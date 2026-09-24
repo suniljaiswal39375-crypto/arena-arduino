@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLab } from '@/store/lab';
 import { SimClient } from '@/lib/sim/client';
 import type { SimSnapshot } from '@/lib/sim/engine';
+import type { BuildMessage } from '@/lib/sim/firmware/build-events';
 import { lastProjectId, loadProject } from '@/lib/doc/persistence';
 import { missionWorkspace } from '@/lib/missions/workspace';
 import { missionBySlug } from '@/lib/missions/missions';
@@ -44,6 +45,8 @@ export function BuilderShell({
 
   const [textCircuit, setTextCircuit] = useState(false);
   const [snapshot, setSnapshot] = useState<SimSnapshot | null>(null);
+  // Build diagnostics exist only in memory; never in project/localStorage.
+  const [buildEvents, setBuildEvents] = useState<BuildMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [rail, setRail] = useState<'inspector' | 'mission' | 'chaos'>('inspector');
@@ -97,6 +100,7 @@ export function BuilderShell({
   useEffect(() => {
     const client = new SimClient();
     client.onState = (s) => setSnapshot(s);
+    client.onBuildEvent = (event) => setBuildEvents((prev) => [...prev, event].slice(-100));
     clientRef.current = client;
     return () => {
       client.dispose();
@@ -104,17 +108,18 @@ export function BuilderShell({
     };
   }, []);
 
-  // Recompile whenever the sketch text changes.
+  // Recompile on source/project/engine changes; rewiring alone updates nets.
   useEffect(() => {
     const client = clientRef.current;
     if (!client) return;
+    setBuildEvents([]);
     client.setSpeed(speed);
     client.load(doc, source);
     setRunning(true);
-    // The document is intentionally read fresh here rather than tracked: only
-    // the sketch text should trigger a recompile.
+    // The document is intentionally read fresh here; other changes are pushed
+    // to the already running engine by the diagram effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, doc.id]);
+  }, [source, doc.id, doc.engine]);
 
   // Wiring and input changes are pushed without restarting the sketch.
   const diagramKey = JSON.stringify({
@@ -152,6 +157,7 @@ export function BuilderShell({
   /* ------------------------------------------------------------- render */
 
   const onRun = useCallback(() => {
+    setBuildEvents([]);
     clientRef.current?.load(doc, source);
     clientRef.current?.start();
     setRunning(true);
@@ -237,7 +243,7 @@ export function BuilderShell({
             <CodePane />
           </div>
           <div className="h-[24%] min-h-[150px] shrink-0 xl:shrink border-t border-[var(--color-border)]">
-            <BottomDock snapshot={snapshot} onSend={onSend} />
+            <BottomDock snapshot={snapshot} onSend={onSend} buildEvents={buildEvents} />
           </div>
         </section>
 

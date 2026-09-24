@@ -6,6 +6,7 @@ import {
   compileCacheKey,
   CompileUnavailableError,
   assertWithinCompileLimits,
+  assertSupportedAvrBuild,
   type CompileResult,
   type FirmwareCompileInput,
 } from '@/lib/sim/firmware/compile-contract';
@@ -73,6 +74,7 @@ export async function compileSketch(
   _requestId: string,
 ): Promise<CompileResult> {
   assertWithinCompileLimits(input);
+  assertSupportedAvrBuild(input);
   if (!cli.path) {
     throw new CompileUnavailableError('no-arduino-cli', cli.detail || 'no arduino-cli 1.x is available');
   }

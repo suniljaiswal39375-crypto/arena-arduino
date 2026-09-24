@@ -12,9 +12,11 @@ import { z } from 'zod';
 import {
   CompileUnavailableError,
   assertWithinCompileLimits,
+  assertSupportedAvrBuild,
   type FirmwareCompileInput,
 } from '@/lib/sim/firmware/compile-contract';
 import { discoverLocalCli, compileSketch } from './compile-service';
+import { proxyFirmwareBuild, type FarmProxyOptions } from './farm-client';
 
 export const MAX_FIRMWARE_BODY_BYTES = 64 * 1024;
 
@@ -72,6 +74,8 @@ function replyError(status: number, code: string, message: string): Response {
 export interface FirmwareCompileDeps {
   origin: string | null;
   cli: () => Promise<{ path: string | null; version: string | null; detail: string }>;
+  /** When configured, the isolated farm is preferred over the local CLI. */
+  farm?: FarmProxyOptions;
 }
 
 /**
@@ -99,14 +103,26 @@ export async function handleFirmwareCompile(request: Request, deps: FirmwareComp
 
   try {
     assertWithinCompileLimits(input);
+    assertSupportedAvrBuild(input);
   } catch (err) {
     const e = err as CompileUnavailableError;
-    return replyError(413, e.reason, e.message);
+    const status = e.reason === 'unsupported-board' || e.reason === 'unsupported-library' ? 422 : 413;
+    return replyError(status, e.reason, e.message);
+  }
+
+  if (deps.farm) {
+    if (!deps.origin) return replyError(503, 'farm-not-configured', 'Set a canonical AUTH_URL before enabling the build farm.');
+    return proxyFirmwareBuild(request, input, deps.farm);
   }
 
   const cli = await deps.cli();
   if (!cli.path) {
     return replyError(503, 'no-arduino-cli', cli.detail || 'No AVR toolchain is available to this build service.');
+  }
+  // Spawning avr-gcc beside Next.js is a developer-only validation path.
+  // Arbitrary C++ compilation in a deployed service MUST use the isolated farm.
+  if (process.env.NODE_ENV === 'production') {
+    return replyError(503, 'isolated-farm-required', 'Production firmware compilation requires an isolated build farm.');
   }
 
   try {

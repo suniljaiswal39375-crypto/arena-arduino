@@ -41,8 +41,8 @@ npm run cli -- --help
 Projects run on the **functional runtime** (an interpreter for a subset of Arduino C++). The
 **firmware slice** (`src/lib/sim/firmware`) executes actual ATmega328P instructions on
 avr8js. The builder's firmware selector works: offline it runs two pre-built baseline images;
-other sketches require a real `arduino-cli`/AVR core on the server and are refused explicitly
-when absent. AVR GPIO, USART0, ADC0, I2C displays, Timer1 servo pulses, single-device MAX7219,
+other sketches require a separately configured, isolated AVR build farm and are refused
+explicitly when absent. Local `arduino-cli` spawning is for development only. AVR GPIO, USART0, ADC0, I2C displays, Timer1 servo pulses, single-device MAX7219,
 common-cathode seven-segment segments and plain-GPIO ULN2003 inputs are decoded from register,
 bus or pin observations — not from the source sketch. Tests compare the observable outputs of
 both engines. This is an educational emulator with the stated clock bridge, not a blanket
@@ -68,7 +68,7 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Chaos Lab: 8 broken-on-purpose projects, each proven solvable | ✅ |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
 | 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
-| AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; compile endpoint requires a separately installed toolchain | ✅ AVR slice · see ROADMAP |
+| AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Accounts, classrooms, 3D workbench, photo scanning, AI mentor, multiplayer, logic analyser | ⏳ see ROADMAP |
 
 ---
@@ -139,13 +139,16 @@ produces a named message rather than silently doing nothing.
 **AVR firmware emulator** (`src/lib/sim/firmware/README.md`) — Intel HEX → avr8js
 ATmega328P instruction execution → the shared `Circuit` net/part model. The builder routes
 `firmware` projects to this engine; a zero-config host runs only its two pre-built baseline
-sketches (real AVR instructions), while the optional `POST /api/firmware-compile` requires
-`SPARKLAB_ARDUINO_CLI` and an installed Arduino AVR core for arbitrary sketches. Tests run
+sketches (real AVR instructions). Arbitrary sketches require the optional isolated AVR
+build farm. Production explicitly refuses unisolated local `arduino-cli` compilation. Tests run
 real AVR images for I2C LCD/OLED, Timer1 servo, seven-seg, MAX7219 (bit-bang and SPI),
 ULN2003 GPIO input phases, ADC/serial, button/pull-up and relay load; cross-engine parity
 asserts the shared visible results. The GPIO stepper shows **observed input phases**, not
 shaft motion, angle, rpm or coil current. Unsupported modes/topologies are reported by name.
-A containerised farm and SSE logs remain future work; see `ROADMAP.md` Phase 10.
+The optional build farm runs each sketch in a disposable, no-network Docker container;
+`POST /api/firmware-compile` offers same-origin SSE progress and logs in the in-memory
+**Build logs** panel, with JSON compatibility. Docker integration is checked in CI, not in
+this sandbox. See `ROADMAP.md` Phase 10 for validation status and limits.
 
 ---
 
@@ -276,6 +279,37 @@ source-fingerprint tests flag missing or stale copy. Hindi needs native-language
 complete seed coverage is not a claim of classroom certification. Individual cached mission pages
 now hydrate offline correctly with Next's URL-encoded dynamic-route chunk names.
 
+
+### Optional AVR build farm (no account or Docker needed for the local lab)
+
+**Production only uses isolated containers for untrusted sketches.** A hosted
+`arduino-cli` 1.5.1 + Arduino AVR core build (the separate official-CLI CI check
+passed) can be installed on an operator-controlled Docker host:
+
+```bash
+docker build -f build-farm/Dockerfile -t sparklab-avr-builder:1.5.1 build-farm
+# Set SPARKLAB_BUILD_FARM_IMAGE, SPARKLAB_BUILD_FARM_TOKEN (32+ random characters),
+# and optionally SPARKLAB_BUILD_FARM_HOST / SPARKLAB_BUILD_FARM_PORT there.
+npm run firmware:farm
+```
+
+On the **Next.js server**, configure `AUTH_URL` to the canonical HTTPS app origin,
+`SPARKLAB_BUILD_FARM_URL` to the *internal* farm origin (e.g.
+`https://internal-farm.example`) and the matching `SPARKLAB_BUILD_FARM_TOKEN`.
+Keep the Docker socket **only** on the farm host and the farm private behind a
+firewall/trusted TLS proxy; never expose its URL/token to the browser. Do not
+store the token in source control. The browser calls only its same-origin
+`POST /api/firmware-compile` with `Accept: text/event-stream`; its build log
+events are memory-only, never saved in project storage or the service worker.
+Without these optional settings, the offline lab still works.
+
+The farm supports Arduino Uno/Nano (ATmega328P), an 8 KiB sketch and only
+preinstalled Arduino AVR core libraries (`Wire`, `SPI`, `EEPROM`,
+`SoftwareSerial`). It refuses other boards/libraries instead of installing
+packages on demand. Each build has bounded concurrency, runtime, logs, HEX
+size, CPU/memory/PIDs, no network and an ephemeral writable mount. This is
+**not** a general arbitrary-architecture Arduino cloud service; front the
+compile route with deployment-level abuse controls before public use.
 
 ### Optional online classrooms
 

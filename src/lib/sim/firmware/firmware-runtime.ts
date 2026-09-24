@@ -11,6 +11,7 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { FirmwareEngine } from './engine';
 import type { FirmwareSnapshot } from './interfaces';
+import { readSseBuild, type BuildMessage } from './build-events';
 import { resolveOfflineFirmware, boardTypeFromFqbn } from './compiler';
 import { avrBoardFor } from './avr';
 
@@ -19,6 +20,10 @@ export interface FirmwareLoadOptions {
   nodeMode?: boolean;
   /** HTTP path of the compile service, used when nodeMode is false. */
   compileEndpoint?: string;
+  /** Ephemeral build progress; never written to project/browser storage. */
+  onBuildEvent?: (event: BuildMessage) => void;
+  /** Cancels an obsolete build when the sketch/project changes. */
+  signal?: AbortSignal;
 }
 
 export interface FirmwareLoadResult {
@@ -117,13 +122,24 @@ export class FirmwareRuntime {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'accept': 'text/event-stream' },
         body: JSON.stringify({ boardFqbn: input.boardFqbn, sketch: input.sketch, libraries: input.libraries }),
+        signal: options.signal,
       });
       if (res.ok) {
+        if (res.headers.get('content-type')?.startsWith('text/event-stream')) {
+          const hex = await readSseBuild(res, input.boardFqbn, options.onBuildEvent ?? (() => {}));
+          return this.loadHex(doc, hex, boardTypeFromFqbn(input.boardFqbn));
+        }
+        // Compatibility with the single-node local CLI JSON endpoint.
         const body = (await res.json()) as { hex?: string };
         if (typeof body.hex === 'string' && body.hex.trim().length > 0) {
           return this.loadHex(doc, body.hex, boardTypeFromFqbn(input.boardFqbn));
+        }
+      } else {
+        const body = await res.json() as { error?: { message?: string } };
+        if (typeof body.error?.message === 'string') {
+          options.onBuildEvent?.({ type: 'error', text: body.error.message.slice(0, 2048) });
         }
       }
     } catch {

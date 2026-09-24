@@ -90,6 +90,25 @@ describe('FirmwareRuntime hosted compile transport', () => {
     expect(rt.lastHex).toBe(hostedHex);
   });
 
+  it('streams SSE build logs and loads the real HEX instead of the interpreter', async () => {
+    const { doc } = blinkFixture();
+    doc.files['sketch.ino'] = 'void setup() {} void loop() {}'; // not a baseline
+    const hex = blinkFixture().hex;
+    const stream = [
+      `event: status\ndata: {"text":"Building AVR"}\n\n`,
+      `event: log\ndata: {"text":"avr-gcc compiling"}\n\n`,
+      `event: result\ndata: ${JSON.stringify({ hex, fqbn: 'arduino:avr:uno' })}\n\n`,
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })));
+    const logs: string[] = [];
+    const rt = new FirmwareRuntime(doc);
+    const loaded = await rt.loadViaCompile(doc, { compileEndpoint: '/api/firmware-compile',
+      onBuildEvent: (event) => logs.push(event.text) });
+    expect(loaded).toMatchObject({ ok: true, source: 'toolchain' });
+    expect(logs).toEqual(['Building AVR', 'avr-gcc compiling']);
+    expect(rt.lastHex).toBe(hex);
+  });
+
   it('falls back to the offline baseline when the service refuses', async () => {
     const { doc } = blinkFixture();
     doc.files['sketch.ino'] = KNOWN_PROGRAMS.find((p) => p.key === 'blink')!.sketchSource;

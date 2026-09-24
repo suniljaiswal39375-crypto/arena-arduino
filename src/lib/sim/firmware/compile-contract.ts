@@ -28,13 +28,19 @@ export const COMPILE_LIMITS = {
   maxCompileMs: 20_000,
 } as const;
 
+/** The only boards and preinstalled core libraries the AVR build image supports. */
+export const AVR_BUILD_BOARDS = ['arduino:avr:uno', 'arduino:avr:nano'] as const;
+export const AVR_CORE_LIBRARIES = ['Wire', 'SPI', 'EEPROM', 'SoftwareSerial'] as const;
+
 export class CompileUnavailableError extends Error {
   readonly reason:
     | 'no-arduino-cli'
     | 'unsupported-version'
     | 'sketch-too-large'
     | 'libraries-too-many'
-    | 'body-too-large';
+    | 'body-too-large'
+    | 'unsupported-board'
+    | 'unsupported-library';
 
   constructor(reason: CompileUnavailableError['reason'], message: string) {
     super(message);
@@ -72,6 +78,19 @@ export function compileCacheKey(input: FirmwareCompileInput): {
   for (const lib of [...input.libraries].sort()) parts.push(`lib=${lib}`);
   const checksum = sketchKey(parts.join('\n') + '\n' + input.sketch);
   return { key: `${input.boardFqbn}/${checksum}`, checksum, kind: 'fnv1a' };
+}
+
+export function assertSupportedAvrBuild(input: FirmwareCompileInput): void {
+  if (!AVR_BUILD_BOARDS.some((board) => board === input.boardFqbn)) {
+    throw new CompileUnavailableError('unsupported-board', 'Only ATmega328P Uno/Nano builds are supported by the AVR compiler.');
+  }
+  const missing = input.libraries.find((lib) => !AVR_CORE_LIBRARIES.some((installed) => installed === lib));
+  if (missing) {
+    throw new CompileUnavailableError(
+      'unsupported-library',
+      `Library '${missing}' is not preinstalled in the offline AVR toolchain; nothing was compiled.`,
+    );
+  }
 }
 
 export interface CompileRequest {

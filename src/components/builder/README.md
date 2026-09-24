@@ -10,7 +10,7 @@
 | `SchematicCanvas` | the SVG scene: pan, zoom, snap, drag, rotate, wire pin-to-pin |
 | `PartGlyph` | the live visual for one part — LED glow, servo angle, LCD text, relay state |
 | `CodePane` | the sketch editor (Monaco, with an offline textarea fallback) |
-| `BottomDock` | Serial, Plotter, Inputs, Diagnostics |
+| `BottomDock` | Serial, Plotter, Inputs, Diagnostics, ephemeral AVR Build logs (SSE) |
 | `Inspector` | pins, attributes, live state and findings for the selected part |
 | `StepTracker` | mission steps, hints, stuck detection, locked reference sketch |
 
