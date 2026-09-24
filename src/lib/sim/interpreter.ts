@@ -2,6 +2,7 @@ import type { CType, DeclInfo, Expr, FuncDecl, Program, Stmt } from './ast';
 import type { SimHost } from './host';
 import { INPUT, INPUT_PULLUP, OUTPUT } from './host';
 import { SkethError } from './tokens';
+import { FULL_STEP_PHASES } from './gpio-devices';
 
 export type RuntimeValue =
   | number
@@ -387,8 +388,28 @@ export class Interpreter {
       return s.length > 0 && /[0-9]/.test(s[0] ?? '') ? 1 : 0;
     });
     def('strlen', (a) => toText(a[0]).length);
-    def('shiftOut', () => undefined);
-    def('shiftIn', () => 0);
+    def('shiftOut', (a) => {
+      const data = Math.trunc(toNum(a[0]));
+      const clock = Math.trunc(toNum(a[1]));
+      const order = Math.trunc(toNum(a[2]));
+      if (a.length < 4 || data === clock || (order !== 0 && order !== 1)) {
+        this.host.unsupported('shiftOut requires different data/clock pins and LSBFIRST or MSBFIRST');
+        return undefined;
+      }
+      const byte = Math.trunc(toNum(a[3])) & 0xff;
+      this.host.digitalWrite(clock, 0);
+      for (let i = 0; i < 8; i++) {
+        const bit = order === 1 ? 7 - i : i;
+        this.host.digitalWrite(data, (byte >> bit) & 1);
+        this.host.digitalWrite(clock, 1);
+        this.host.digitalWrite(clock, 0);
+      }
+      return undefined;
+    });
+    def('shiftIn', () => {
+      this.host.unsupported('shiftIn is not decoded in the functional engine');
+      return 0;
+    });
     def('delay_yield', () => undefined);
     def('Serial_begin', () => undefined);
     def('__unsupported', (a) => {
@@ -634,9 +655,14 @@ export class Interpreter {
   }
 
   private makeStepper(args: RuntimeValue[]): RuntimeObject {
-    const steps = Math.trunc(toNum(args[0] ?? 200));
+    const steps = Math.trunc(toNum(args[0] ?? 0));
+    const pins = args.slice(1).map((v) => Math.trunc(toNum(v)));
+    const fourWire = args.length === 5 && steps > 0 && pins.every((p) => Number.isInteger(p) && p >= 0)
+      && new Set(pins).size === 4;
     const o: RuntimeObject = { __kind: 'object', className: 'Stepper', fields: new Map() };
+    if (fourWire) for (const pin of pins) this.host.pinMode(pin, OUTPUT);
     let speed = 60;
+    let phase = 0;
     o.fields.set('setSpeed', {
       __kind: 'function',
       name: 'setSpeed',
@@ -650,9 +676,20 @@ export class Interpreter {
       name: 'step',
       native: (a) => {
         const count = Math.trunc(toNum(a[0]));
-        // 60 seconds per minute, at speed rpm, for `count` of `steps` per turn.
-        const usPerStep = speed > 0 ? (60000000 / (steps * speed)) : 0;
-        this.host.advance(usPerStep * Math.abs(count));
+        // Match Stepper.h's four-wire full-step sequence; two-wire drivers,
+        // acceleration, shaft mechanics and very long blocking calls are not
+        // approximated as successful steps.
+        if (!fourWire || !Number.isFinite(count) || Math.abs(count) > 2048 || speed <= 0) {
+          this.host.unsupported('Stepper.step requires four distinct GPIO pins, positive RPM and at most 2048 commanded steps');
+          return undefined;
+        }
+        const usPerStep = 60_000_000 / (steps * speed);
+        for (let i = 0; i < Math.abs(count); i++) {
+          phase = (phase + (count > 0 ? 1 : 3)) % 4;
+          const coils = FULL_STEP_PHASES[phase] ?? 0;
+          this.host.digitalWritePins(pins.map((pin, bit) => ({ pin, value: (coils >> bit) & 1 })));
+          this.host.advance(usPerStep);
+        }
         return undefined;
       },
     });

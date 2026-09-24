@@ -109,7 +109,11 @@ export function tierForType(type: string, engine: 'functional' | 'firmware' = 'f
   const p = getPart(type);
   if (!p) return 'visual';
   if (engine === 'firmware') {
-    return p.fidelity.engine === 'functional' && p.fidelity.tier === 'visual' ? 'visual' : 'exact';
+    if (p.fidelity.engine === 'functional' && p.fidelity.tier === 'visual') return 'visual';
+    // An instrument that *observes* an exact CPU is not itself an exact,
+    // one-gigahertz physical sampler. Preserve explicit model tier claims.
+    if (p.fidelity.tier === 'model') return 'model';
+    return 'exact';
   }
   return p.fidelity.tier;
 }

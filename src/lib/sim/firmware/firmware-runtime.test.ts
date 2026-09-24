@@ -4,7 +4,7 @@
  * reset and the honest refusal surface.
  */
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { FirmwareRuntime } from './firmware-runtime';
+import { FirmwareRuntime, compileInputFor } from './firmware-runtime';
 import { KNOWN_PROGRAMS } from './known-programs';
 import { blinkFixture } from './fixtures/blink';
 import { templateDoc } from '@/lib/templates';
@@ -41,6 +41,18 @@ describe('FirmwareRuntime', () => {
     const res = rt.load(doc, { nodeMode: true });
     // The uno-blink template matches the baseline sketch the catalog ships.
     expect(res).toMatchObject({ ok: true });
+  });
+
+  it('refuses an unsupported board instead of compiling it as an Uno', () => {
+    const { doc } = blinkFixture();
+    const board = doc.diagram.parts.find((part) => part.type === 'arduino-uno');
+    expect(board).toBeDefined();
+    board!.type = 'arduino-mega';
+    doc.files['sketch.ino'] = KNOWN_PROGRAMS.find((p) => p.key === 'blink')!.sketchSource;
+    expect(compileInputFor(doc).boardFqbn).toBe('arduino-mega');
+    const rt = new FirmwareRuntime(doc);
+    expect(rt.load(doc)).toMatchObject({ ok: false });
+    expect(rt.hasImage).toBe(false);
   });
 
   it('stop then reset restores a running image', () => {
@@ -88,6 +100,41 @@ describe('FirmwareRuntime hosted compile transport', () => {
     expect(res.ok).toBe(true);
     expect(res.source).toBe('toolchain');
     expect(rt.lastHex).toBe(hostedHex);
+  });
+
+  it('streams SSE build logs and loads the real HEX instead of the interpreter', async () => {
+    const { doc } = blinkFixture();
+    doc.files['sketch.ino'] = 'void setup() {} void loop() {}'; // not a baseline
+    const hex = blinkFixture().hex;
+    const stream = [
+      `event: status\ndata: {"text":"Building AVR"}\n\n`,
+      `event: log\ndata: {"text":"avr-gcc compiling"}\n\n`,
+      `event: result\ndata: ${JSON.stringify({ hex, fqbn: 'arduino:avr:uno' })}\n\n`,
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })));
+    const logs: string[] = [];
+    const rt = new FirmwareRuntime(doc);
+    const loaded = await rt.loadViaCompile(doc, { compileEndpoint: '/api/firmware-compile',
+      onBuildEvent: (event) => logs.push(event.text) });
+    expect(loaded).toMatchObject({ ok: true, source: 'toolchain' });
+    expect(logs).toEqual(['Building AVR', 'avr-gcc compiling']);
+    expect(rt.lastHex).toBe(hex);
+  });
+
+  it('preserves the real SSE compiler error and refuses an unknown offline sketch', async () => {
+    const { doc } = blinkFixture();
+    doc.files['sketch.ino'] = 'void setup() { nonexistent(); } void loop() {}';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      'event: error\ndata: {"code":"compile-failed","message":"unknown function nonexistent"}\n\n',
+      { headers: { 'content-type': 'text/event-stream' } },
+    )));
+    const logs: string[] = [];
+    const rt = new FirmwareRuntime(doc);
+    const loaded = await rt.loadViaCompile(doc, { compileEndpoint: '/api/firmware-compile',
+      onBuildEvent: (event) => logs.push(event.text) });
+    expect(loaded.ok).toBe(false);
+    expect(rt.hasImage).toBe(false);
+    expect(logs).toEqual(['unknown function nonexistent']);
   });
 
   it('falls back to the offline baseline when the service refuses', async () => {

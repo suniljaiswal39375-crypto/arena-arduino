@@ -21,7 +21,7 @@ client.ts   SimClient: what the UI talks to
 
 ```ts
 const client = new SimClient();
-client.onState = (snapshot) => { ... };   // clockUs, parts, serial, plot, plotLabels, error
+client.onState = (snapshot) => { ... };   // clockUs, parts, serial, plot, logicAnalyzers, error
 client.load(doc, source);                 // compile and rewind
 client.start(); client.stop(); client.reset();
 client.update(doc);                       // wiring changed, keep running
@@ -45,8 +45,19 @@ avr8js ATmega328P core behind the same worker/client seam — see
 the educational, toolchain-free layer. `SimClient` routes a
 `doc.engine === 'firmware'` project to the firmware worker (or its inline
 fallback) and projects the firmware snapshot onto the same `SimSnapshot` the
-builder renders, so the Toolbar engine selector is live: baseline sketches run
-real AVR instructions, other sketches get an honest compile refusal.
+builder renders, so the Toolbar engine selector is live: offline baselines run
+real AVR instructions, while other sketches need the optional isolated AVR
+build farm (local CLI in development) or get an honest compile refusal. The shared `Circuit` also decodes
+common-cathode seven-segment nets, one MAX7219 (GPIO/SPI), and ULN2003
+**observed GPIO input phases**, not physical motor motion. Decoder, executed-AVR
+and parity tests constrain the supported topologies. `instruments/logic-analyzer.ts`
+provides the first inspect-bench instrument: GND-referenced eight-channel virtual GPIO
+edge capture, 2 × 2,048 bounded events, unknown (`X`) for unmodelled sources and a
+1 ns-timescale VCD *export format*. The analyzer is not a 1 GHz sampler: functional
+writes have virtual-µs timestamps, AVR GPIO writes use instruction-cycle offsets
+(62.5 ns), and peripheral/PWM outputs without a waveform decoder remain unknown.
+Wiring changes invalidate old waves; captured data stays out of the document and
+browser persistence. See `instruments/logic-analyzer.integration.test.ts`.
 
 **How the virtual clock works.** `tick(realMs, speed)` converts real elapsed time into a
 microsecond budget and runs the interpreter's generator until the budget is spent. Time the sketch
@@ -74,6 +85,7 @@ plotter eating the monitor's output.
 npm test -- src/lib/sim
 npm test -- src/lib/sim/firmware
 npm test -- src/lib/sim/parity
+npm test -- src/lib/sim/instruments
 ```
 
 `sim.test.ts` covers parsing, blinking, `millis()`, compile errors and sensors. `runtime.test.ts`

@@ -4,7 +4,7 @@
  * real fake-arduino-cli script through `discoverLocalCli`; refusal paths use a
  * stubbed discovery, so none of this needs a real toolchain.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,7 +42,14 @@ function fakeCli(version = '1.5.2', payload?: string): string {
     'fi',
     'if [ "$1" = "compile" ]; then',
     '  dir="${@: -1}"',
-    `  printf '%b\\n' '${escaped}' > "$dir/sketch.ino.hex"`,
+    '  [ -f "$dir/Sketch.ino" ] || exit 3',
+    '  output=""',
+    '  while [ "$#" -gt 0 ]; do',
+    '    if [ "$1" = "--output-dir" ]; then shift; output="$1"; fi',
+    '    shift',
+    '  done',
+    '  mkdir -p "$output"',
+    `  printf '%b\\n' '${escaped}' > "$output/Sketch.ino.hex"`,
     '  exit 0',
     'fi',
     'exit 2',
@@ -54,6 +61,7 @@ function fakeCli(version = '1.5.2', payload?: string): string {
 
 afterEach(() => {
   delete process.env.SPARKLAB_ARDUINO_CLI;
+  vi.unstubAllEnvs();
   if (fakeCliDir) rmSync(fakeCliDir, { recursive: true, force: true });
 });
 
@@ -115,6 +123,24 @@ describe('POST /api/firmware-compile', () => {
       deps({ path: '/x', version: '1.5.2', detail: '' }),
     );
     expect(res.status).toBe(403);
+  });
+
+  it('requires an isolated farm for production instead of spawning the local compiler', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const res = await handleFirmwareCompile(request({ boardFqbn: 'arduino:avr:uno', sketch: 'void setup(){}', libraries: [] }),
+      deps({ path: '/not/run', version: '1.5.1', detail: '' }));
+    expect(res.status).toBe(503);
+    expect((await res.json() as { error: { code: string } }).error.code).toBe('isolated-farm-required');
+  });
+
+  it('rejects missing AVR boards and non-installed libraries before discovery', async () => {
+    const noCli = { path: null, version: null, detail: 'not configured' };
+    const board = await handleFirmwareCompile(request({ boardFqbn: 'arduino:avr:mega', sketch: 'x', libraries: [] }), deps(noCli));
+    expect(board.status).toBe(422);
+    expect((await board.json() as { error: { code: string } }).error.code).toBe('unsupported-board');
+    const lib = await handleFirmwareCompile(request({ boardFqbn: 'arduino:avr:uno', sketch: 'x', libraries: ['Servo@latest'] }), deps(noCli));
+    expect(lib.status).toBe(422);
+    expect((await lib.json() as { error: { code: string } }).error.code).toBe('unsupported-library');
   });
 
   it('rejects an invalid body shape with 400', async () => {

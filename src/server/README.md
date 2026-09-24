@@ -50,18 +50,20 @@ Before use with real students: establish consent, retention/deletion/export proc
 
 ## Firmware compile service
 
-`POST /api/firmware-compile` is the "toolchain present" upgrade path for the
-AVR firmware slice (`src/server/firmware/`, `src/app/api/firmware-compile/`).
-It accepts `{boardFqbn, sketch, libraries}` (bounded: 64 KiB body, 8 KiB
-sketch, 16 libraries, 256-char lines), compiles through gated arduino-cli 1.x
-when `SPARKLAB_ARDUINO_CLI` is set, and returns Intel HEX. When the toolchain
-is absent the route answers an honest `503 {error:{code:"no-arduino-cli"}}` —
-never a fake build — and the browser falls back to the offline baseline stub
-(`src/lib/sim/firmware/compiler.ts`). The sketch is written to a private
-temp-dir file, never shell-interpolated; compile deadline and heartbeat are
-bounded. Tests drive the real spawn path against a fake arduino-cli script
-(`src/server/firmware/*.test.ts`) and prove the produced HEX runs on the AVR
-core with the same blink as the parity fixture.
+`POST /api/firmware-compile` has two optional execution paths; neither is
+needed for the zero-config local lab. For development, `SPARKLAB_ARDUINO_CLI`
+can point to official arduino-cli 1.x plus the installed AVR core. The local
+process path is **disabled in production** because uploaded C++ is not safe
+to compile beside the Next.js app. The alternative is the separate Docker
+AVR build farm documented at [`firmware/README.md`](firmware/README.md).
+Production requires a canonical HTTPS `AUTH_URL`, `SPARKLAB_BUILD_FARM_URL`
+(internal URL) and `SPARKLAB_BUILD_FARM_TOKEN` (server-to-server only). It
+streams no-store SSE status/compiler logs/HEX to the in-memory builder panel
+or returns compatible JSON. Errors/refusals never fabricate HEX; without the
+service the two known offline AVR baselines remain available. The official
+CLI and the separate Docker/SSE-to-avr8js integration checks both passed in
+GitHub Actions. Live deployment remains a separate operator responsibility. Neither OAuth nor fake teacher accounts are needed to run
+the local lab.
 
 ## Tests
 

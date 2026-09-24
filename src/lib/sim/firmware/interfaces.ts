@@ -1,4 +1,5 @@
 import type { PartState, SerialLine } from '../runtime';
+import type { LogicTrace } from '../instruments/logic-analyzer';
 
 /**
  * A hardware-level probe of the firmware slice, compatible in spirit with the
@@ -32,6 +33,7 @@ export interface FirmwareSnapshot {
   serial: SerialLine[];
   plot: number[][];
   plotLabels: Array<string | undefined>;
+  logicAnalyzers: LogicTrace[];
   status: FirmwareStatus;
   unsupported: string[];
 }

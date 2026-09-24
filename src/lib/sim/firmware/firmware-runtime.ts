@@ -11,6 +11,7 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { FirmwareEngine } from './engine';
 import type { FirmwareSnapshot } from './interfaces';
+import { readSseBuild, type BuildMessage } from './build-events';
 import { resolveOfflineFirmware, boardTypeFromFqbn } from './compiler';
 import { avrBoardFor } from './avr';
 
@@ -19,6 +20,10 @@ export interface FirmwareLoadOptions {
   nodeMode?: boolean;
   /** HTTP path of the compile service, used when nodeMode is false. */
   compileEndpoint?: string;
+  /** Ephemeral build progress; never written to project/browser storage. */
+  onBuildEvent?: (event: BuildMessage) => void;
+  /** Cancels an obsolete build when the sketch/project changes. */
+  signal?: AbortSignal;
 }
 
 export interface FirmwareLoadResult {
@@ -35,7 +40,10 @@ export interface FirmwareLoadResult {
 export function compileInputFor(doc: ProjectDoc): { boardFqbn: string; sketch: string; libraries: string[] } {
   const boardPart = doc.diagram.parts.find((p) => p.type.startsWith('arduino') || p.type.startsWith('emu'));
   const boardType = boardPart?.type ?? doc.board;
-  const fqbn = avrBoardFor(boardType)?.fqbn ?? 'arduino:avr:uno';
+  // Never silently compile an unsupported board's sketch for an Uno.
+  // An unrecognised part type is intentionally rejected by both the server's
+  // FQBN allowlist and the offline stub instead of becoming runnable AVR HEX.
+  const fqbn = avrBoardFor(boardType)?.fqbn ?? boardType;
   const librarySource = doc.files['libraries.txt'] ?? '';
   const libraries = librarySource
     .split('\n')
@@ -114,19 +122,38 @@ export class FirmwareRuntime {
       return this.load(doc, options);
     }
     const input = compileInputFor(doc);
+    let sawError = false;
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'accept': 'text/event-stream' },
         body: JSON.stringify({ boardFqbn: input.boardFqbn, sketch: input.sketch, libraries: input.libraries }),
+        signal: options.signal,
       });
       if (res.ok) {
+        if (res.headers.get('content-type')?.startsWith('text/event-stream')) {
+          const hex = await readSseBuild(res, input.boardFqbn, (event) => {
+            if (event.type === 'error') sawError = true;
+            options.onBuildEvent?.(event);
+          });
+          return this.loadHex(doc, hex, boardTypeFromFqbn(input.boardFqbn));
+        }
+        // Compatibility with the single-node local CLI JSON endpoint.
         const body = (await res.json()) as { hex?: string };
         if (typeof body.hex === 'string' && body.hex.trim().length > 0) {
           return this.loadHex(doc, body.hex, boardTypeFromFqbn(input.boardFqbn));
         }
+      } else {
+        const body = await res.json() as { error?: { message?: string } };
+        if (typeof body.error?.message === 'string') {
+          sawError = true;
+          options.onBuildEvent?.({ type: 'error', text: body.error.message.slice(0, 2048) });
+        }
       }
     } catch {
+      if (!options.signal?.aborted && !sawError) {
+        options.onBuildEvent?.({ type: 'error', text: 'AVR build service unavailable or build stream interrupted; trying the offline baseline.' });
+      }
       // Network/host failure: fall through to the offline baseline.
     }
     return this.load(doc, options);

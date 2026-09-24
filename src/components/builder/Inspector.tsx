@@ -189,7 +189,18 @@ function describeState(state: PartState): string {
     case 'sensor':
       return `${Math.round(state.value)} ${state.unit} (${state.label})`;
     case 'seven-seg':
-      return state.value || '-';
+      return state.value || `segments a..dp: ${state.segments.toString(2).padStart(8, '0')}`;
+    case 'matrix':
+      return `${state.cells.filter(Boolean).length} of 64 pixels on`;
+    case 'stepper':
+      return state.powered
+        ? state.coils === null ? 'GPIO IN1–4: floating/input · coil phase unknown'
+          : `GPIO IN1–4: ${state.coils.toString(2).padStart(4, '0')} · ${state.sequence ?? 'unknown'} phase · ${state.transitions} observed GPIO transitions (not shaft steps)`
+        : 'Unpowered · no motor motion inferred';
+    case 'logic-analyzer':
+      return state.grounded
+        ? `${state.levels.map((v, i) => `D${i}:${v}`).join(' ')} · ${state.edges} retained edges${state.dropped ? ` · ${state.dropped} dropped` : ''}`
+        : 'GND not referenced · digital levels unknown (X)';
     case 'board':
       return 'running';
     default:

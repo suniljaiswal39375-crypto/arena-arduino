@@ -12,6 +12,7 @@ export {
   COMPILE_LIMITS,
   CompileUnavailableError,
   assertWithinCompileLimits,
+  assertSupportedAvrBuild,
   compileCacheKey,
   compileWithCli,
   sketchKey,

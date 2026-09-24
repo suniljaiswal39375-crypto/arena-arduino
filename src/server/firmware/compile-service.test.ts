@@ -8,7 +8,7 @@
  * paths when no toolchain is present or the input breaches the bounds.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { COMPILE_LIMITS } from '@/lib/sim/firmware/compile-contract';
@@ -33,10 +33,18 @@ function fakeCli(version = '1.5.2', hex = true): string {
     `  echo '{"VersionString":"${version}"}'`,
     '  exit 0',
     'fi',
-    // compile <flags> <sketchdir>
+    // compile <flags> <sketchdir>: mimic Arduino's naming convention.
     'if [ "$1" = "compile" ]; then',
     '  dir="${@: -1}"',
-    hex ? `  printf ':00000001FF\\n' > "$dir/sketch.ino.hex"` : '  :',
+    '  [ -f "$dir/Sketch.ino" ] || exit 3',
+    `  printf '%s' "$dir" > '${fakeCliDir}/last-dir'`,
+    '  output=""',
+    '  while [ "$#" -gt 0 ]; do',
+    '    if [ "$1" = "--output-dir" ]; then shift; output="$1"; fi',
+    '    shift',
+    '  done',
+    '  mkdir -p "$output"',
+    hex ? `  printf ':00000001FF\\n' > "$output/Sketch.ino.hex"` : '  :',
     '  exit 0',
     'fi',
     'echo "unexpected args: $*" >&2',
@@ -73,6 +81,7 @@ describe('discoverLocalCli', () => {
   it('rejects an unsupported major through the same gate', async () => {
     process.env.SPARKLAB_ARDUINO_CLI = fakeCli('2.1.0');
     const d = await discoverLocalCli();
+    expect(d.path).toBeNull();
     expect(d.detail).toMatch(/not in the supported major line/);
     expect(d.version).toBe('2.1.0');
   });
@@ -88,10 +97,16 @@ describe('compileSketch', () => {
     expect(result.fqbn).toBe('arduino:avr:uno');
     expect(result.cacheKey).toMatch(/^arduino:avr:uno\//);
     expect(result.toolchain).toMatchObject({ version: '1.5.2' });
+    expect(existsSync(readFileSync(join(fakeCliDir, 'last-dir'), 'utf8'))).toBe(false);
   });
 
   it('refuses honestly when no toolchain is present', async () => {
     await expect(compileSketch(INPUT, { path: null, version: null, detail: 'no CLI' }, 'r')).rejects.toMatchObject({ reason: 'no-arduino-cli' });
+  });
+
+  it('rejects even a directly supplied unsupported CLI before any spawn', async () => {
+    await expect(compileSketch(INPUT, { path: '/x', version: '2.1.0', detail: 'only 1.x' }, 'r'))
+      .rejects.toMatchObject({ reason: 'unsupported-version' });
   });
 
   it('rejects an oversized sketch before any spawn', async () => {
@@ -103,5 +118,6 @@ describe('compileSketch', () => {
     process.env.SPARKLAB_ARDUINO_CLI = fakeCli('1.5.2', false);
     const cli = await discoverLocalCli();
     await expect(compileSketch(INPUT, cli, 'r')).rejects.toMatchObject({ reason: 'no-arduino-cli' });
+    expect(existsSync(readFileSync(join(fakeCliDir, 'last-dir'), 'utf8'))).toBe(false);
   });
 });

@@ -1,17 +1,12 @@
 /**
- * The firmware compile service (Node only).
- *
- * The contract (`compile-contract.ts`) is browser-safe; this module is the
- * server-side implementation of the executor: it compiles a bounded `.ino`
- * through gated arduino-cli 1.x when a toolchain is present, and refuses —
- * with a precise reason — when it is not. The offline lab never depends on
- * this; it is the "toolchain present" upgrade path the contract promises.
+ * Local AVR compile service (Node only). This is an operator-configured single
+ * process, NOT a sandbox for untrusted C++: see server/firmware/README.md.
  */
 import {
   compileCacheKey,
   CompileUnavailableError,
   assertWithinCompileLimits,
-  sketchKey,
+  assertSupportedAvrBuild,
   type CompileResult,
   type FirmwareCompileInput,
 } from '@/lib/sim/firmware/compile-contract';
@@ -31,13 +26,12 @@ export type {
   FirmwareCompileInput,
 } from '@/lib/sim/firmware/compile-contract';
 
-/** A local CLI skips network core fetches; guarded by the `SPARKLAB_ARDUINO_CLI` env. */
+/** Discovery must return path:null on *unsupported* versions too. */
 export async function discoverLocalCli(): Promise<{
   path: string | null;
   version: string | null;
   detail: string;
 }> {
-  if (typeof process === 'undefined') return { path: null, version: null, detail: 'no Node host' };
   const candidate = process.env.SPARKLAB_ARDUINO_CLI;
   if (!candidate) {
     return {
@@ -46,118 +40,113 @@ export async function discoverLocalCli(): Promise<{
       detail: 'SPARKLAB_ARDUINO_CLI is not set; no AVR toolchain is available to this build service',
     };
   }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { spawnSync } = await import('node:child_process');
-  try {
-    const res = spawnSync(candidate, ['version', '--format', 'json'], { encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
-    const raw = (res.stdout ?? '').trim();
-    let version: string | null = null;
-    try {
-      version = (JSON.parse(raw) as { VersionString?: string }).VersionString ?? null;
-    } catch {
-      version = raw.replace(/^arduino-cli[^\d]*/i, '').trim().split(/\s+/)[0] ?? null;
-    }
-    if (!version) return { path: candidate, version: null, detail: 'arduino-cli reported no version' };
-    const gate = parseArduinoCliVersion(version);
-    if (!gate.supported) return { path: candidate, version, detail: gate.detail };
-    return { path: candidate, version, detail: gate.detail };
-  } catch (err) {
-    return { path: candidate, version: null, detail: `failed to execute: ${err instanceof Error ? err.message : String(err)}` };
+  const res = spawnSync(candidate, ['version', '--format', 'json'], {
+    encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  if (res.error || res.status !== 0) {
+    return {
+      path: null, version: null,
+      detail: `failed to execute arduino-cli: ${res.error?.message ?? res.stderr?.trim().slice(0, 256) ?? `exit ${res.status}`}`,
+    };
   }
+  const raw = (res.stdout ?? '').trim();
+  let version: string | null = null;
+  try {
+    version = (JSON.parse(raw) as { VersionString?: string }).VersionString ?? null;
+  } catch {
+    version = raw.replace(/^arduino-cli[^\d]*/i, '').trim().split(/\s+/)[0] ?? null;
+  }
+  if (!version) return { path: null, version: null, detail: 'arduino-cli reported no version' };
+  const gate = parseArduinoCliVersion(version);
+  return { path: gate.supported ? candidate : null, version, detail: gate.detail };
 }
 
 /**
- * Compile a bounded sketch through a supplied spawner. This is the executor
- * shape the contract (`compileWithCli`) expects; it never interpolates the
- * sketch into a shell string, writes into a private temp dir, and enforces the
- * compile time/cache heartbeats documented in the contract.
+ * Compile a bounded sketch through an explicitly configured local toolchain.
+ * Arduino requires the main .ino to match its containing directory, so use a
+ * constant safe sketch name *inside* a unique private directory. Always remove
+ * the entire directory, including compiler intermediates, on success/failure.
  */
 export async function compileSketch(
   input: FirmwareCompileInput,
   cli: { path: string | null; version: string | null; detail: string },
-  requestId: string,
+  _requestId: string,
 ): Promise<CompileResult> {
   assertWithinCompileLimits(input);
-
+  assertSupportedAvrBuild(input);
   if (!cli.path) {
-    throw new CompileUnavailableError('no-arduino-cli', cli.detail || 'no arduino-cli 1.x is available and no build farm is configured');
+    throw new CompileUnavailableError('no-arduino-cli', cli.detail || 'no arduino-cli 1.x is available');
+  }
+  if (!cli.version || !parseArduinoCliVersion(cli.version).supported) {
+    throw new CompileUnavailableError('unsupported-version', cli.detail || 'only arduino-cli 1.x is supported');
   }
 
-  const cache = compileCacheKey(input);
-  const exec = await import('node:child_process');
-  const { spawn } = exec;
-  const { mkdtempSync, writeFileSync, readFileSync } = await import('node:fs');
+  const { spawn } = await import('node:child_process');
+  const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
   const os = await import('node:os');
-
   const dir = mkdtempSync(join(os.tmpdir(), 'sparklab-fw-'));
-  const sketchPath = join(dir, 'sketch.ino');
-  writeFileSync(sketchPath, input.sketch);
-
-  // Private temp dir, request-id scoped, no shell string: the input is a file.
-  const buildPath = join(dir, 'build');
-  const args = [
-    'compile',
-    '--fqbn', input.boardFqbn,
-    '--build-path', buildPath,
-    '--output-dir', dir,
-    '--format', 'json',
-    dir,
-  ];
-
-  const heartbeatMs = Number(process.env.SPARKLAB_FW_HEARTBEAT_MS ?? 5_000);
-  const compileMs = Number(process.env.SPARKLAB_FW_COMPILE_MS ?? 20_000);
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(cli.path!, args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
-    let out = '';
-    let done = false;
-    const timer = setTimeout(() => {
-      if (!done) {
-        done = true;
-        child.kill('SIGKILL');
-        reject(new CompileUnavailableError('no-arduino-cli', `compile exceeded ${compileMs} ms; the build service cancelled the request`));
-      }
-    }, compileMs);
-    // Heartbeat so a stalled request never looks alive past the claimed bound.
-    const beat = setInterval(() => {
-      if (done) return;
-      const alive = child.exitCode === null;
-      void alive;
-      // Reserved for SSE build logs; no output stream is emitted today.
-    }, heartbeatMs);
-    child.stdout?.on('data', (chunk: Buffer) => (out += chunk.toString('utf8')));
-    child.stderr?.on('data', (chunk: Buffer) => (out += chunk.toString('utf8')));
-    child.on('error', (err) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      clearInterval(beat);
-      reject(err);
-    });
-    child.on('close', (code) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      clearInterval(beat);
-      if (code !== 0) {
-        reject(new CompileUnavailableError('no-arduino-cli', `arduino-cli exited ${code}: ${out.trim().slice(0, 500)}`));
-        return;
-      }
-      resolve();
-    });
-  });
-
-  const hexPath = join(dir, 'sketch.ino.hex');
-  let hex: string;
+  const sketchDir = join(dir, 'Sketch');
+  const outputDir = join(dir, 'output');
   try {
-    hex = readFileSync(hexPath, 'utf8');
-  } catch {
-    hex = '';
-  }
-  if (!hex.trim()) {
-    throw new CompileUnavailableError('no-arduino-cli', 'arduino-cli produced no Intel HEX output for the sketch');
-  }
+    mkdirSync(sketchDir);
+    writeFileSync(join(sketchDir, 'Sketch.ino'), input.sketch);
+    const args = [
+      'compile',
+      '--fqbn', input.boardFqbn,
+      '--build-path', join(dir, 'build'),
+      '--output-dir', outputDir,
+      '--format', 'json',
+      sketchDir,
+    ];
+    const compileMs = Number(process.env.SPARKLAB_FW_COMPILE_MS ?? 20_000);
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(cli.path!, args, { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done) {
+          done = true;
+          child.kill('SIGKILL');
+          reject(new CompileUnavailableError('no-arduino-cli', `compile exceeded ${compileMs} ms; the build service cancelled the request`));
+        }
+      }, compileMs);
+      const onOutput = (chunk: Buffer): void => { out = (out + chunk.toString('utf8')).slice(0, 8192); };
+      child.stdout?.on('data', onOutput);
+      child.stderr?.on('data', onOutput);
+      child.on('error', (err) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+      child.on('close', (code) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (code !== 0) {
+          reject(new CompileUnavailableError('no-arduino-cli', `arduino-cli exited ${code}: ${out.trim().slice(0, 500)}`));
+          return;
+        }
+        resolve();
+      });
+    });
 
-  return { hex, cacheKey: cache.key, fqbn: input.boardFqbn, toolchain: { path: cli.path, version: cli.version } };
+    let hex: string;
+    try {
+      hex = readFileSync(join(outputDir, 'Sketch.ino.hex'), 'utf8');
+    } catch {
+      throw new CompileUnavailableError('no-arduino-cli', 'arduino-cli produced no Intel HEX output for the sketch');
+    }
+    if (!hex.trim()) {
+      throw new CompileUnavailableError('no-arduino-cli', 'arduino-cli produced no Intel HEX output for the sketch');
+    }
+    return {
+      hex, cacheKey: compileCacheKey(input).key, fqbn: input.boardFqbn,
+      toolchain: { path: cli.path, version: cli.version },
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

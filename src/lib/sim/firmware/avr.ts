@@ -26,6 +26,8 @@ import {
   AVRADC,
   AVRWatchdog,
   AVRTWI,
+  AVRSPI,
+  spiConfig,
   portBConfig,
   portCConfig,
   portDConfig,
@@ -300,6 +302,7 @@ export interface AvrSandbox {
   usart: AVRUSART;
   adc: AVRADC;
   twi: AVRTWI;
+  spi: AVRSPI;
   watchdog: AVRWatchdog;
   image: IntelHexImage;
 }
@@ -338,6 +341,7 @@ export function prepareAvrProgram(image: IntelHexImage, _options?: AvrProgramOpt
   const adc = new AVRADC(cpu, adcConfig);
   for (let ch = 0; ch < adcConfig.numChannels; ch++) (adc.channelValues as unknown[])[ch] = 0;
   const twi = new AVRTWI(cpu, twiConfig, 16e6);
+  const spi = new AVRSPI(cpu, spiConfig, 16e6);
   const watchdog = new AVRWatchdog(cpu, watchdogConfig, clock);
 
   // Free-running, so the host's execution count is the single source of truth
@@ -347,7 +351,7 @@ export function prepareAvrProgram(image: IntelHexImage, _options?: AvrProgramOpt
   cpu.data[0x60] = 0; // CLKPR
   watchdog.resetWatchdog();
 
-  return { cpu, clock, ports, timers, usart, adc, twi, watchdog, image };
+  return { cpu, clock, ports, timers, usart, adc, twi, spi, watchdog, image };
 }
 
 /** Advance the sandbox by exactly one instruction + one peripheral tick. */

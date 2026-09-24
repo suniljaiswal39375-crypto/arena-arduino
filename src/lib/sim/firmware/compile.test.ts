@@ -9,6 +9,7 @@ import {
   COMPILE_LIMITS,
   CompileUnavailableError,
   assertWithinCompileLimits,
+  assertSupportedAvrBuild,
   compileCacheKey,
   sketchKey,
   parseArduinoCliVersion,
@@ -78,6 +79,18 @@ describe('assertWithinCompileLimits', () => {
   it('rejects too many libraries', () => {
     const many = { ...INPUT, libraries: Array(COMPILE_LIMITS.maxLibraries + 1).fill('Lib') };
     expect(() => assertWithinCompileLimits(many)).toThrow(CompileUnavailableError);
+  });
+});
+
+describe('supported AVR build targets', () => {
+  it('accepts Uno/Nano with preinstalled AVR core libraries only', () => {
+    expect(() => assertSupportedAvrBuild({ ...INPUT, libraries: ['Wire', 'SPI'] })).not.toThrow();
+    expect(() => assertSupportedAvrBuild({ ...INPUT, boardFqbn: 'arduino:avr:nano', libraries: [] })).not.toThrow();
+  });
+  it('names unsupported boards and external/uncurated libraries instead of silently ignoring them', () => {
+    expect(() => assertSupportedAvrBuild({ ...INPUT, boardFqbn: 'arduino:avr:mega', libraries: [] }))
+      .toThrowError(/Uno\/Nano/);
+    expect(() => assertSupportedAvrBuild(INPUT)).toThrowError(/Servo@1.2.1/);
   });
 });
 

@@ -506,10 +506,11 @@ export const EMULATOR_PARTS: PartDef[] = [
   E('emu-logic-analyzer', 'Logic Analyzer (8 ch)', 'Sensor', {
     wokwi: 'wokwi-logic-analyzer',
     pins: 'GND:ground:l D0:digital:l D1:digital:l D2:digital:l D3:digital:l D4:digital:r D5:digital:r D6:digital:r D7:digital:r',
-    adapter: 'static',
-    tier: 'exact',
-    desc: 'Eight channels at a 1 GHz sample rate with edge and level triggering. Captures to VCD.',
-    notes: 'The only instrument that sees inside the emulated core. Exports a VCD that opens in PulseView and GTKWave.',
+    adapter: 'logic-analyzer',
+    tier: 'model',
+    desc: 'Eight digital net probes with event-timestamped waves and VCD export; requires GND.',
+    notes: 'MODEL: captures observable board GPIO edges, not internal CPU registers. AVR edges carry cycle timestamps (62.5 ns at 16 MHz, rounded to 1 ns); functional writes use their virtual microsecond clock. Not a physical 1 GHz sampler. Floating/unsupported nets are X; no edge/level trigger yet.',
+    wiring: ['Connect GND to board GND, then D0..D7 to individual GPIO nets. Open the Logic tab while running; export the retained window to VCD.'],
   }),
   E('emu-microsd', 'microSD Card', 'IoT', {
     wokwi: 'wokwi-microsd-card',

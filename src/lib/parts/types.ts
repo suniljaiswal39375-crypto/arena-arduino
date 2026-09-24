@@ -39,6 +39,7 @@ export type AdapterKind =
   | 'potentiometer'
   | 'matrix'
   | 'seven-seg'
+  | 'logic-analyzer'
   | 'power'
   | 'chip'
   | 'static';

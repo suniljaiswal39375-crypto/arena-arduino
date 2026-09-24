@@ -27,6 +27,7 @@ export function firmwareSnapshotAsSim(snapshot: FirmwareSnapshot, loadError: Sim
     serial: snapshot.serial,
     plot: snapshot.plot,
     plotLabels: snapshot.plotLabels,
+    logicAnalyzers: snapshot.logicAnalyzers,
     error,
     unsupported: snapshot.unsupported,
   };

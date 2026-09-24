@@ -54,16 +54,13 @@ export const FW_LIMITS = {
   serialCapLines: 600,
 } as const;
 
-/** Adapters the AVR slice v0 does not yet decode on the bus. */
-const UNWIRED_ADAPTERS: ReadonlySet<string> = new Set([
-  // 'lcd' and 'oled' are now decoded from the TWI bus (peripherals.ts), and
-  // 'servo' is decoded from Timer1's real register state (servo.ts). A servo
-  // part needs a Timer1 servo-mode pulse on D9/D10 to render a position.
-  'matrix',
-  'seven-seg',
-  'stepper',
-  'chip',
-]);
+/** A shared adapter does not imply that *all* part protocols are decoded. */
+function unmodelledAvrPart(type: string, adapter: string): boolean {
+  if (adapter === 'chip') return true;
+  if (adapter === 'matrix') return type !== 'matrix-8x8-max7219' && type !== 'emu-max7219';
+  if (adapter === 'stepper') return type !== 'uln2003' && type !== 'stepper-28byj48';
+  return false;
+}
 
 export interface FirmwareRun {
   snapshot: FirmwareSnapshot;
@@ -78,6 +75,9 @@ export class FirmwareEngine {
   private boardId = '';
   private image: IntelHexImage | null = null;
   private clock = 0;
+  /** AVR cycle counter at the start of the instruction segment now executing. */
+  private segmentStartCycles: number | null = null;
+  private unknownLogicMask = 0;
   private running = false;
   private started = false;
   private instructions = 0;
@@ -110,9 +110,13 @@ export class FirmwareEngine {
   /** Re-read the document after an edit. Inputs/wiring change, firmware keeps running. */
   update(doc: ProjectDoc): void {
     this.doc = doc;
-    this.circuit = new Circuit(doc);
+    this.circuit.clock = this.clock;
+    this.refreshPeripheralProbeMask(true);
+    this.circuit.update(doc); // keep latched display RAM and valid phase history if wiring is unchanged
     this.pinDrive.clear();
     this.pinOutputs.clear();
+    this.refreshUnsupported();
+    this.syncPinModel();
   }
 
   /* --------------------------------------------------------------- load -- */
@@ -167,12 +171,25 @@ export class FirmwareEngine {
       },
       readByte: () => twi.completeRead(0xff),
     };
+    const spi = sandbox.spi;
+    spi.onByte = (value) => {
+      const mode = spi.spiMode;
+      const order = spi.dataOrder;
+      // The byte reaches MOSI only at the end of a real SPI transfer. The
+      // avr8js SPI clock event also raises SPIF so polling firmware advances.
+      sandbox.cpu.addClockEvent(() => {
+        if (spi.isMaster) this.circuit.hardwareSpiByte(value, mode, order);
+        spi.completeTransfer(0xff); // no MISO device model is connected
+      }, spi.transferCycles);
+    };
 
     this.sandbox = sandbox;
     this.board = board;
     this.image = image;
     this.lastHex = hex;
     this.clock = 0;
+    this.segmentStartCycles = null;
+    this.unknownLogicMask = 0;
     this.debt = 0;
     this.partial = '';
     this.instructions = 0;
@@ -183,22 +200,22 @@ export class FirmwareEngine {
     this.pinOutputs.clear();
     this.lastServoUs.clear();
     this.circuit = new Circuit(doc);
+    // Port listeners observe every firmware OUT/SBI/CBI/DDR write, including
+    // sub-frame CLK and coil edges. Sampling only at run()'s end would silently
+    // lose all 16 MAX7219 clock edges and intermediate stepper phases.
+    for (const port of ['B', 'C', 'D'] as const) {
+      sandbox.ports[port].addListener(() => this.onPortChanged(port));
+    }
 
     const boardInst = doc.diagram.parts.find((p) => getPart(p.type)?.adapter === 'board');
     this.boardId = boardInst?.id ?? '';
 
-    // Peripherals the slice cannot decode yet are reported by name, never
-    // silently modelled by guess — the functional engine still models them.
-    for (const part of doc.diagram.parts) {
-      const def = getPart(part.type);
-      if (def && UNWIRED_ADAPTERS.has(def.adapter)) {
-        this.unsupported.add(`${part.type} (${def.name}): not decoded on the AVR bus yet; functional engine models it`);
-      }
-    }
+    this.refreshUnsupported();
 
     this.statusKind = 'idle';
     this.statusDetail = 'firmware compiled and staged';
     this.lastError = null;
+    this.syncPinModel(); // seed the ADC/GPIO inputs before firmware's first instruction
   }
 
   start(): void {
@@ -231,14 +248,35 @@ export class FirmwareEngine {
     return board?.type ?? 'arduino-uno';
   }
 
+  private refreshUnsupported(): void {
+    this.unsupported.clear();
+    for (const part of this.doc.diagram.parts) {
+      const def = getPart(part.type);
+      if (def && unmodelledAvrPart(part.type, def.adapter)) {
+        this.unsupported.add(`${part.type} (${def.name}): no AVR decoder for this part; no output inferred`);
+      }
+    }
+  }
+
   /* ------------------------------------------------------------ serial --- */
 
   private onUsartByte(value: number): void {
+    const sandbox = this.sandbox;
+    if (!sandbox?.usart.txEnable) return;
+    const format = sandbox.cpu.data[0xc2] ?? 0;
+    if (sandbox.usart.bitsPerChar !== 8 || (format & 0xf8) !== 0) {
+      this.unsupported.add('USART0: only asynchronous 8N1 TX bytes are decoded; non-8N1 frame ignored');
+      return;
+    }
+    if (value > 0x7f) {
+      this.unsupported.add('USART0: non-ASCII/UTF-8 byte stream is not decoded; byte ignored');
+      return;
+    }
     if (value === 0x0a || value === 0x0d) {
       this.flushSerialLine();
       return;
     }
-    this.partial += String.fromCharCode(value & 0x7f);
+    this.partial += String.fromCharCode(value);
   }
 
   /* ------------------------------------------------------------- twi/i2c -- */
@@ -333,34 +371,97 @@ export class FirmwareEngine {
 
   /* --------------------------------------------------------- pin model -- */
 
+  /** Cycle position within this virtual debt-loop segment, not the UI frame. */
+  private currentCycleTimeUs(): number {
+    const cpu = this.sandbox?.cpu;
+    return this.clock + (cpu && this.segmentStartCycles !== null
+      ? (cpu.cycles - this.segmentStartCycles) / 16 : 0);
+  }
+
+  /**
+   * GPIO port writes are captured; peripheral waveforms are NOT. Do not turn
+   * timer PWM, SPI SCK/MOSI, USART TX or TWI SDA/SCL into a fictitious constant
+   * 0/1 just because the DDR/PORT latch has that value. Observe control
+   * registers after each executed instruction when a probe is present so a
+   * mid-frame peripheral enable becomes X at its actual virtual time.
+   */
+  private refreshPeripheralProbeMask(force = false): void {
+    const cpu = this.sandbox?.cpu;
+    if (!cpu) return;
+    const d = cpu.data;
+    let mask = 0;
+    if ((d[0x44] ?? 0) & 0xc0) mask |= 1 << 6;  // Timer0 OC0A
+    if ((d[0x44] ?? 0) & 0x30) mask |= 1 << 5;  // Timer0 OC0B
+    if ((d[0x80] ?? 0) & 0xc0) mask |= 1 << 9;  // Timer1 OC1A
+    if ((d[0x80] ?? 0) & 0x30) mask |= 1 << 10; // Timer1 OC1B
+    if ((d[0xb0] ?? 0) & 0xc0) mask |= 1 << 11; // Timer2 OC2A
+    if ((d[0xb0] ?? 0) & 0x30) mask |= 1 << 3;  // Timer2 OC2B
+    if ((d[0x4c] ?? 0) & 0x40) mask |= (1 << 11) | (1 << 13); // SPI master pins
+    if ((d[0xc1] ?? 0) & 0x08) mask |= 1 << 1;  // USART0 TX
+    if ((d[0xbc] ?? 0) & 0x04) mask |= (1 << 18) | (1 << 19); // TWI A4/A5
+    if (mask === this.unknownLogicMask && !force) return;
+    this.unknownLogicMask = mask;
+    this.circuit.clock = this.currentCycleTimeUs();
+    const pins = new Set<number>();
+    for (let pin = 0; pin < 20; pin++) if (mask & (1 << pin)) pins.add(pin);
+    this.circuit.setUnknownLogicPins(pins);
+  }
+
   /**
    * Set the Circuit's pin model from the *authoritative* AVR register state.
    * DDR/PORT decide INPUT / INPUT_PULLUP / OUTPUT; the driven level comes
    * straight from the GPIO port bit.
    */
+  private onPortChanged(port: 'B' | 'C' | 'D'): void {
+    const sandbox = this.sandbox;
+    const board = this.board;
+    if (!sandbox || !board) return;
+    const updates: Array<{ pin: number; mode: 0 | 1 | 2; level: 0 | 1 }> = [];
+    for (const [pinName, mapping] of Object.entries(board.digital)) {
+      if (mapping.port !== port) continue;
+      const state = sandbox.ports[port].pinState(mapping.bit);
+      updates.push({
+        pin: Number(pinName),
+        mode: state === 0 || state === 1 ? OUTPUT : state === 3 ? INPUT_PULLUP : INPUT,
+        level: state === 1 ? 1 : 0,
+      });
+    }
+    // The port listener runs inside avrInstruction, not at a rendered frame.
+    // Stamp its *whole port* atomically at the AVR cycle that issued the write.
+    // One 16 MHz cycle is 62.5 ns; Circuit exports nearest-nanosecond VCD.
+    this.circuit.clock = this.currentCycleTimeUs();
+    this.refreshPeripheralProbeMask();
+    this.circuit.applyAvrPins(updates);
+    // INPUT_PULLUP can be enabled mid-frame. Refresh the external PIN levels
+    // before the *next* instruction reads them, not only at worker boundaries.
+    this.feedExternalPins();
+  }
+
   private syncPinModel(): void {
     const sandbox = this.sandbox;
     const board = this.board;
     if (!sandbox || !board) return;
+    const updates: Array<{ pin: number; mode: 0 | 1 | 2; level: 0 | 1 }> = [];
     for (const pinNum of Object.keys(board.digital).map(Number)) {
       const mapping = board.digital[pinNum];
       if (!mapping) continue;
       const state = sandbox.ports[mapping.port].pinState(mapping.bit);
       if (state === 0 || state === 1) {
-        // Firmware drives this pin.
         this.pinOutputs.add(pinNum);
-        this.circuit.pinMode(pinNum, OUTPUT);
-        const level = state === 1 ? 1 : 0;
-        this.pinDrive.set(pinNum, level * 5);
-        this.circuit.digitalWrite(pinNum, level);
-      } else if (state === 3) {
-        this.pinOutputs.delete(pinNum);
-        this.circuit.pinMode(pinNum, INPUT_PULLUP);
+        this.pinDrive.set(pinNum, state === 1 ? 5 : 0);
       } else {
         this.pinOutputs.delete(pinNum);
-        this.circuit.pinMode(pinNum, INPUT);
+        this.pinDrive.delete(pinNum);
       }
+      updates.push({
+        pin: pinNum,
+        mode: state === 0 || state === 1 ? OUTPUT : state === 3 ? INPUT_PULLUP : INPUT,
+        level: state === 1 ? 1 : 0,
+      });
     }
+    this.circuit.clock = this.clock;
+    this.refreshPeripheralProbeMask(true);
+    this.circuit.applyAvrPins(updates);
 
     // ADC: give the AVR the circuit's analogue answer for each channel, in
     // volts (5 V reference), so analogRead() returns the same value as the
@@ -438,11 +539,15 @@ export class FirmwareEngine {
         // Execute until the firmware raises the delay flag (or the segment
         // budget elapses), exactly like the interpreter yielding at delay().
         const cyclesBefore = cpu.cycles;
-        const ran = this.executeUntilDelay(cpu);
-        this.instructions += ran;
-        // Real instruction work: cpu.cycles counts AVR clock cycles, so the
-        // simulated time is instruction-accurate at 16 MHz.
-        this.clock += Math.round((cpu.cycles - cyclesBefore) / 16);
+        this.segmentStartCycles = cyclesBefore;
+        try {
+          this.instructions += this.executeUntilDelay(cpu);
+        } finally {
+          this.segmentStartCycles = null;
+        }
+        // Keep fractional microseconds: rounding a whole segment would erase
+        // the cycle timing of sub-frame GPIO edges in the logic analyzer.
+        this.clock += (cpu.cycles - cyclesBefore) / 16;
       }
 
       const consumed = this.clock - before;
@@ -478,6 +583,7 @@ export class FirmwareEngine {
       if (cpu.data[BRIDGE_DELAY_FLAG] !== 0) break;
       step(this.sandbox as AvrSandbox);
       ran++;
+      if (this.circuit.hasLogicAnalyzers) this.refreshPeripheralProbeMask();
     }
     return ran;
   }
@@ -498,8 +604,9 @@ export class FirmwareEngine {
       serial: [...this.circuit.serialLog],
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
+      logicAnalyzers: this.circuit.logicTraces(),
       status: this.status(),
-      unsupported: [...this.unsupported],
+      unsupported: [...new Set([...this.unsupported, ...this.circuit.unsupportedCalls, ...this.circuit.deviceLimitations()])],
     };
   }
 

@@ -58,24 +58,45 @@ TWI firmware.
 **Compile transport shipped.** `POST /api/firmware-compile` (`src/server/firmware/`,
 `src/app/api/firmware-compile/`) is the server-side, resource-bounded arduino-cli 1.x compile
 path: zod-validated `{boardFqbn, sketch, libraries}`, 64 KiB streamed-body cap, private temp-dir
-sketch (never shell-interpolated), heartbeat + deadline, honest `503 no-arduino-cli` when the
+sketch (never shell-interpolated), compile deadline and honest `503 no-arduino-cli` when the
 toolchain is absent. The firmware worker tries it in the browser and falls back to the offline
-baseline; tests drive the real spawn path against a fake arduino-cli script and prove the
-produced HEX runs on the AVR core with the same blink as the parity fixture.
+baseline. The opt-in CI test **passed** against official `arduino-cli` 1.5.1 + the
+Arduino AVR core: it caught and fixed the real CLI requirement that a sketch's
+`.ino` filename match its directory. Its compiled HEX executed on avr8js.
+Local fake-CLI tests still cover transport/refusal paths.
 
-Still to do (same order as before):
+**AVR pin-device milestone.** The seven-segment common-cathode display reads the a..dp
+net drives; a single MAX7219 decodes latched 16-bit GPIO bit-bang or AVR hardware-SPI words
+(shutdown, scan limit, display-test and no-decode mode); and the ULN2003 reads only IN1–IN4
+GPIO masks for known half/full phase tables. A coil mask/transition count is **not motor
+motion**. Shared `Circuit` pin decoders drive both engines. Unit tests, real AVR instruction
+e2e fixtures and cross-engine parity cover each. Additional parity covers I2C LCD, USART0
+serial/plot, ADC0 raw 0/512/1023, button pull-ups and relay contacts with downstream load.
+Unwired, ambiguous, unsupported, misconfigured and non-AVR behaviours are not inferred.
 
-- A real `arduino-cli` + ArduinoCore-avr *binary* on a host (the transport is fully exercised
-  with a fake CLI and has not been run against a real toolchain — download CDNs were blocked in
-  the sandboxes that built this).
-- The containerised build farm (`BUILD_FARM_URL`) and SSE build logs; the local-CLI transport is
-  the single-node form of the same contract.
-- `sim-core` as WASM beyond AVR8: RP2040, then ESP32 (Xtensa / RISC-V); STM32 cores.
-- Peripheral models the AVR slice still reports as unsupported rather than guessing:
-  matrix/seven-seg decode and `stepper`. (The SSD1306 OLED is decoded from the TWI bus —
-  `Ssd1306Decoder` + `font5x7.ts` — and servo pulse timing is decoded from Timer1's real
-  registers — `servo.ts` — both with cross-engine parity.)
-- ESP32/Pico virtual WiFi, SD, and the debugger/GDB later phases.
+Phase 10 status and remaining order:
+
+1. **Completed:** official `arduino-cli` 1.5.1 + Arduino AVR core compiled a Uno sketch
+   through `compileSketch` on GitHub Actions, and avr8js executed its HEX. Local sandbox
+   cannot download the release assets or the core, so this was validated remotely.
+2. **Implemented; Docker/SSE integration passed in CI:** a separate internal, bearer-authenticated farm service runs each build
+   inside a disposable Docker image with preinstalled CLI/core, no runtime network, read-only
+   root, non-root UID, resource limits, cancellation and private temp cleanup. The Next.js
+   endpoint proxies JSON/SSE; the worker's in-memory Build logs panel streams progress.
+   Production refuses the old unisolated CLI spawn. Docker is unavailable *locally*, but
+   the CI image build, isolated container compile, SSE and avr8js execution **passed**
+   in run 36048759643. A dedicated operator deployment, abuse controls, network/TLS
+   configuration and security review are not claimed by a CI test.
+3. **Phase 12 started after the build boundary:** the first modelled instrument now captures
+   eight observed GPIO nets at virtual write/cycle time, displays live waves and exports VCD.
+   It is not a physical 1 GHz sampler: triggers, analogue scope/multimeter and broader bus
+   probes remain. Only afterward pursue typed-tool AI, generated Chaos exercises, chip
+   authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP. Non-AVR architectures
+   (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
+
+Unsupported remains explicit for multi-device MAX7219 cascades, BCD decode mode, alternative
+seven-segment topologies, non-8N1/non-ASCII serial, unmodelled I2C buses and physical motor
+motion. More catalogue parts are not automatically firmware-supported.
 
 ## Phase 11 — P0: accounts, classrooms, sharing
 
@@ -91,9 +112,16 @@ Foundation implemented: optional PostgreSQL + Drizzle + Auth.js Google/database 
 
 This is what makes it a lab rather than a simulator.
 
-- **Logic analyser**, 8 channels, 1 GHz, with VCD export. Needs real bus timing, so it depends on
-  Phase 10.
-- **Multimeter, oscilloscope and power supply** instruments against the netlist.
+- **Eight-channel digital logic analyser + VCD — first bounded model shipped.** Requires
+  a grounded `emu-logic-analyzer` and observable board GPIO nets; AVR port edges receive
+  16 MHz cycle timestamps, functional writes virtual µs. Live waves, source labels,
+  unknown (`X`) for unsupported/floating/averaged/peripheral-owned nets and deterministic
+  1 ns-timescale VCD export are implemented. Captures are worker-memory-only, two probes
+  × 2,048 edges max; overflow and rewire resets are visible. A VCD 1 ns timescale does
+  **not** imply a physical 1 GHz sampler. Edge/level triggering, further digital bus
+  probes and calibrated sampling remain unimplemented.
+- **Multimeter, analogue oscilloscope and power supply** instruments against the netlist remain.
+  Model voltage/uncertainty and timebase honestly before advertising any analogue accuracy.
 - **GDB bridge** once there is a real core to attach to.
 
 ## Phase 13 — P1: the learning surface
@@ -122,7 +150,8 @@ This is what makes it a lab rather than a simulator.
 - VS Code extension and MCP server, so a project can be driven from an agent. (The CLI and the
   GitHub Action exist; the MCP server would wrap the same `runScenario` / `SimEngine` surface.)
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
-  They need a renderer, a touchscreen part, an MQTT broker and a logic analyser respectively.
+  They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
+  pattern assertions against the new bounded capture respectively.
 - PWA install, accessibility audit, performance budget, pricing and school/org billing.
 
 ---
@@ -226,7 +255,7 @@ AI feature that talks without touching the simulator.
 ### Next-session implementation priority
 
 1. Validate deployment integration where real services are available; never invent credentials or fake OAuth success. Add retention automation/operator audit design and true mission-evidence progress before calling the class matrix a learning heatmap.
-2. **Firmware emulation (Phase 10) is now started, not finished:** the AVR slice runs real machine code with the parity test green. Next: execute the arduino-cli compile path on a host that can download the toolchain, wire `doc.engine === 'firmware'` into the builder (worker seam is ready), then peripheral models the slice reports as unsupported, then RP2040/ESP32 separately.
+2. **Firmware emulation (Phase 10) remains AVR-only:** the AVR slice and builder engine selector run real machine code; I2C displays, servo, seven-seg, MAX7219 and ULN2003 GPIO decoders have parity tests. The later Phase 10 status above records passed official-CLI and isolated-container/SSE CI checks; deployment verification and non-AVR architectures remain. RP2040/ESP32 are later.
 3. Add real-timing instruments/VCD only when the execution engine can support the claimed timing; then typed-tool Saksham, generated Chaos exercises and chip-authoring workflow.
 4. Continue editable/uncertainty-aware 3D/scanning, Yjs collaboration, sharing, mail login, remaining localization and integrations as documented above and in the original PDF.
 
@@ -242,11 +271,78 @@ The complete PDF roadmap is not finished by this checkpoint. Prefer correct test
   gate, honest toolchain discovery) and the firmware worker mirroring `SimClient`'s protocol.
 - Added the PDF's parity acceptance test: the same blink project produces the identical LED trace
   on the functional interpreter and on real AVR machine code.
-- Honest boundaries: the I2C displays and the servo are now decoded from the real AVR bus
-  (`peripherals.ts` / `servo.ts`); matrix/seven-seg and steppers are reported by name as
-  unsupported rather than guessed. `arduino-cli` binaries could not be downloaded in this
-  sandbox (release CDN blocked), so compile **execution** is tested behind a fake executor,
-  never claimed as a live build. RP2040/ESP32/STM32 remain future work.
+- At that checkpoint matrix/seven-seg/stepper were unsupported; the later AVR pin-device
+  milestone above supersedes that *historical* missing-feature list. Official release asset
+  downloads were blocked locally. RP2040/ESP32/STM32 remain future work.
 
 Verification this session: 520 unit/render tests pass (28 files, up from 482); the parity test
 and 40 firmware/compile/hex tests are new; strict typecheck and production build pass.
+
+### AVR GPIO-device and parity checkpoint — 25 September 2026
+
+- Added shared pin-level decoders and visual states for common-cathode seven-segment,
+  single MAX7219 dot matrix (bit-bang + hardware SPI), and ULN2003 IN1–IN4 step phases.
+  The latter is plain-GPIO **observed phase decoding**, not shaft/step/angle estimation.
+  Fixed the ULN2003 OUT1–OUT4 catalogue pin directions; supply pins remain supply.
+- Added unit, executed-AVR e2e and cross-engine parity for each; additional parity now
+  includes I2C LCD, ADC0 analogRead at 0/512/1023, USART0 serial/plot, GPIO input pull-up
+  and active-low relay contacts/downstream LED. Power cycles and floating inputs are tested.
+- `npm run typecheck` and `npm run scenarios` passed; `npm test` passed **637 tests / 54 files**
+  before adding the opt-in official-CLI test (locally skipped without the CLI).
+- Official Arduino CLI v1.5.1 release and AVR core CDNs are unreachable from this sandbox;
+  GitHub Actions **did** install the real toolchain and compile/execute a Uno sketch. The
+  subsequent container/SSE milestone is tracked above; Docker is unavailable locally.
+
+### Official-CLI validation and build-farm implementation — 25 September 2026
+
+- GitHub Actions `Official arduino-cli / Arduino AVR core integration` passed on commit
+  `daa0b64` (run 36045051575). It initially found a real failure: Arduino requires
+  `Sketch/Sketch.ino`, not a random directory containing `sketch.ino`. Fixed the folder,
+  added cleanup of private compiler files and enforced unsupported-version/board/library
+  refusal. The official v1.5.1 compile output drove an LED on avr8js.
+- Built an opt-in private farm service and pinned AVR Dockerfile. Next's same-origin
+  route can proxy JSON or SSE; the browser worker decodes bounded SSE progress and the
+  builder displays transient logs without persisting them. Local CLI spawning is disabled
+  in production. The farm rejects arbitrary external libraries/boards, limits concurrent
+  jobs and executes Docker without root/network/capabilities with CPU/memory/PID/time/
+  output bounds. It deletes request files and cancels disconnected jobs.
+- Docker was **not** available in this sandbox; the CI `farm-container` job built the
+  pinned image and passed container compilation and SSE-to-avr8js (run 36048759643).
+  This validates the code path, **not a public deployment**: a dedicated farm host,
+  private token, firewall/TLS, deployed rate limits and operational monitoring remain required.
+
+Final local verification for this checkpoint: `npm run typecheck` passed;
+`npm test` passed **659 tests / 57 files** with **2 intentionally skipped**
+real-toolchain/Docker integration tests; `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully and generated **215 static pages**.
+GitHub Actions run 36048759643 passed official CLI/Core, Docker/SSE-to-avr8js,
+browser checks and all standard jobs. The next step is a protected operator
+deployment/security review before real untrusted public compilation; within
+product development, proceed to timing-accurate instruments/VCD, then the
+remaining later phases in the order above.
+
+### Inspect-bench first instrument — 25 September 2026 (Phase 12 partial)
+
+The Logic Analyzer (8 ch) now observes D0–D7 nets relative to a wired GND on either
+engine, recording transitions at functional virtual-write time or executed AVR
+instruction-cycle offsets. The Logic dock shows live steps, source pins and recent
+changes; the retained bounded window exports deterministic 1 ns-timescale VCD.
+Single-board GPIO, directly wired button pull-ups and rails are decoded; floating,
+ambiguous, averaged-PWM and SPI/UART/TWI/Timer-owned signals are `X` with explicit
+limitations. Two analyzers × 2,048 edges are retained; overflows and rewiring resets
+are shown. Captures are transient, not project/browser-storage state.
+
+Local verification for this slice: `npm run typecheck` passed; `npm test` passed
+**671 tests in 59 files**, with 2 CLI/Docker opt-ins skipped locally; `npm run scenarios`
+passed **10/10**; `npm run build` generated **215 static pages**. Local
+`npm run test:e2e` with packaged Chromium 143 passed **21 browser tests, 5 opt-in
+configured-classroom tests skipped**, including native wiring and VCD download.
+Initial GitHub Actions run 36052576969 passed AVR/Docker/scenarios but failed on
+a strict browser selector in the new regression. The corrected instrument code at
+`54be785` passed **all four jobs** in [PR run 36058543324](https://github.com/suniljaiswal39375-crypto/arena-arduino/actions/runs/36058543324),
+including real CLI/Core, Docker AVR-to-avr8js/SSE, and browser/offline tests.
+Cloudflare Workers Builds still fails independently on merged baseline PR #2;
+its external logs/deployment require separate operator diagnosis.
+
+Next: design a calibrated virtual-time analogue oscilloscope/multimeter and
+trigger modes. AI/Chaos generation and later phases remain in the order above.

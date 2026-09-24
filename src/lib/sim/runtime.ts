@@ -4,7 +4,9 @@ import { getPart } from '@/lib/parts';
 import type { PartDef } from '@/lib/parts/types';
 import type { PartInstance, ProjectDoc } from '@/lib/doc/types';
 import type { PinMode, SimHost } from './host';
-import { INPUT_PULLUP } from './host';
+import { INPUT, INPUT_PULLUP, OUTPUT } from './host';
+import { GpioStepperDecoder, Max7219Decoder, SEGMENT_PINS, sevenSegmentValue, type SerialPins } from './gpio-devices';
+import { LogicCapture, LOGIC_CHANNELS, MAX_LOGIC_ANALYZERS, type LogicLevel, type LogicTrace } from './instruments/logic-analyzer';
 
 export interface LedState {
   kind: 'led';
@@ -52,7 +54,27 @@ export interface MatrixState {
 }
 export interface SevenSegState {
   kind: 'seven-seg';
+  /** Actual observed common-cathode segments; bit order a,b,c,d,e,f,g,dp. */
+  segments: number;
+  /** Only populated for an exact known digit pattern. */
   value: string;
+}
+export interface StepperState {
+  kind: 'stepper';
+  /** Observed HIGH GPIO inputs IN1..IN4; not physical coil current. */
+  coils: number | null;
+  /** Signed observed GPIO phase transitions; not shaft steps/angle or speed. */
+  transitions: number;
+  sequence: 'half' | 'full' | null;
+  phase: number | null;
+  powered: boolean;
+}
+export interface LogicAnalyzerState {
+  kind: 'logic-analyzer';
+  grounded: boolean;
+  levels: LogicLevel[];
+  edges: number;
+  dropped: number;
 }
 export interface SensorState {
   kind: 'sensor';
@@ -79,6 +101,8 @@ export type PartState =
   | OledState
   | MatrixState
   | SevenSegState
+  | StepperState
+  | LogicAnalyzerState
   | SensorState
   | BoardState
   | NoneState;
@@ -130,8 +154,13 @@ export class Circuit implements SimHost {
   private oleds = new Map<string, string[]>();
   private buzzerFreq = new Map<string, number>();
   private motorSpeed = new Map<string, number>();
-  private sevenSeg = new Map<string, string>();
-  private matrixCells = new Map<string, boolean[]>();
+  /** Device decoders retain their register/phase state while wiring is unchanged. */
+  private matrices = new Map<string, { pins: [number, number, number]; powered: boolean; decoder: Max7219Decoder }>();
+  private steppers = new Map<string, { pins: [number, number, number, number]; powered: boolean; decoder: GpioStepperDecoder }>();
+  /** Bounded live captures. Never persisted in ProjectDoc or browser storage. */
+  private logicCaptures = new Map<string, LogicCapture>();
+  /** Peripheral waveforms not decoded by the eight-channel GPIO probe. */
+  private unknownLogicPins = new Set<number>();
 
   clock = 0;
   /** Lines printed since the plotter last harvested, used for CSV extraction. */
@@ -172,12 +201,18 @@ export class Circuit implements SimHost {
     if (!boardId) {
       this.board = null;
       this.boardDef = null;
+      this.matrices.clear();
+      this.steppers.clear();
+      this.rebuildLogicCaptures(); // unwired probes still show unknown, never LOW
       return;
     }
     const inst = this.doc.diagram.parts.find((p) => p.id === boardId) ?? null;
     this.board = inst;
     this.boardDef = inst ? (getPart(inst.type) ?? null) : null;
-    if (!inst || !this.boardDef) return;
+    if (!inst || !this.boardDef) {
+      this.rebuildLogicCaptures();
+      return;
+    }
 
     const analogBase = Number(this.boardDef.defaults?.analogBase ?? 14);
     for (const pin of this.boardDef.pins) {
@@ -185,12 +220,323 @@ export class Circuit implements SimHost {
       if (n === null) continue;
       this.pinNode.set(n, `${inst.id}:${pin.name}`);
     }
+    this.rebuildGpioDevices();
+    this.rebuildLogicCaptures();
+  }
+
+  /** A probe is only meaningful relative to an actual ground reference. */
+  private logicGrounded(partId: string): boolean {
+    const net = this.nl.nodeNet.get(`${partId}:GND`);
+    const info = net ? this.nl.nets.get(net) : undefined;
+    return !!info && info.nodes.length > 1 && info.isGround && !info.isPower;
+  }
+
+  private logicNet(partId: string, channel: string): string | undefined {
+    return this.nl.nodeNet.get(`${partId}:${channel}`);
+  }
+
+  private logicSignature(partId: string): string {
+    return ['GND', ...LOGIC_CHANNELS].map((pin) => {
+      const net = this.nl.nodeNet.get(`${partId}:${pin}`);
+      const info = net ? this.nl.nets.get(net) : undefined;
+      return info?.nodes.join('|') ?? '';
+    }).join('\n');
+  }
+
+  private logicSource(partId: string, channel: string): string {
+    const net = this.logicNet(partId, channel);
+    const info = net ? this.nl.nets.get(net) : undefined;
+    if (!info || info.nodes.length < 2) return 'unwired';
+    const boards = info.nodes.filter((node) => {
+      const pin = this.nl.nodes.get(node);
+      return pin?.part.adapter === 'board' && pin.pin.electrical !== 'power' && pin.pin.electrical !== 'ground';
+    });
+    if (boards.length === 1) {
+      const board = this.nl.nodes.get(boards[0]!);
+      return `${board?.part.name ?? 'Board'} ${board?.pin.name ?? ''}`;
+    }
+    if (info.isGround && !info.isPower) return 'ground';
+    if (info.isPower && !info.isGround) return `${info.voltage ?? '?'} V rail`;
+    return 'undecoded net';
+  }
+
+  /** Only a single board GPIO drive/pull-up or a sound rail is known. */
+  private logicLevel(partId: string, channel: string): LogicLevel {
+    if (!this.logicGrounded(partId)) return 'x';
+    const net = this.logicNet(partId, channel);
+    const info = net ? this.nl.nets.get(net) : undefined;
+    if (!net || !info || info.nodes.length < 2 || (info.isPower && info.isGround)) return 'x';
+    const boardNodes = info.nodes.filter((node) => {
+      const pin = this.nl.nodes.get(node);
+      return pin?.part.adapter === 'board' && pin.pin.electrical !== 'power' && pin.pin.electrical !== 'ground';
+    });
+    // More than one board pin on the same net can contend. This first slice
+    // does not guess whether they agree, even when both happen to be HIGH.
+    if (boardNodes.length > 1) return 'x';
+    const boardPin = boardNodes.length === 1
+      ? [...this.pinNode].find(([, node]) => node === boardNodes[0])?.[0] : undefined;
+    if (boardPin !== undefined && this.unknownLogicPins.has(boardPin)) return 'x';
+    if (info.isGround || info.isPower) {
+      if (boardPin !== undefined && this.pinModes.get(boardPin) === OUTPUT) return 'x';
+      if (info.isGround) return '0';
+      return (info.voltage ?? 0) >= 2.5 ? '1' : 'x';
+    }
+    if (boardPin === undefined) return 'x';
+    if (this.pinModes.get(boardPin) === OUTPUT && this.netVoltage.has(net)) {
+      // A button, sensor, potentiometer or custom chip can drive this net too.
+      // Their possible contention is not resolved by the GPIO latch model.
+      if (this.partsOnNet(net).some((part) => {
+        const adapter = getPart(part.type)?.adapter;
+        return adapter === 'button' || adapter === 'sensor-value'
+          || adapter === 'potentiometer' || adapter === 'chip';
+      })) return 'x';
+      const duty = this.netDuty.get(net);
+      if (duty !== 0 && duty !== 255) return 'x'; // analogWrite averages PWM, not a waveform
+      return (this.netVoltage.get(net) ?? 0) >= 2.5 ? '1' : '0';
+    }
+    if (this.pinModes.get(boardPin) === INPUT_PULLUP) {
+      // A directly wired button is the only modelled digital input here. Other
+      // sensor/chip outputs may be time-dependent or unpowered; do not infer.
+      const others = this.partsOnNet(net).filter((p) => p.id !== partId && p.id !== this.board?.id);
+      if (others.every((p) => getPart(p.type)?.adapter === 'button')) {
+        return this.readNetDigital(net, true) ? '1' : '0';
+      }
+    }
+    return 'x';
+  }
+
+  private logicValues(partId: string): LogicLevel[] {
+    return LOGIC_CHANNELS.map((pin) => this.logicLevel(partId, pin));
+  }
+
+  private logicNowNs(): number {
+    return Math.round(this.clock * 1000);
+  }
+
+  private rebuildLogicCaptures(): void {
+    const previous = this.logicCaptures;
+    this.logicCaptures = new Map();
+    for (const part of this.doc.diagram.parts.filter((p) => p.type === 'emu-logic-analyzer').slice(0, MAX_LOGIC_ANALYZERS)) {
+      const signature = this.logicSignature(part.id);
+      const old = previous.get(part.id);
+      const label = part.label || `Logic analyzer ${part.id}`;
+      const grounded = this.logicGrounded(part.id);
+      const sources = LOGIC_CHANNELS.map((pin) => this.logicSource(part.id, pin));
+      const values = this.logicValues(part.id);
+      const capture = old?.signature === signature ? old
+        : new LogicCapture(part.id, signature, label, grounded, sources, this.logicNowNs(), values);
+      capture.label = label;
+      capture.grounded = grounded;
+      capture.sources = sources;
+      capture.observe(this.logicNowNs(), values);
+      this.logicCaptures.set(part.id, capture);
+    }
+  }
+
+  private sampleLogicCaptures(): void {
+    for (const capture of this.logicCaptures.values()) {
+      capture.observe(this.logicNowNs(), this.logicValues(capture.id));
+    }
+  }
+
+  get hasLogicAnalyzers(): boolean { return this.logicCaptures.size > 0; }
+
+  /** AVR SPI/UART/TWI/Timer pins are X until a timed waveform decoder exists. */
+  setUnknownLogicPins(pins: ReadonlySet<number>): void {
+    this.unknownLogicPins = new Set(pins);
+    this.sampleLogicCaptures();
+  }
+
+  /** Clear stale waves on a sketch reload without storing them in the document. */
+  resetLogicCaptures(): void {
+    this.logicCaptures.clear();
+    this.rebuildLogicCaptures();
+  }
+
+  logicTraces(): LogicTrace[] {
+    return [...this.logicCaptures.values()].map((capture) => capture.snapshot(this.logicNowNs()));
+  }
+
+  /** Only an unambiguous, distinct board GPIO on each input can be decoded. */
+  private boardPinAt(partId: string, input: string): number | null {
+    const net = this.nl.nodeNet.get(`${partId}:${input}`);
+    if (!net) return null;
+    const pins = [...this.pinNode].filter(([, node]) => this.nl.nodeNet.get(node) === net);
+    return pins.length === 1 ? (pins[0]?.[0] ?? null) : null;
+  }
+
+  private rebuildGpioDevices(): void {
+    const oldMatrices = this.matrices;
+    const oldSteppers = this.steppers;
+    this.matrices = new Map();
+    this.steppers = new Map();
+    for (const inst of this.doc.diagram.parts) {
+      if (inst.type === 'matrix-8x8-max7219' || inst.type === 'emu-max7219') {
+        const din = this.boardPinAt(inst.id, 'DIN');
+        const cs = this.boardPinAt(inst.id, 'CS');
+        const clk = this.boardPinAt(inst.id, 'CLK');
+        if (din === null || cs === null || clk === null || new Set([din, cs, clk]).size !== 3) continue;
+        const pins: [number, number, number] = [din, cs, clk];
+        const old = oldMatrices.get(inst.id);
+        const def = getPart(inst.type);
+        const powered = !!def && this.powered(inst, def);
+        const decoder = old?.powered === powered && old.pins.every((p, i) => p === pins[i])
+          ? old.decoder : new Max7219Decoder();
+        this.matrices.set(inst.id, { pins, powered, decoder });
+      }
+      if (inst.type === 'uln2003' || inst.type === 'stepper-28byj48') {
+        const pins = ['IN1', 'IN2', 'IN3', 'IN4'].map((name) => this.boardPinAt(inst.id, name));
+        if (pins.some((pin) => pin === null) || new Set(pins).size !== 4) continue;
+        const numbered: [number, number, number, number] = [pins[0]!, pins[1]!, pins[2]!, pins[3]!];
+        const old = oldSteppers.get(inst.id);
+        const def = getPart(inst.type);
+        const powered = !!def && this.powered(inst, def);
+        const decoder = old?.powered === powered && old.pins.every((p, i) => p === numbered[i])
+          ? old.decoder : new GpioStepperDecoder();
+        this.steppers.set(inst.id, { pins: numbered, powered, decoder });
+      }
+    }
+    this.sampleGpioDevices();
   }
 
   private netOfPin(pin: number): string | undefined {
     const node = this.pinNode.get(pin);
     if (!node) return undefined;
     return this.nl.nodeNet.get(node);
+  }
+
+  private powered(inst: PartInstance, def: PartDef): boolean {
+    return def.pins.every((pin) => {
+      if (pin.electrical !== 'power' && pin.electrical !== 'ground') return true;
+      const net = this.nl.nodeNet.get(`${inst.id}:${pin.name}`);
+      const info = net ? this.nl.nets.get(net) : undefined;
+      return pin.electrical === 'power' ? info?.isPower === true : info?.isGround === true;
+    });
+  }
+
+  /** A floating pin, pull-up, or a GPIO tied directly to a rail is not a drive. */
+  private outputLevel(pin: number): 0 | 1 | null {
+    const net = this.netOfPin(pin);
+    if (!net || this.pinModes.get(pin) !== OUTPUT || !this.netVoltage.has(net)) return null;
+    const info = this.nl.nets.get(net);
+    if (info?.isPower || info?.isGround) return null; // short/pin conflict: level is not trustworthy
+    return (this.netVoltage.get(net) ?? 0) >= 2.5 ? 1 : 0;
+  }
+
+  /** Sample on *each* drive change, not once per rendered frame. */
+  private sampleGpioDevices(): void {
+    for (const [id, { pins, decoder }] of this.matrices) {
+      const inst = this.doc.diagram.parts.find((p) => p.id === id);
+      const def = inst && getPart(inst.type);
+      const powered = !!inst && !!def && this.powered(inst, def);
+      const [din, cs, clk] = pins;
+      const levels: SerialPins = powered
+        ? { din: this.outputLevel(din), cs: this.outputLevel(cs), clk: this.outputLevel(clk) }
+        : { din: null, cs: null, clk: null };
+      decoder.onPins(levels);
+    }
+    for (const [id, { pins, decoder }] of this.steppers) {
+      const inst = this.doc.diagram.parts.find((p) => p.id === id);
+      const def = inst && getPart(inst.type);
+      const levels = pins.map((pin) => this.outputLevel(pin));
+      const complete = !!inst && !!def && this.powered(inst, def) && levels.every((v) => v !== null);
+      decoder.onCoils(complete ? levels.reduce<number>((mask, v, i) => mask | ((v ?? 0) << i), 0) : null);
+    }
+  }
+
+  /**
+   * The AVR changes all bits of a port in one instruction. Apply the register
+   * snapshot *atomically*, so an OUT writing CLK and DIN together cannot
+   * create a fictitious intermediate clock edge or stepper phase.
+   */
+  applyAvrPins(pins: ReadonlyArray<{ pin: number; mode: PinMode; level: 0 | 1 }>): void {
+    const touched = new Set<string>();
+    for (const { pin, mode, level } of pins) {
+      const net = this.netOfPin(pin);
+      const previous = this.pinModes.get(pin);
+      this.pinModes.set(pin, mode);
+      if (!net) continue;
+      if (mode === OUTPUT) {
+        this.netVoltage.set(net, level ? 5 : 0);
+        this.netDuty.set(net, level ? 255 : 0);
+      } else if (mode === INPUT_PULLUP) {
+        this.netVoltage.set(net, 5);
+        this.netDuty.delete(net);
+      } else if (previous === OUTPUT || previous === INPUT_PULLUP) {
+        this.netVoltage.delete(net);
+        this.netDuty.delete(net);
+      }
+      touched.add(net);
+    }
+    for (const net of touched) this.updateOutputs(net);
+    this.sampleGpioDevices();
+    this.sampleLogicCaptures();
+    this.pollInterrupts();
+  }
+
+  /** One byte from a completed ATmega328P hardware-SPI master transfer. */
+  hardwareSpiByte(byte: number, mode: number, order: 'msbFirst' | 'lsbFirst'): void {
+    for (const [id, { pins, decoder }] of this.matrices) {
+      const inst = this.doc.diagram.parts.find((p) => p.id === id);
+      const def = inst && getPart(inst.type);
+      if (pins[0] !== 11 || pins[2] !== 13 || !inst || !def || !this.powered(inst, def)) continue;
+      if (this.outputLevel(pins[1]) !== 0) continue; // the device is not selected
+      if (mode !== 0 || order !== 'msbFirst' || this.outputLevel(11) === null || this.outputLevel(13) === null) {
+        this.unsupported(`${inst.type}: AVR SPI mode ${mode}/${order} or MOSI/SCK direction is not decoded for MAX7219`);
+        continue;
+      }
+      decoder.writeByte(byte);
+    }
+  }
+
+  /** Engine-visible fidelity limits. Display states never guess missing buses. */
+  deviceLimitations(): string[] {
+    const notes: string[] = [];
+    for (const inst of this.doc.diagram.parts) {
+      if (inst.type === 'matrix-8x8-max7219' || inst.type === 'emu-max7219') {
+        const attachment = this.matrices.get(inst.id);
+        if (!attachment) notes.push(`${inst.type}: DIN/CS/CLK require three distinct board GPIO nets for MAX7219 decoding`);
+        else if (attachment.powered && attachment.pins.some((pin) => this.outputLevel(pin) === null)) {
+          notes.push(`${inst.type}: DIN/CS/CLK are not all driven GPIO outputs; no serial transfer decoded`);
+        }
+        const dout = this.nl.nodeNet.get(`${inst.id}:DOUT`);
+        if (dout && this.nl.nets.get(dout)?.nodes.some((node) => node !== `${inst.id}:DOUT`)) {
+          notes.push(`${inst.type}: daisy-chained DOUT is not modelled`);
+        }
+        const limitation = attachment?.decoder.limitation;
+        if (limitation) notes.push(`${inst.type}: ${limitation}`);
+      } else if (inst.type === 'uln2003' || inst.type === 'stepper-28byj48') {
+        const attachment = this.steppers.get(inst.id);
+        if (!attachment) notes.push(`${inst.type}: requires four distinct board GPIO inputs IN1..IN4; driver outputs/shaft motion are not simulated`);
+        const state = attachment?.decoder.state;
+        if (state && state.coils === null && attachment?.powered) {
+          notes.push(`${inst.type}: IN1..IN4 are not all driven GPIO outputs; coil phase is unknown`);
+        } else if (state && state.coils !== null && state.coils !== 0 && state.sequence === null) {
+          notes.push(`${inst.type}: coil pattern 0x${state.coils.toString(16)} is ambiguous/unknown; no step inferred`);
+        } else if (state && state.coils !== null && state.coils !== 0 && state.phase === null) {
+          notes.push(`${inst.type}: coil pattern 0x${state.coils.toString(16)} is not in the selected sequence; no step inferred`);
+        }
+      } else if ((inst.type === 'seven-segment' || inst.type === 'emu-7segment') && inst.attrs.common === 'anode') {
+        notes.push(`${inst.type}: common-anode polarity is not modelled; this catalogue part has a common cathode`);
+      } else if (inst.type === 'emu-logic-analyzer') {
+        if (!this.logicCaptures.has(inst.id)) {
+          notes.push('logic analyzer: at most two concurrent eight-channel captures are supported');
+        } else if (!this.logicGrounded(inst.id)) {
+          notes.push('logic analyzer: connect GND to a ground reference; channels remain unknown until then');
+        }
+        if (LOGIC_CHANNELS.some((channel) => {
+          const net = this.logicNet(inst.id, channel);
+          const duty = net ? this.netDuty.get(net) : undefined;
+          return duty !== undefined && duty > 0 && duty < 255;
+        })) notes.push('logic analyzer: functional analogWrite is averaged PWM, not a waveform; affected channels are unknown');
+        if (LOGIC_CHANNELS.some((channel) => {
+          const net = this.logicNet(inst.id, channel);
+          return !!net && [...this.pinNode].some(([pin, node]) =>
+            this.nl.nodeNet.get(node) === net && this.unknownLogicPins.has(pin));
+        })) notes.push('logic analyzer: SPI/UART/TWI/Timer peripheral outputs are not sampled as waveforms; affected channels are unknown');
+      }
+    }
+    return [...new Set(notes)];
   }
 
   private partsOnNet(netId: string): PartInstance[] {
@@ -262,21 +608,43 @@ export class Circuit implements SimHost {
   }
 
   pinMode(pin: number, mode: PinMode): void {
+    const previous = this.pinModes.get(pin);
     this.pinModes.set(pin, mode);
-    if (mode === INPUT_PULLUP) {
-      const net = this.netOfPin(pin);
-      if (net) this.netVoltage.set(net, 5);
+    const net = this.netOfPin(pin);
+    // Enabling OUTPUT drives the current PORT latch. A never-written Arduino
+    // GPIO latch starts LOW, just like the AVR DDR register transition.
+    if (net && mode === OUTPUT && !this.netVoltage.has(net)) {
+      this.netVoltage.set(net, 0);
+      this.netDuty.set(net, 0);
     }
+    if (net && mode === INPUT_PULLUP) this.netVoltage.set(net, 5);
+    if (net && mode === INPUT && (previous === OUTPUT || previous === INPUT_PULLUP)) {
+      this.netVoltage.delete(net);
+      this.netDuty.delete(net);
+    }
+    this.sampleGpioDevices();
+    this.sampleLogicCaptures();
   }
 
   digitalWrite(pin: number, value: number): void {
-    const net = this.netOfPin(pin);
-    if (!net) return;
-    this.netVoltage.set(net, value ? 5 : 0);
-    this.netDuty.set(net, value ? 255 : 0);
-    this.updateOutputs(net);
-    this.pollInterrupts();
-    void value;
+    this.digitalWritePins([{ pin, value }]);
+  }
+
+  digitalWritePins(pins: ReadonlyArray<{ pin: number; value: number }>): void {
+    const touched = new Set<string>();
+    for (const { pin, value } of pins) {
+      const net = this.netOfPin(pin);
+      if (!net) continue;
+      this.netVoltage.set(net, value ? 5 : 0);
+      this.netDuty.set(net, value ? 255 : 0);
+      touched.add(net);
+    }
+    for (const net of touched) this.updateOutputs(net);
+    if (touched.size > 0) {
+      this.sampleGpioDevices();
+      this.sampleLogicCaptures();
+      this.pollInterrupts();
+    }
   }
 
   digitalRead(pin: number): number {
@@ -445,6 +813,7 @@ export class Circuit implements SimHost {
     this.netDuty.set(net, duty);
     this.netVoltage.set(net, (duty / 255) * 5);
     this.updateOutputs(net);
+    this.sampleLogicCaptures();
   }
 
   pulseIn(pin: number, level: number, timeoutUs: number): number {
@@ -945,9 +1314,37 @@ export class Circuit implements SimHost {
       case 'oled':
         return { kind: 'oled', lines: this.oleds.get(inst.id) ?? [] };
       case 'matrix':
-        return { kind: 'matrix', cells: this.matrixCells.get(inst.id) ?? new Array(64).fill(false) };
-      case 'seven-seg':
-        return { kind: 'seven-seg', value: this.sevenSeg.get(inst.id) ?? '' };
+        return {
+          kind: 'matrix',
+          cells: this.powered(inst, def) ? (this.matrices.get(inst.id)?.decoder.cells ?? new Array(64).fill(false)) : new Array(64).fill(false),
+        };
+      case 'seven-seg': {
+        let segments = 0;
+        if (inst.attrs.common !== 'anode' && this.returnsToGround(inst, def)) {
+          SEGMENT_PINS.forEach((pin, bit) => {
+            const net = this.nl.nodeNet.get(`${inst.id}:${pin}`);
+            if (net && !this.nl.nets.get(net)?.isGround && this.netVoltageOf(net) >= 2.5) segments |= 1 << bit;
+          });
+        }
+        return { kind: 'seven-seg', segments, value: sevenSegmentValue(segments) };
+      }
+      case 'stepper': {
+        const decoded = this.steppers.get(inst.id)?.decoder.state;
+        return {
+          kind: 'stepper',
+          coils: decoded?.coils ?? null,
+          transitions: decoded?.transitions ?? 0,
+          sequence: decoded?.sequence ?? null,
+          phase: decoded?.phase ?? null,
+          powered: this.powered(inst, def),
+        };
+      }
+      case 'logic-analyzer': {
+        const capture = this.logicCaptures.get(inst.id);
+        return { kind: 'logic-analyzer', grounded: capture?.grounded ?? this.logicGrounded(inst.id),
+          levels: capture?.levelsNow ?? Array<LogicLevel>(8).fill('x'),
+          edges: capture?.eventCount ?? 0, dropped: capture?.droppedCount ?? 0 };
+      }
       case 'sensor-value':
       case 'potentiometer': {
         const name = this.inputNameFor(inst);

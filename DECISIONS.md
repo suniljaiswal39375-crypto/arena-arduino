@@ -45,13 +45,13 @@ maintenance cost, not a head start.
 
 ## Simulation
 
-### One canvas, two engines — but only one engine exists yet
-`doc.engine` (`auto` / `functional` / `firmware`) and the per-part `fidelity.engine` field are in
-the schema, and the ERC emits `unsupported-part-in-engine` when a firmware-only part is used on
-the functional runtime. The firmware emulator itself is Phase 5.
-
-**Why not stub it:** a fake "EXACT" badge would violate the honesty pillar, which is the thing
-that makes the rest of the product trustworthy. Better to have the seam and no badge.
+### One canvas, two actual engines — AVR is a supported slice, not a blanket guarantee
+`doc.engine` (`auto` / `functional` / `firmware`) routes through the builder to either the
+educational interpreter or real AVR machine-code execution on avr8js. The per-part
+`fidelity.engine` and ERC mark unsupported parts; any missing firmware image, board or decoder
+must say so rather than silently substitute the interpreter. Without an installed toolchain,
+only the two known pre-built AVR baseline images can run in firmware mode. Other programs are
+explicitly refused. A fake "EXACT" badge would violate the honesty pillar.
 
 ### The functional runtime is a real interpreter, not a pattern matcher
 Tokenizer → recursive-descent parser → AST → tree-walking interpreter with a virtual clock.
@@ -243,8 +243,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - A documented **clock bridge** (three reserved SRAM cells 0x0200/0x0204/0x0205, defined in visible editable C) is the single thing that does not exist on silicon. It reproduces the functional engine's `delay()`/`millis()` pacing so `delay(1000)` does not burn 16M busy-wait cycles, and so the differential parity test is meaningful. Anything banked on the bridge is labelled emulator-only instrumentation, never magic bytes.
 - **Compile is a gated seam, not a bundled binary.** `arduino-cli` binaries and `downloads.arduino.cc` were blocked in the sandbox that built the slice, so `compile.ts` implements the typed contract — version gate (1.x), resource limits before I/O, FNV-1a checksummed cache key (honestly named `fnv1a`, not SHA-256), and device discovery. Tests use a fake executor; a live build is NOT claimed.
 - The engine ports `SimEngine.tick`'s debt loop, including its carry-over and negative-debt behaviour, so both engines sample an identical blink at 100 ms — parity by construction.
-- Peripherals the AVR slice cannot yet decode (I2C LCD/OLED, matrix, seven-seg, servo, stepper) are reported by name as `unsupported` rather than guessed, matching the interpreter's unsupported-call convention. RP2040/ESP32/STM32 are later phases.
-- The firmware worker mirrors `SimClient`'s message vocabulary, so wiring `doc.engine === 'firmware'` into the builder is the remaining unshipped UI step; the engine seam itself is tested headlessly.
+- At the first AVR checkpoint I2C displays/servo/matrix/seven-seg/stepper were unsupported; subsequent dated sections below supersede that list. RP2040/ESP32/STM32 remain later phases.
+- The worker mirrors `SimClient`'s messages; the builder was subsequently connected to the firmware worker. It does **not** run a sketch on the interpreter when AVR compilation fails.
 
 ## Firmware CLI (`--firmware`) and the `--elf` rejection — 24 September 2026
 
@@ -269,7 +269,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
   (`known-programs.ts` / `program-image.ts`), and refuses every other sketch,
   library list or non-328P board with a precise reason. Reworking this into a
   JavaScript "compiler" would be a lie; real compilation stays on the
-  containerised arduino-cli seam (`compile.ts`).
+  optional arduino-cli compile seam (`compile.ts`). The current local service is **not**
+  containerised; a future build farm must be actually isolated before hosting untrusted C++.
 - **Snapshot projection, never renaming.** `SimClient` now routes
   `doc.engine === 'firmware'` to the firmware worker (or an inline fallback)
   and projects `FirmwareSnapshot` onto the existing `SimSnapshot` shape
@@ -280,8 +281,8 @@ path separators). Added a build-script fixture test and real offline mission-pag
   the engine slices real TWI signals (START / SLA+W / PCF8574 expander bytes
   with EN-pulse latching / STOP) into the shared `lcdCommand` surface
   (`firmware/peripherals.ts`). The e2e test clocks "HI" in from real TWI
-  firmware. Timing-only devices (servo pulse width, stack-sized 7-seg/matrix,
-  stepper) stay honestly unsupported until a timing model exists.
+  firmware. Timer1 servo was later decoded from registers and the three
+  GPIO devices were later decoded from observed pins; see the dated sections below.
 
 ## Compile transport (`POST /api/firmware-compile`) — 24 September 2026
 
@@ -291,8 +292,9 @@ path separators). Added a build-script fixture test and real offline mission-pag
   build. The browser falls back to the offline baseline stub (which itself
   never fakes a compile), so the two honest fallbacks compose.
 - The sketch is written to a private temp dir as a file and passed as a path —
-  never shell-interpolated. Compile deadline (default 20 s) and heartbeat
-  (default 5 s) bound every request; both are env-tunable.
+  never shell-interpolated. The compile deadline defaults to 20 s. The current
+  heartbeat interval **does not emit SSE**; do not represent it as streamed logs
+  or a bounded container worker.
 - Resource bounds mirror the offline stub's: 64 KiB request body, 8 KiB sketch,
   16 libraries, 256-char library lines — enforced before filesystem I/O.
 - Origin/cross-site checks reuse the classrooms policy (403 on mismatch). The
@@ -344,3 +346,121 @@ path separators). Added a build-script fixture test and real offline mission-pag
   library constant, not a register fact. The parity fixture therefore uses
   `writeMicroseconds(1500)` ↔ `OCR1A = 3000` (both 1500 µs), not an angle
   claim the register file cannot carry.
+
+## AVR pin-device decoding and cross-engine parity — 25 September 2026
+
+- **Observe pins, not calls.** Common-cathode seven-segment state is read from the a..dp
+  output nets; only exact known bit patterns receive digit labels. The MAX7219 decoder
+  shifts DIN on CLK edges while CS is low, latches the final 16-bit word on CS rise, and
+  also receives completed AVR master-SPI bytes through the same decoder. Only one device
+  with a GPIO CS, shutdown off, scan limit set and decode mode zero is shown. No guessed
+  cascades, BCD digit-mode matrix, LED brightness or partial transfers.
+- **Stepper is plain-GPIO phase decoding.** ULN2003 OUT1–OUT4 are outputs, not power inputs;
+  VCC and GND remain required. Observe the four IN levels, coalescing the functional
+  `Stepper.step` writes at command boundaries while AVR tracks actual port edges. Recognise
+  only adjacent masks in the common half-step and four-wire full-step tables. A mode shared
+  between tables stays unknown until disambiguated. Report raw masks for invalid/undriven
+  inputs; a count is only observed adjacent GPIO phase transitions, **not physical shaft
+  steps, angle, speed, torque or coil current**. Sequential `digitalWrite` transients may
+  form valid intermediate masks, so do not infer the library's intended mechanical step
+  count from firmware activity. Both engines reset display/phase decoders on loss of power.
+- **Parity measures visible results, not matching source.** Executed AVR fixtures cover
+  the three devices as well as TWI LCD, OLED and Timer1 servo. Differential tests compare
+  seven-seg bits/digit, matrix cells, ULN2003 mask/sequence/count, LCD lines, OLED text,
+  servo pulse/angle, USART serial lines/plot labels, ADC0 raw 0/512/1023, button pull-up
+  reads and a relay's downstream load against interpreter behaviour. Neither a test-only
+  fake CLI nor pre-assembled AVR images certify real `arduino-cli` compilation.
+
+## Real-toolchain validation boundary — 25 September 2026
+
+- The sandbox has no `arduino-cli`, AVR compiler, Docker or Podman. Official v1.5.1 release
+  download via `gh release download` failed at `release-assets.githubusercontent.com` (EOF);
+  the Arduino core CDN failed TLS connection. No production toolchain build was observed here.
+- An **opt-in** GitHub Actions check installs official `arduino-cli` 1.5.1 + the
+  Arduino AVR core, compiles a minimal Uno sketch through `compileSketch`, parses its HEX and
+  executes it on avr8js. It **passed** (run 36045051575). The first attempt failed on the
+  genuine sketch-directory naming rule, which was fixed; earlier fake-CLI tests alone had
+  not detected it. Compiler temp directories are now removed on success and failure.
+- The optional `SPARKLAB_BUILD_FARM_URL` integration now has an implemented private
+  Docker-backed service, SSE and in-memory builder log panel (see next section). This
+  sandbox has no Docker; the CI Docker job **passed** (run 36048759643), validating
+  isolated compilation and SSE into avr8js. It does not validate a public deployment.
+  Never expose the old local child-process transport publicly.
+
+## Isolated build farm and in-memory SSE logs — 25 September 2026
+
+- **Separate trust boundary:** the Next.js route alone sees `SPARKLAB_BUILD_FARM_URL` /
+  `SPARKLAB_BUILD_FARM_TOKEN`. It enforces the canonical `AUTH_URL` Origin and bounds
+  the request, then proxies JSON or streamed SSE to a bearer-authenticated *internal*
+  farm. Browser code calls a relative URL only; no token/URL is returned to the user.
+  The farm process is deployed separately from Next.js and is the only service with
+  Docker access; its default listener is loopback. The token is not an end-user login.
+- **One disposable container per accepted job, no runtime downloads:** the Docker image
+  installs official Arduino CLI 1.5.1 + a pinned AVR core at image build time. Each compile
+  is `docker run --network=none --read-only --user <host uid:gid>`, all capabilities dropped,
+  no new privileges, bounded CPU/memory/PIDs/tmpfs/runtime. The only bind mount is a private
+  per-request sketch/build directory, removed afterward. An aborted/expired job removes
+  its named container. Maximum two concurrent jobs by default; excess returns 429. The
+  image should be pinned to a digest by a deploying operator after CI verification.
+- **Honest scopes:** only Uno/Nano 328P plus installed core `Wire`/`SPI`/`EEPROM`/
+  `SoftwareSerial` libraries; non-installed libraries and other boards get 422 before a
+  spawn. Unknown document boards also refuse instead of being silently mapped to an Uno.
+  Arbitrary package installation, shared caches, external hardware architectures,
+  internet access while compiling and unrestricted build logs are intentionally absent.
+  The local `SPARKLAB_ARDUINO_CLI` process path is development-only; production returns
+  503 without the isolated farm, not a silently unconfined compile.
+- **Actual SSE, not a heartbeat-only placeholder:** `POST /api/firmware-compile` with
+  `Accept: text/event-stream` emits `status`, bounded compiler `log`, `result` (HEX) or
+  `error`; the worker reads it incrementally, verifies the board, and surfaces progress in
+  a new Build logs tab. A JSON response remains for legacy callers. Logs are transient
+  React state, absent from localStorage/projects/service-worker caches, and responses are
+  private/no-store. Replacing a sketch cancels its previous build and ignores late events.
+- **Deployment limitations:** this is not a general cloud compiler or a guarantee of
+  production security. The Docker farm requires a dedicated protected host, TLS on its
+  internal hop where applicable, tight ingress/egress policy, deployed abuse rate limits
+  and container/host monitoring. CI's real Docker-image build/SSE/avr8js check passed;
+  Docker cannot run in this sandbox. Do not label it deployed yet.
+
+Verification: local strict typecheck, 659 Vitest tests across 57 files
+(2 toolchain/Docker opt-ins skipped locally), 10/10 automation scenarios and
+a production build with 215 static pages passed. GitHub Actions run
+36048759643 passed the official CLI/Core, isolated Docker/SSE-to-avr8js and
+browser regressions. No public deployment or school-scale security review
+has been performed.
+
+## First inspect-bench slice: event-timestamped digital logic, not a GHz instrument — 25 September 2026
+
+- **Capture observable nets, not UI frames or fabricated CPU internals.** The eight-channel
+  `emu-logic-analyzer` now needs its GND tied to a true ground reference; D0–D7 only
+  resolve a single board GPIO drive, a directly wired input pull-up/button, or a sound
+  rail. Floating, contended and undecoded nets are `X`. Shared `Circuit` samples
+  *every* functional GPIO write or AVR atomic port update; AVR port listeners use the
+  current 16 MHz instruction-cycle offset, rather than the end-of-worker-frame clock.
+  Firmware instruction time retains fractional microseconds. One AVR cycle is 62.5 ns;
+  VCD stores its rounded 1 ns timestamp. Functional writes carry the interpreter's
+  virtual microsecond clock (rapid same-time transitions are not invented into pulses).
+- **No false peripheral waveforms.** Functional `analogWrite` is an averaged duty model:
+  those channels become `X`. AVR timer compare outputs, SPI, UART TX and TWI pins are
+  similarly `X` while their peripheral owns the pin; the GPIO latch is not a physical
+  waveform. Unknowns and missing ground are explained by `deviceLimitations`.
+  This first instrument is explicitly `MODEL`, *not* the PDF's physical 1 GHz sampler,
+  edge/level trigger, analogue oscilloscope, calibrated multimeter or internal core probe.
+- **Bounded, transient capture and deterministic export.** Two analyzers × 2,048 retained
+  edges; eviction updates the retained initial state and increments an exposed drop count.
+  Rewiring or reloading clears incompatible history. Waveforms and source labels appear
+  in the Logic dock and selected-part inspector; VCD uses fixed channel identifiers,
+  `$dumpvars` for the retained initial levels and relative 1 ns timestamps. No user
+  label is interpolated into VCD syntax. Captures live only in worker/React memory —
+  not in project JSON, browser persistence or service-worker caches. Export requires
+  an explicit user download.
+- **Verification boundary:** dedicated capture/VCD unit tests, a wired functional/real-AVR
+  blink trace and sub-frame machine-code edge tests, SPI-unknown tests, render coverage,
+  and a browser wiring/download test. Local typecheck, 671 Vitest tests (2 CLI/Docker
+  opt-ins skipped), 10/10 scenarios, build (215 static pages), and 21 Chromium tests
+  (5 configured-classroom opt-ins skipped) passed after fixing an ambiguous test
+  selector. The first CI run for this instrument (36052576969) passed AVR/Docker/
+  scenarios but failed the browser selector. Corrected code `54be785` passed all
+  four GitHub Actions jobs in PR run 36058543324, including the browser regression,
+  official CLI/Core and real Docker AVR-to-avr8js/SSE integration. Local CLI/Docker
+  remain unavailable; a public farm deployment and Cloudflare Workers build have
+  not been verified.

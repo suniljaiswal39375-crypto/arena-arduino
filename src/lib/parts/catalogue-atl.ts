@@ -1237,7 +1237,7 @@ const DRIVER: PartDef[] = [
     desc: 'Darlington array used to switch the 28BYJ-48 stepper and other inductive loads.',
     tags: ['stepper', 'driver', 'darlington'],
     aliases: ['uln2003', 'uln2003a'],
-    pins: 'IN1:digital:l IN2:digital:l IN3:digital:l IN4:digital:l GND:ground:r VCC:power:r OUT1:power:r OUT2:power:r OUT3:power:r OUT4:power:r',
+    pins: 'IN1:digital:l IN2:digital:l IN3:digital:l IN4:digital:l GND:ground:r VCC:power:r OUT1:digital:r OUT2:digital:r OUT3:digital:r OUT4:digital:r',
     adapter: 'stepper',
     tier: 'model',
     supply: 5,

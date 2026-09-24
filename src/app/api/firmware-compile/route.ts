@@ -14,5 +14,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request): Promise<Response> {
-  return handleFirmwareCompile(request, { origin: appOrigin(), cli: discoverLocalCli });
+  const url = process.env.SPARKLAB_BUILD_FARM_URL;
+  const token = process.env.SPARKLAB_BUILD_FARM_TOKEN;
+  const farm = url || token ? { url: url ?? '', token: token ?? '' } : undefined;
+  return handleFirmwareCompile(request, { origin: appOrigin(), cli: discoverLocalCli, farm });
 }
