@@ -36,7 +36,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Browser and offline regressions
-        run: npm run test:e2e
+        # Publish failed-test details as check annotations even when the Actions
+        # archive for this run is temporarily inaccessible.
+        run: npm run test:e2e -- --add-reporter github
 
   real-avr:
     name: Official arduino-cli / Arduino AVR core integration
