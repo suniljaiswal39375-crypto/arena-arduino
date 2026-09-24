@@ -347,7 +347,7 @@ path separators). Added a build-script fixture test and real offline mission-pag
   `writeMicroseconds(1500)` ↔ `OCR1A = 3000` (both 1500 µs), not an angle
   claim the register file cannot carry.
 
-## AVR pin-device decoding and cross-engine parity — 24 September 2026
+## AVR pin-device decoding and cross-engine parity — 25 September 2026
 
 - **Observe pins, not calls.** Common-cathode seven-segment state is read from the a..dp
   output nets; only exact known bit patterns receive digit labels. The MAX7219 decoder
@@ -371,7 +371,7 @@ path separators). Added a build-script fixture test and real offline mission-pag
   reads and a relay's downstream load against interpreter behaviour. Neither a test-only
   fake CLI nor pre-assembled AVR images certify real `arduino-cli` compilation.
 
-## Real-toolchain validation boundary — 24 September 2026
+## Real-toolchain validation boundary — 25 September 2026
 
 - The sandbox has no `arduino-cli`, AVR compiler, Docker or Podman. Official v1.5.1 release
   download via `gh release download` failed at `release-assets.githubusercontent.com` (EOF);
@@ -383,10 +383,11 @@ path separators). Added a build-script fixture test and real offline mission-pag
   not detected it. Compiler temp directories are now removed on success and failure.
 - The optional `SPARKLAB_BUILD_FARM_URL` integration now has an implemented private
   Docker-backed service, SSE and in-memory builder log panel (see next section). This
-  sandbox has no Docker; the new CI Docker job must pass before calling *container*
-  integration verified. Never expose the old local child-process transport publicly.
+  sandbox has no Docker; the CI Docker job **passed** (run 36048759643), validating
+  isolated compilation and SSE into avr8js. It does not validate a public deployment.
+  Never expose the old local child-process transport publicly.
 
-## Isolated build farm and in-memory SSE logs — 24 September 2026
+## Isolated build farm and in-memory SSE logs — 25 September 2026
 
 - **Separate trust boundary:** the Next.js route alone sees `SPARKLAB_BUILD_FARM_URL` /
   `SPARKLAB_BUILD_FARM_TOKEN`. It enforces the canonical `AUTH_URL` Origin and bounds
@@ -416,5 +417,12 @@ path separators). Added a build-script fixture test and real offline mission-pag
 - **Deployment limitations:** this is not a general cloud compiler or a guarantee of
   production security. The Docker farm requires a dedicated protected host, TLS on its
   internal hop where applicable, tight ingress/egress policy, deployed abuse rate limits
-  and container/host monitoring. CI's real Docker-image build/SSE/avr8js check is the
-  validation gate; Docker cannot run in this sandbox. Do not label it deployed yet.
+  and container/host monitoring. CI's real Docker-image build/SSE/avr8js check passed;
+  Docker cannot run in this sandbox. Do not label it deployed yet.
+
+Verification: local strict typecheck, 658 Vitest tests across 57 files
+(2 toolchain/Docker opt-ins skipped locally), 10/10 automation scenarios and
+a production build with 215 static pages passed. GitHub Actions run
+36048759643 passed the official CLI/Core, isolated Docker/SSE-to-avr8js and
+browser regressions. No public deployment or school-scale security review
+has been performed.

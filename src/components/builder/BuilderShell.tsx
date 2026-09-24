@@ -57,6 +57,7 @@ export function BuilderShell({
   const clientRef = useRef<SimClient | null>(null);
 
   const source = doc.files['sketch.ino'] ?? '';
+  const librariesSource = doc.files['libraries.txt'] ?? '';
   const mission = missionSlug ? missionBySlug(missionSlug) : undefined;
 
   useEffect(() => {
@@ -108,7 +109,7 @@ export function BuilderShell({
     };
   }, []);
 
-  // Recompile on source/project/engine changes; rewiring alone updates nets.
+  // Recompile on sketch/library/board/project/engine changes; rewiring alone updates nets.
   useEffect(() => {
     const client = clientRef.current;
     if (!client) return;
@@ -119,7 +120,7 @@ export function BuilderShell({
     // The document is intentionally read fresh here; other changes are pushed
     // to the already running engine by the diagram effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, doc.id, doc.engine]);
+  }, [source, librariesSource, doc.board, doc.id, doc.engine]);
 
   // Wiring and input changes are pushed without restarting the sketch.
   const diagramKey = JSON.stringify({

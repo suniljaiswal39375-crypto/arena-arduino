@@ -106,7 +106,8 @@ self.onmessage = (event: MessageEvent<FirmwareWorkerRequest>): void => {
     case 'set-image': {
       compileController?.abort();
       compileController = null;
-      if (!runtime) runtime = new FirmwareRuntime(msg.doc);
+      // Replace, don't mutate a runtime that may still finish an old fetch.
+      runtime = new FirmwareRuntime(msg.doc);
       const res = runtime.loadHex(msg.doc, msg.hex, msg.boardType);
       if (!res.ok) {
         post({ type: 'load-error', message: res.message });

@@ -148,8 +148,9 @@ to run firmware: a pre-built Intel HEX image always is. The direct local
 process is disabled in production. A separately configured Docker build farm
 runs bounded, networkless AVR builds; `POST /api/firmware-compile` streams
 same-origin SSE progress/logs/HEX into the builder's ephemeral Build logs tab.
-Docker cannot run locally in this sandbox, so the separate image/SSE/avr8js
-CI integration is the validation gate (see `src/server/firmware/README.md`).
+Docker cannot run locally in this sandbox; the separate image/SSE/avr8js
+CI integration **passed** (run 36048759643). This is not a live deployment;
+see `src/server/firmware/README.md`.
 
 ## Tests
 

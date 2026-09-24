@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,6 +60,16 @@ describe('isolated AVR container job', () => {
     await expect(compileInContainer({ ...input, libraries: ['LiquidCrystal_I2C'] }, { image: 'sparklab-avr:test', dockerPath: docker.path }))
       .rejects.toMatchObject({ reason: 'unsupported-library' });
     expect(existsSync(join(docker.dir, 'args'))).toBe(false);
+  });
+
+  it('refuses a root-host Docker daemon configuration instead of running the compiler as root', async () => {
+    const docker = dockerScript();
+    const uid = vi.spyOn(process, 'getuid').mockReturnValue(0);
+    try {
+      await expect(compileInContainer(input, { image: 'sparklab-avr:test', dockerPath: docker.path }))
+        .rejects.toMatchObject({ code: 'farm-not-configured' });
+      expect(existsSync(join(docker.dir, 'args'))).toBe(false);
+    } finally { uid.mockRestore(); }
   });
 
   it('cancels the named container when its request disconnects', async () => {

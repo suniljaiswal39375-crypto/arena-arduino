@@ -61,8 +61,8 @@ Production requires a canonical HTTPS `AUTH_URL`, `SPARKLAB_BUILD_FARM_URL`
 streams no-store SSE status/compiler logs/HEX to the in-memory builder panel
 or returns compatible JSON. Errors/refusals never fabricate HEX; without the
 service the two known offline AVR baselines remain available. The official
-CLI integration passed in GitHub Actions; Docker integration is a separate
-validation gate. Neither OAuth nor fake teacher accounts are needed to run
+CLI and the separate Docker/SSE-to-avr8js integration checks both passed in
+GitHub Actions. Live deployment remains a separate operator responsibility. Neither OAuth nor fake teacher accounts are needed to run
 the local lab.
 
 ## Tests

@@ -79,13 +79,14 @@ Still to do, in order:
 1. **Completed:** official `arduino-cli` 1.5.1 + Arduino AVR core compiled a Uno sketch
    through `compileSketch` on GitHub Actions, and avr8js executed its HEX. Local sandbox
    cannot download the release assets or the core, so this was validated remotely.
-2. **In validation:** a separate internal, bearer-authenticated farm service runs each build
+2. **Implemented; Docker/SSE integration passed in CI:** a separate internal, bearer-authenticated farm service runs each build
    inside a disposable Docker image with preinstalled CLI/core, no runtime network, read-only
    root, non-root UID, resource limits, cancellation and private temp cleanup. The Next.js
    endpoint proxies JSON/SSE; the worker's in-memory Build logs panel streams progress.
-   Production refuses the old unisolated CLI spawn. Docker is unavailable *locally*;
-   the new CI job must build the real image and run the container/SSE/avr8js integration
-   before treating deployment as validated. Operator isolation and abuse controls remain required.
+   Production refuses the old unisolated CLI spawn. Docker is unavailable *locally*, but
+   the CI image build, isolated container compile, SSE and avr8js execution **passed**
+   in run 36048759643. A dedicated operator deployment, abuse controls, network/TLS
+   configuration and security review are not claimed by a CI test.
 3. Only after the build boundary, add accurately timed instruments/VCD, then typed-tool AI,
    generated Chaos exercises, chip authoring, 3D/scanning, Yjs, full localisation and VS Code/MCP.
    Non-AVR architectures (RP2040 then ESP32, etc.), WiFi/SD and debugger support follow AVR.
@@ -266,7 +267,7 @@ The complete PDF roadmap is not finished by this checkpoint. Prefer correct test
 Verification this session: 520 unit/render tests pass (28 files, up from 482); the parity test
 and 40 firmware/compile/hex tests are new; strict typecheck and production build pass.
 
-### AVR GPIO-device and parity checkpoint — 24 September 2026
+### AVR GPIO-device and parity checkpoint — 25 September 2026
 
 - Added shared pin-level decoders and visual states for common-cathode seven-segment,
   single MAX7219 dot matrix (bit-bang + hardware SPI), and ULN2003 IN1–IN4 step phases.
@@ -281,7 +282,7 @@ and 40 firmware/compile/hex tests are new; strict typecheck and production build
   GitHub Actions **did** install the real toolchain and compile/execute a Uno sketch. The
   subsequent container/SSE milestone is tracked above; Docker is unavailable locally.
 
-### Official-CLI validation and build-farm implementation — 24 September 2026
+### Official-CLI validation and build-farm implementation — 25 September 2026
 
 - GitHub Actions `Official arduino-cli / Arduino AVR core integration` passed on commit
   `daa0b64` (run 36045051575). It initially found a real failure: Arduino requires
@@ -294,7 +295,17 @@ and 40 firmware/compile/hex tests are new; strict typecheck and production build
   in production. The farm rejects arbitrary external libraries/boards, limits concurrent
   jobs and executes Docker without root/network/capabilities with CPU/memory/PID/time/
   output bounds. It deletes request files and cancels disconnected jobs.
-- Docker was **not** available in this sandbox; the new CI `farm-container` job builds the
-  image and tests container compilation and SSE-to-avr8js. Do not mark this milestone
-  production-validated until the CI job passes. A dedicated farm host, private token,
-  firewall/TLS, deployed rate limits and operational monitoring are still requirements.
+- Docker was **not** available in this sandbox; the CI `farm-container` job built the
+  pinned image and passed container compilation and SSE-to-avr8js (run 36048759643).
+  This validates the code path, **not a public deployment**: a dedicated farm host,
+  private token, firewall/TLS, deployed rate limits and operational monitoring remain required.
+
+Final local verification for this checkpoint: `npm run typecheck` passed;
+`npm test` passed **658 tests / 57 files** with **2 intentionally skipped**
+real-toolchain/Docker integration tests; `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully and generated **215 static pages**.
+GitHub Actions run 36048759643 passed official CLI/Core, Docker/SSE-to-avr8js,
+browser checks and all standard jobs. The next step is a protected operator
+deployment/security review before real untrusted public compilation; within
+product development, proceed to timing-accurate instruments/VCD, then the
+remaining later phases in the order above.

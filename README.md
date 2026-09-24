@@ -147,8 +147,8 @@ asserts the shared visible results. The GPIO stepper shows **observed input phas
 shaft motion, angle, rpm or coil current. Unsupported modes/topologies are reported by name.
 The optional build farm runs each sketch in a disposable, no-network Docker container;
 `POST /api/firmware-compile` offers same-origin SSE progress and logs in the in-memory
-**Build logs** panel, with JSON compatibility. Docker integration is checked in CI, not in
-this sandbox. See `ROADMAP.md` Phase 10 for validation status and limits.
+**Build logs** panel, with JSON compatibility. Docker integration **passed in GitHub Actions CI** (run 36048759643); it cannot
+be run in this sandbox, which has no Docker. See `ROADMAP.md` Phase 10 for limits.
 
 ---
 
@@ -184,6 +184,14 @@ Parts Wokwi has no model for are named at export time rather than silently dropp
 ```bash
 npm test
 ```
+
+Current AVR/build-farm checkpoint: `npm run typecheck` passed; `npm test` passed
+**658 tests across 57 files**, with **2 opt-in integration tests skipped locally**
+(no CLI or Docker); `npm run scenarios` passed **10/10**; `npm run build`
+passed (**215 static pages**). GitHub Actions run 36048759643 passed typecheck,
+tests, production build, browser regressions, scenarios, an official-CLI build
+and the **real Docker-container/SSE-to-avr8js** integration check. Neither a
+public deployment nor live OAuth/PostgreSQL is asserted.
 
 The suite does not only test units, it tests promises. Every piece of seed content is executed:
 

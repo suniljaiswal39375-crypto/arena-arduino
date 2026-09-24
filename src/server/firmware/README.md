@@ -76,5 +76,5 @@ Actions (run 36045051575) and caught the actual sketch-directory naming rule.
 `farm-worker.test.ts` verifies Docker arguments, cancellation, cleanup and
 refusal without Docker. `farm-http.test.ts` proves auth/body/concurrency, SSE
 logs-before-HEX, cancellation, Next proxy and token non-disclosure. The real
-Docker image/SSE/avr8js CI job is the remaining container validation gate; it
-cannot run locally in this sandbox (no Docker).
+Docker image/SSE/avr8js CI job **passed** (run 36048759643); it cannot run
+locally in this sandbox (no Docker). This is not a hosted deployment test.

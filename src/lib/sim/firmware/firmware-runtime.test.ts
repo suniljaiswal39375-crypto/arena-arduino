@@ -109,6 +109,22 @@ describe('FirmwareRuntime hosted compile transport', () => {
     expect(rt.lastHex).toBe(hex);
   });
 
+  it('preserves the real SSE compiler error and refuses an unknown offline sketch', async () => {
+    const { doc } = blinkFixture();
+    doc.files['sketch.ino'] = 'void setup() { nonexistent(); } void loop() {}';
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      'event: error\ndata: {"code":"compile-failed","message":"unknown function nonexistent"}\n\n',
+      { headers: { 'content-type': 'text/event-stream' } },
+    )));
+    const logs: string[] = [];
+    const rt = new FirmwareRuntime(doc);
+    const loaded = await rt.loadViaCompile(doc, { compileEndpoint: '/api/firmware-compile',
+      onBuildEvent: (event) => logs.push(event.text) });
+    expect(loaded.ok).toBe(false);
+    expect(rt.hasImage).toBe(false);
+    expect(logs).toEqual(['unknown function nonexistent']);
+  });
+
   it('falls back to the offline baseline when the service refuses', async () => {
     const { doc } = blinkFixture();
     doc.files['sketch.ino'] = KNOWN_PROGRAMS.find((p) => p.key === 'blink')!.sketchSource;

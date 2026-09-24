@@ -119,6 +119,7 @@ export class FirmwareRuntime {
       return this.load(doc, options);
     }
     const input = compileInputFor(doc);
+    let sawError = false;
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -128,7 +129,10 @@ export class FirmwareRuntime {
       });
       if (res.ok) {
         if (res.headers.get('content-type')?.startsWith('text/event-stream')) {
-          const hex = await readSseBuild(res, input.boardFqbn, options.onBuildEvent ?? (() => {}));
+          const hex = await readSseBuild(res, input.boardFqbn, (event) => {
+            if (event.type === 'error') sawError = true;
+            options.onBuildEvent?.(event);
+          });
           return this.loadHex(doc, hex, boardTypeFromFqbn(input.boardFqbn));
         }
         // Compatibility with the single-node local CLI JSON endpoint.
@@ -139,10 +143,14 @@ export class FirmwareRuntime {
       } else {
         const body = await res.json() as { error?: { message?: string } };
         if (typeof body.error?.message === 'string') {
+          sawError = true;
           options.onBuildEvent?.({ type: 'error', text: body.error.message.slice(0, 2048) });
         }
       }
     } catch {
+      if (!options.signal?.aborted && !sawError) {
+        options.onBuildEvent?.({ type: 'error', text: 'AVR build service unavailable or build stream interrupted; trying the offline baseline.' });
+      }
       // Network/host failure: fall through to the offline baseline.
     }
     return this.load(doc, options);

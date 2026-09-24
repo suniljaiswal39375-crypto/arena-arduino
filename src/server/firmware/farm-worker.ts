@@ -54,6 +54,7 @@ export async function compileInContainer(input: FirmwareCompileInput, options: F
   }
   const uid = process.getuid();
   const gid = process.getgid();
+  if (uid === 0) throw new FarmError('farm-not-configured', 'Run the Docker farm as a non-root host user.', 503);
   const docker = options.dockerPath ?? 'docker';
   const timeoutMs = Math.min(120_000, Math.max(1_000, options.timeoutMs ?? 60_000));
   const name = `sparklab-fw-${randomUUID()}`;
