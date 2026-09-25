@@ -1,6 +1,7 @@
 import { createProject, makePart, makeWire } from '@/lib/doc/factory';
 import { WIRE_COLORS, type PartInstance, type ProjectDoc, type WireColor } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
+import { chipById } from '@/lib/chips/chips';
 import { PRODUCT_NAME } from '@/lib/brand';
 
 /**
@@ -136,6 +137,10 @@ export function wokwiTypeFor(type: string): string | null {
   // Authored chips export as Wokwi custom chips: type `chip-<name>` plus the
   // `<name>.chip.json` and `<name>.c` files wokwiZip attaches.
   if (type.startsWith('user-chip-')) return `chip-${type.slice('user-chip-'.length)}`;
+  // The three shipped logic chips export through the same custom-chip
+  // mechanism: their chip.json and Wokwi Chips API C source live in the chip
+  // registry and are attached by wokwiZip.
+  if (type.startsWith('chip-') && chipById(type)) return `chip-${type.slice('chip-'.length)}`;
   return MAPPINGS[type]?.type ?? getPart(type)?.wokwi ?? null;
 }
 

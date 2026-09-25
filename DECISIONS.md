@@ -817,3 +817,34 @@ pattern instead of adding a dependency.
 - **The honest remainder:** a combobox primitive ships when a consumer needs it (the palette
   search is a plain filter input today), and screen-reader behaviour is verified in the CI
   browser job (`e2e/menus.spec.ts`), not claimed from this sandbox.
+
+## Wokwi export: shipped chips go out as custom chips, the rest stay honest — 25 September 2026
+
+Debt item 6 framed the Wokwi export gap as "64 of 166 parts get skipped; shims would make it
+complete." Auditing each skip changed the answer: most of those parts are genuinely unmappable,
+and the small remainder that *is* fixable is now fixed properly.
+
+- **What was wrong to leave skipped.** The three shipped logic chips (NOT gate, window
+  comparator, pulse generator) already carry full `ChipDef`s whose `source` field is literal
+  Wokwi Chips API C. Skipping them at export meant a SparkLab project with a NOT gate lost a
+  wired, working part on the way to Wokwi — despite the repo owning everything needed to carry
+  it over.
+- **The fix.** `wokwiTypeFor` now maps `chip-<slug>` parts (when the chip registry knows them)
+  to Wokwi diagram type `chip-<slug>`, the same custom-chip mechanism user-authored chips
+  already used. `bundle.ts` gained `wokwiProjectFiles()`, the single source of truth for the
+  Wokwi project file set: diagram.json, sketch.ino, libraries.txt, plus `<slug>.chip.json` and
+  `<slug>.c` attached once per chip type on the canvas. Builder download, MCP `export_diagram`
+  and any future consumer all build from it; the CLI's single-file `diagram export --wokwi`
+  prints a warning when chips are present, since their files cannot ride in one JSON document.
+- **What was deliberately NOT done.** The analogue sensors (soil, rain, MQ-2, MQ-135, line
+  array, FSR, pH, pulse oximeter, …) and RF/IoT parts (HC-05, SIM800L, LoRa E32, RFID RC522,
+  Raspberry Pi 5, …) have no model in Wokwi: the Chips API expresses digital logic in C, not
+  physics or radios. Fabricating custom-chip shims for them would export parts that silently do
+  nothing, violating the honesty rule — and pin-name guesswork on approximate part mappings
+  (28BYJ-48 stepper, 4-channel relay, L298N) would silently break exported wiring. Those ~60
+  parts remain skipped and are reported by name at export time, exactly as before.
+- **Round-trip verified.** Exported chips carry their exact SparkLab type through the
+  `sparklabType` attribute; import restores `chip-<slug>` parts with wires intact. Four new
+  tests pin this (export type per shipped chip, wiring round trip, zip attachment/dedup with
+  exact chip.json and C content, and honesty — an analogue part next to an exported chip is
+  still reported).

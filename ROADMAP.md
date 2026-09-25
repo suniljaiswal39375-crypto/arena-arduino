@@ -241,8 +241,14 @@ AI feature that talks without touching the simulator.
 4. **Keyboard wiring and a text connection table are shipped.** Precise pointer-free placement and screen-reader testing remain (see `/accessibility`).
 5. **The serial log is capped at 600 lines** in memory; the scenario runner reads a lifetime counter
    so it never misses a line, but the Serial panel loses its earliest output on long runs.
-6. **Wokwi export skips parts Wokwi has no model for** (soil, rain, MQ-2, line array, L298N). It says
-   so at export time; a Wokwi custom-chip shim for each would make the export complete.
+6. **Wokwi export ships its own logic chips and stays honest about the rest.** The three shipped
+   chips (NOT gate, window comparator, pulse generator) now export through Wokwi's custom-chip
+   mechanism: diagram type `chip-<slug>` plus the `<slug>.chip.json` and `<slug>.c` (Wokwi Chips API
+   C) files, attached in the project zip, MCP `export_diagram`, and builder download alike. The
+   remaining skips (soil, rain, MQ-2, line array, L298N and the other ~60 analogue/RF parts Wokwi
+   has no model for) are still reported by name at export time rather than faked with stub shims —
+   see DECISIONS.md. Closing more of that gap means either upstream Wokwi parts or custom chips with
+   verified pinouts, not silence.
 7. **The emulator catalogue is 67 parts** against the ~72 Wokwi parts the spec lists. The gap is the
    less common displays and motor drivers; add them as data.
 
@@ -794,3 +800,17 @@ Local verification: `npm run typecheck` passed; `npm test` passed **978 tests in
 Next open items: Wokwi-export custom-chip shims / emulator catalogue gap, the remaining
 Hindi/regional polish, `Y.Text` merging, and the scenario steps that need a renderer, a
 touchscreen part and an MQTT broker.
+
+### Checkpoint — Wokwi export: shipped chips as custom chips, 2026-09-25 (local)
+
+- Shipped logic chips (`chip-not-gate`, `chip-window-comparator`, `chip-pulse-generator`) now
+  export as Wokwi custom chips: diagram type `chip-<slug>`, with `<slug>.chip.json` + `<slug>.c`
+  (their Wokwi Chips API C source) attached to the project zip. Builder download, MCP
+  `export_diagram` and CLI share one assembly (`wokwiProjectFiles`); `diagram export --wokwi`
+  warns when chips are present since their files need the zip.
+- The remaining ~60 skips (analogue sensors, RF/IoT, motor drivers without exact Wokwi parts)
+  stay skipped and are reported by name — custom-chip shims for parts Wokwi cannot model would
+  be dishonest stubs (DECISIONS.md).
+- Verification: strict typecheck; 982 tests / 93 files passing (4 new interop tests: export
+  type per shipped chip, wiring round trip, zip attachment + dedup, honesty next to a chip);
+  scenarios 10/10; production build and budgets green (builder 102.4 kB gz).

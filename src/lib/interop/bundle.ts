@@ -1,16 +1,22 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { fromWokwiDiagram, librariesTxt, toWokwiDiagram, type WokwiDiagram, type WokwiImport } from './wokwi';
-import { chipJson } from '@/lib/chips/chips';
+import { chipById, chipJson } from '@/lib/chips/chips';
 import { createZip, readZip } from './zip';
 
+export interface WokwiProjectFiles {
+  files: Array<{ name: string; content: string }>;
+  skipped: Array<{ id: string; type: string; name: string }>;
+}
+
 /**
- * The Wokwi-ready project zip: diagram.json + sketch.ino + libraries.txt, the
- * exact layout Wokwi's "upload project" and wokwi-cli expect.
+ * The file set of a Wokwi-ready project: diagram.json + sketch.ino +
+ * libraries.txt (the exact layout Wokwi's "upload project" and wokwi-cli
+ * expect), plus custom-chip files for every chip on the canvas.
  */
-export function wokwiZip(doc: ProjectDoc): { bytes: Uint8Array; skipped: string[] } {
+export function wokwiProjectFiles(doc: ProjectDoc): WokwiProjectFiles {
   const { diagram, skipped } = toWokwiDiagram(doc);
   const sketch = doc.files['sketch.ino'] ?? '';
-  const files = [
+  const files: Array<{ name: string; content: string }> = [
     { name: 'diagram.json', content: `${JSON.stringify(diagram, null, 2)}\n` },
     { name: 'sketch.ino', content: sketch },
     { name: 'libraries.txt', content: librariesTxt(sketch) },
@@ -21,6 +27,25 @@ export function wokwiZip(doc: ProjectDoc): { bytes: Uint8Array; skipped: string[
     files.push({ name: `${name}.chip.json`, content: `${JSON.stringify(chipJson(chip), null, 2)}\n` });
     files.push({ name: `${name}.c`, content: chip.source });
   }
+  // The shipped logic chips do too: their chip.json and Wokwi Chips API C
+  // source live in the chip registry, so attach them whenever an instance is
+  // on the canvas (once per chip type, not per instance).
+  const shippedAttached = new Set<string>();
+  for (const part of doc.diagram.parts) {
+    if (!part.type.startsWith('chip-') || shippedAttached.has(part.type)) continue;
+    const chip = chipById(part.type);
+    if (!chip) continue;
+    shippedAttached.add(part.type);
+    const slug = part.type.slice('chip-'.length);
+    files.push({ name: `${slug}.chip.json`, content: `${JSON.stringify(chipJson(chip), null, 2)}\n` });
+    files.push({ name: `${slug}.c`, content: chip.source });
+  }
+  return { files, skipped };
+}
+
+/** The Wokwi-ready project zip, for download and wokwi-cli. */
+export function wokwiZip(doc: ProjectDoc): { bytes: Uint8Array; skipped: string[] } {
+  const { files, skipped } = wokwiProjectFiles(doc);
   return { bytes: createZip(files), skipped: skipped.map((s) => `${s.name} (${s.id})`) };
 }
 

@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { fromWokwiDiagram, fromWokwiPin, librariesTxt, toWokwiDiagram, toWokwiPin, type WokwiDiagram } from './wokwi';
 import { crc32, createZip, readZip } from './zip';
 import { importWokwiZip, wokwiZip } from './bundle';
+import { CHIPS, chipById, chipJson } from '@/lib/chips/chips';
+import { makeWire } from '@/lib/doc/factory';
 import { bomCsv, bomRows, kicadNetlist } from './exports';
 import { templateDoc, templates } from '@/lib/templates';
 import { MISSIONS } from '@/lib/missions/missions';
@@ -197,6 +199,62 @@ describe('project zip', () => {
     const zip = createZip([{ name: 'notes.txt', content: 'hello' }]);
     expect(() => importWokwiZip(zip)).toThrow(/no diagram.json/);
     expect(() => importWokwiZip(new Uint8Array([1, 2, 3]))).toThrow(/Not a ZIP/);
+  });
+});
+
+describe('shipped logic chips export as Wokwi custom chips', () => {
+  it('exports every shipped chip as chip-<slug> and never skips it', () => {
+    for (const chip of CHIPS) {
+      const doc = templateDoc('uno-blink')!;
+      doc.diagram.parts.push({ id: 'c1', type: chip.id, x: 0, y: 0, rotate: 0, attrs: {} });
+      const { diagram, skipped } = toWokwiDiagram(doc);
+      expect(diagram.parts.find((p) => p.id === 'c1')?.type, chip.id).toBe(`chip-${chip.id.slice('chip-'.length)}`);
+      expect(skipped.find((s) => s.id === 'c1'), chip.id).toBeUndefined();
+    }
+  });
+
+  it('keeps chip wiring intact across the round trip', () => {
+    const doc = templateDoc('uno-blink')!;
+    doc.diagram.parts.push({ id: 'gate', type: 'chip-not-gate', x: 10, y: 20, rotate: 0, attrs: {} });
+    doc.diagram.connections.push(
+      makeWire({ part: 'uno', pin: 'D7' }, { part: 'gate', pin: 'IN' }, 'green'),
+      makeWire({ part: 'gate', pin: 'OUT' }, { part: 'led1', pin: 'A' }, 'red'),
+    );
+    const back = fromWokwiDiagram(toWokwiDiagram(doc).diagram).doc;
+    expect(back.diagram.parts.find((p) => p.id === 'gate')?.type).toBe('chip-not-gate');
+    expect(topology(back)).toEqual(topology(doc));
+    expect(back.diagram.parts.find((p) => p.id === 'gate')?.rotate).toBe(0);
+  });
+
+  it('attaches chip.json and Wokwi Chips API C source once per chip type in the zip', () => {
+    const doc = templateDoc('uno-blink')!;
+    doc.diagram.parts.push({ id: 'g1', type: 'chip-not-gate', x: 0, y: 0, rotate: 0, attrs: {} });
+    doc.diagram.parts.push({ id: 'g2', type: 'chip-not-gate', x: 40, y: 0, rotate: 0, attrs: {} });
+    doc.diagram.parts.push({ id: 'cmp', type: 'chip-window-comparator', x: 80, y: 0, rotate: 0, attrs: {} });
+    const entries = readZip(wokwiZip(doc).bytes);
+    const names = entries.map((e) => e.name);
+    expect(names.filter((n) => n === 'not-gate.chip.json')).toHaveLength(1); // deduped across instances
+    expect(names).toContain('not-gate.c');
+    expect(names).toContain('window-comparator.chip.json');
+    expect(names).toContain('window-comparator.c');
+    expect(names.some((n) => n.startsWith('pulse-generator'))).toBe(false); // not on the canvas
+    const decoder = new TextDecoder();
+    const chipJsonFile = JSON.parse(decoder.decode(entries.find((e) => e.name === 'not-gate.chip.json')!.data!));
+    expect(chipJsonFile).toEqual(chipJson(chipById('chip-not-gate')!));
+    const source = decoder.decode(entries.find((e) => e.name === 'not-gate.c')!.data!);
+    expect(source).toBe(chipById('chip-not-gate')!.source);
+    expect(source).toContain('wokwi-api.h');
+  });
+
+  it('still reports genuinely unmappable parts honestly, side by side with exported chips', () => {
+    const doc = templateDoc('uno-blink')!;
+    doc.diagram.parts.push({ id: 'soil', type: 'soil-moisture', x: 0, y: 0, rotate: 0, attrs: {} });
+    doc.diagram.parts.push({ id: 'gate', type: 'chip-not-gate', x: 0, y: 40, rotate: 0, attrs: {} });
+    const { skipped, diagram } = toWokwiDiagram(doc);
+    expect(skipped.map((s) => s.id)).toEqual(['soil']);
+    expect(diagram.parts.some((p) => p.id === 'gate')).toBe(true);
+    expect(diagram.parts.some((p) => p.id === 'soil')).toBe(false);
+    expect(wokwiZip(doc).skipped).toEqual(['Soil Moisture Sensor (soil)']);
   });
 });
 

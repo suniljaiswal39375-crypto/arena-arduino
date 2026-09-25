@@ -376,6 +376,12 @@ function exportDiagram(target: string, flags: Flags, io: CliIO): number {
   if (flags.switches.has('wokwi')) {
     const { diagram, skipped } = toWokwiDiagram(project.doc);
     for (const s of skipped) io.err(`warning: ${s.name} (${s.id}) has no Wokwi part and was left out`);
+    const hasChips =
+      (project.doc.chips?.length ?? 0) > 0 ||
+      project.doc.diagram.parts.some((p) => p.type.startsWith('chip-'));
+    if (hasChips) {
+      io.err('warning: this project uses custom chips; export the Wokwi project zip from the builder to carry their chip.json + C files');
+    }
     content = `${JSON.stringify(diagram, null, 2)}\n`;
   } else if (flags.switches.has('kicad')) {
     content = kicadNetlist(project.doc);
