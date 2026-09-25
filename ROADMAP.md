@@ -159,11 +159,19 @@ This is what makes it a lab rather than a simulator.
 
 ## Phase 14 — P1: 3D and scanning
 
-- react-three-fiber workbench: a breadboard you can actually look at, for students who cannot hold
-  the real thing.
-- Photo-to-circuit scanning. Treat as research: the failure mode is confidently wrong output, so it
-  must always produce an editable, obviously-uncertain starting point rather than a finished
-  circuit.
+- react-three-fiber workbench — **shipped (viewing-aid slice):** a "3D" toolbar button opens an
+  orbitable bench over the current sheet (`Workbench3D`, dynamic import). Parts render as
+  category-coloured blocks (click to select, shared with the schematic), wires as straight
+  coloured segments, a grid helper sizes itself to the sheet. The scene data is pure
+  (`lib/canvas/workbench3d.ts`); three.js lives in a lazy chunk and is **verified absent from the
+  builder's first-load manifest** (builder First Load JS stays 105 kB against the <250 kB budget).
+- Photo-to-circuit scanning — **research conclusion + honest slice:** without a hosted vision model
+  the lab ships *photo trace* instead: a session-only reference underlay behind the schematic with
+  an opacity slider, labelled "nothing is recognized or auto-placed". Auto-recognition stays out of
+  scope offline (no server, no model weights in the browser bundle, and a confidently wrong part
+  list is worse than none). When a hosted model arrives it must emit an editable, obviously
+  uncertain starting point — low-confidence boxes and a diff against the current sheet — never a
+  finished circuit.
 
 ## Phase 15 — P2: breadth
 
@@ -504,4 +512,25 @@ Local verification for this checkpoint: `npm run typecheck` passed; `npm test` p
   against a real project on disk, plus an end-to-end `runCli(['mcp'])` run asserting exactly one
   response per request.
 
-Next: Phase 14 (3D workbench, photo-to-circuit research), then remaining Phase 15 breadth.
+### Phase 14 slice — 3D workbench + photo trace — 25 September 2026
+
+- **`lib/canvas/workbench3d.ts`:** pure scene builder — sheet coordinates mapped to the bench plane
+  (x → x, y → depth, ×0.06), category-coloured blocks with per-category heights, wires lifted above
+  the taller end block, bench extents grown from part bounds (with an empty-scene fallback).
+  Deterministic; 5 unit tests incl. the missing-part wire skip.
+- **`Workbench3D.tsx`:** r3f Canvas + OrbitControls in a dialog; click selects through the same
+  store the schematic uses; category legend and the viewing-aid honesty note ride along. Loaded via
+  `next/dynamic` (`ssr: false`) from the toolbar "3D" button — the three/drei chunks never appear
+  in the builder's first-load manifest (verified against `app-build-manifest.json`).
+- **Photo trace:** `SchematicCanvas` gains a session-only underlay (object-URL image behind the
+  SVG, opacity 10–90 %, remove). Nothing is persisted, exported, or recognized; the object URL is
+  revoked on replace/close. This is the honest version of photo-to-circuit for an offline lab.
+- **e2e (`workbench.spec.ts`, CI browser job):** dialog opens with a canvas, honesty note visible,
+  closes cleanly; photo underlay applies and removes.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **858 tests in 79 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` compiled with
+`/builder` First Load JS at **105 kB** (budget <250 kB) and three.js confined to lazy chunks.
+
+Next: remaining Phase 15 breadth (PWA install, accessibility audit, performance budget enforcement,
+pricing, multiplayer, hosted MCP transport).

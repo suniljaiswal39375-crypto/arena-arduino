@@ -17,6 +17,8 @@ import {
   wirePath,
 } from '@/lib/canvas/geometry';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n/client';
+import { Image as ImageIcon } from 'lucide-react';
 import { FIDELITY_LABEL } from '@/lib/brand';
 import { PartGlyph } from './PartGlyph';
 
@@ -47,6 +49,24 @@ export function SchematicCanvas({ states }: { states: Record<string, PartState> 
   const cancelWire = useLab((s) => s.cancelWire);
   const apply = useLab((s) => s.apply);
   const deleteSelection = useLab((s) => s.deleteSelection);
+  const { t } = useI18n();
+
+  // Photo trace (Phase 14): a session-only reference underlay. It is
+  // deliberately *not* persisted or recognized — nothing is auto-placed.
+  const [photo, setPhoto] = useState<{ url: string; opacity: number } | null>(null);
+  const onPhotoFile = useCallback((file: File | undefined) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return { url: URL.createObjectURL(file), opacity: 35 };
+    });
+  }, []);
+  const removePhoto = useCallback(() => {
+    setPhoto((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url);
+      return null;
+    });
+  }, []);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 });
@@ -208,6 +228,16 @@ export function SchematicCanvas({ states }: { states: Record<string, PartState> 
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[var(--color-bg)]">
+      {photo && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photo.url}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2"
+          style={{ opacity: photo.opacity / 100 }}
+        />
+      )}
       <svg
         ref={svgRef}
         className={cn('h-full w-full', spaceDown ? 'cursor-grab' : 'cursor-default')}
@@ -415,6 +445,44 @@ export function SchematicCanvas({ states }: { states: Record<string, PartState> 
             })}
         </g>
       </svg>
+
+      <div className="absolute right-3 top-3 flex items-center gap-1.5">
+        <label className="btn btn-sm cursor-pointer">
+          <ImageIcon size={12} /> {t('photoTrace')}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              onPhotoFile(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {photo && (
+          <>
+            <label className="panel-2 flex items-center gap-1.5 px-2 py-1 text-[11px] text-[var(--color-text-dim)]">
+              {t('photoOpacity')}
+              <input
+                type="range"
+                min={10}
+                max={90}
+                value={photo.opacity}
+                onChange={(e) => setPhoto((prev) => (prev ? { ...prev, opacity: Number(e.target.value) } : prev))}
+                aria-label={t('photoOpacity')}
+              />
+            </label>
+            <button type="button" className="btn btn-sm" onClick={removePhoto}>
+              {t('photoRemove')}
+            </button>
+          </>
+        )}
+      </div>
+      {photo && (
+        <p role="note" className="panel-2 pointer-events-none absolute left-1/2 top-3 max-w-md -translate-x-1/2 px-2.5 py-1 text-[10.5px] leading-snug text-[var(--color-text-dim)]">
+          {t('photoTraceHint')}
+        </p>
+      )}
 
       <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 text-[11px] text-[var(--color-text-faint)]">
         <span className="panel-2 px-2 py-1">

@@ -71,7 +71,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | 3 shipped custom chips + **Chip Studio**: author your own chip (inverter, window comparator, pulse generator) in the browser — palette part, Wokwi `chip.json` and reference C source, embedded in the project file | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, 3D/scanning | ⏳ see ROADMAP |
+| 3D workbench: an orbitable viewing aid over the current sheet (lazy chunk; positions mirror the schematic) and a session-only photo-trace underlay | ✅ viewing aid |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, photo-to-circuit recognition | ⏳ see ROADMAP |
 
 ---
 

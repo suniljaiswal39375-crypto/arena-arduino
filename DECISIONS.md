@@ -580,3 +580,21 @@ has been performed.
 - **Bounds are enforced at the tool boundary** (free-run 50–30 000 ms, serial tails capped at 200
   lines, project scans capped at 50 hits / depth 3) so one careless agent call cannot stall a
   session or flood a context window.
+
+## The 3D workbench looks, it does not simulate — 25 September 2026
+
+- **A viewing aid, badged as one.** The bench mirrors the schematic sheet (positions, category
+  colours, straight wire segments); it does not model breadboard electrical geometry, strain
+  relief, or physical routing. The dialog says so in one line, because a student who believes the
+  3D view is electrically meaningful has been misled.
+- **three.js never enters the builder's first load.** The workbench is a dynamic import and the
+  build manifest is checked: the builder route stays at 105 kB First Load JS against the <250 kB
+  budget. A viewing aid that cost 60+ kB on every builder visit would be a budget violation
+  dressed as a feature.
+- **One selection, one source of truth.** Clicking a block selects through the same store the
+  schematic uses — the 3D view introduces no parallel selection state.
+- **Photo tracing is a reference, not recognition.** The underlay is session-only (object URL,
+  revoked on replace/close), never persisted or exported, and its caption states that nothing is
+  recognized or auto-placed. Auto photo-to-circuit needs a hosted vision model; when one exists it
+  must emit an editable, obviously uncertain starting point — the confidently wrong part list is
+  the failure mode this rule exists to prevent.

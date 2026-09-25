@@ -8,7 +8,7 @@ import { templateDoc, templates } from '@/lib/templates';
 import { missionWorkspace } from '@/lib/missions/workspace';
 import { missionPresentation, LEVEL_MESSAGES } from '@/lib/missions/localize';
 import { MISSIONS } from '@/lib/missions/missions';
-import { Eraser, Play, Redo2, RotateCcw, Sparkles, Square, Undo2 } from 'lucide-react';
+import { Box, Eraser, Play, Redo2, RotateCcw, Sparkles, Square, Undo2 } from 'lucide-react';
 import type { SimSnapshot } from '@/lib/sim/engine';
 import { ProjectFiles } from './ProjectFiles';
 import { PRODUCT_NAME } from '@/lib/brand';
@@ -22,6 +22,7 @@ export function Toolbar({
   onSpeed,
   speed,
   onMentor,
+  onWorkbench,
 }: {
   running: boolean;
   snapshot: SimSnapshot | null;
@@ -31,6 +32,7 @@ export function Toolbar({
   onSpeed: (value: number) => void;
   speed: number;
   onMentor?: () => void;
+  onWorkbench?: () => void;
 }) {
   const { t, locale } = useI18n();
   const saveError = useLab(s => s.saveError);
@@ -80,6 +82,11 @@ export function Toolbar({
       {onMentor && (
         <button type="button" className="btn" onClick={onMentor} title={t('mentorTitle')}>
           <Sparkles size={13} /> {t('mentor')}
+        </button>
+      )}
+      {onWorkbench && (
+        <button type="button" className="btn" onClick={onWorkbench} title={t('workbench')}>
+          <Box size={13} /> {t('workbenchOpen')}
         </button>
       )}
 

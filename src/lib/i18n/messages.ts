@@ -69,6 +69,10 @@ export const en = {
   chipInPin: 'Input pin name', chipOutPin: 'Output pin name', chipLowThr: 'Lower threshold', chipHighThr: 'Upper threshold',
   chipBpm: 'Rate (beats per minute)', chipDuty: 'Pulse width (% of beat)',
   chipPreview: 'Preview', chipAdd: 'Add chip to canvas', chipCancel: 'Cancel',
+  workbench: '3D workbench', workbenchOpen: '3D', workbenchClose: 'Close the 3D view',
+  workbenchHint: 'A viewing aid: positions mirror your sheet and wires are straight lines, not physical routing. Drag to orbit, scroll to zoom.',
+  photoTrace: 'Photo trace', photoTraceHint: 'A reference underlay only — nothing is recognized or auto-placed. The photo stays in this tab and disappears when you leave.',
+  photoOpacity: 'Photo opacity', photoRemove: 'Remove photo',
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
@@ -138,6 +142,10 @@ export const hi: Record<MessageKey, string> = {
   chipInPin: 'इनपुट पिन का नाम', chipOutPin: 'आउटपुट पिन का नाम', chipLowThr: 'निचली दहलीज़', chipHighThr: 'ऊपरी दहलीज़',
   chipBpm: 'दर (बीट प्रति मिनट)', chipDuty: 'पल्स चौड़ाई (बीट का %)',
   chipPreview: 'झलक', chipAdd: 'चिप कैनवास पर जोड़ें', chipCancel: 'रद्द करें',
+  workbench: '3D वर्कबेंच', workbenchOpen: '3D', workbenchClose: '3D व्यू बंद करें',
+  workbenchHint: 'यह केवल देखने का साधन है: स्थिति आपकी शीट जैसी हैं और तार सीधी रेखाएँ हैं, असली रूटिंग नहीं। घुमाने के लिए खींचें, ज़ूम के लिए स्क्रॉल करें।',
+  photoTrace: 'फ़ोटो ट्रेस', photoTraceHint: 'यह केवल संदर्भ तस्वीर है — कुछ भी पहचाना या अपने आप नहीं रखा जाता। फ़ोटो इसी टैब में रहती है और जाते ही मिट जाती है।',
+  photoOpacity: 'तस्वीर की पारदर्शिता', photoRemove: 'तस्वीर हटाएँ',
 };
 
 /** Text interpolation only. React escapes values; no HTML or eval is used. */

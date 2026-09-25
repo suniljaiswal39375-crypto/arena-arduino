@@ -20,10 +20,14 @@ import { ConnectionsPanel } from './ConnectionsPanel';
 import { ChaosPanel } from './ChaosPanel';
 import { MentorPanel } from './MentorPanel';
 import { ChaosGeneratorCard } from './ChaosGeneratorCard';
+
+// The 3D workbench pulls three.js; keep it out of the main builder bundle.
+const Workbench3D = dynamic(() => import('./Workbench3D'), { ssr: false });
 import { cn } from '@/lib/cn';
 import { chaosBySlug, brokenProject } from '@/lib/chaos/chaos';
 import { brokenGenerated, generatedBySlug } from '@/lib/chaos/generator';
 import { EMPTY_SCHEDULE, type FaultSchedule } from '@/lib/sim/faults';
+import dynamic from 'next/dynamic';
 import { showcaseBySlug, showcaseDoc } from '@/lib/showcase';
 import { Flame, Layers, Sparkles, Wrench } from 'lucide-react';
 
@@ -166,6 +170,9 @@ export function BuilderShell({
     setMobilePanel(true);
   }, []);
 
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const openWorkbench = useCallback(() => setWorkbenchOpen(true), []);
+
   const revealReference = useCallback(() => {
     if (!mission) return;
     setFile('sketch.ino', mission.referenceSketch);
@@ -226,6 +233,7 @@ export function BuilderShell({
         onSpeed={setSpeed}
         speed={speed}
         onMentor={openMentor}
+        onWorkbench={openWorkbench}
       />
 
       {error && (
@@ -332,6 +340,7 @@ export function BuilderShell({
           </div>
         </aside>
       </div>
+      {workbenchOpen && <Workbench3D onClose={() => setWorkbenchOpen(false)} />}
     </main>
   );
 }
