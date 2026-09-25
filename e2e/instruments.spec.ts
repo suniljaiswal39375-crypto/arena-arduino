@@ -25,12 +25,18 @@ test('navigates inspect bench instruments and verifies zero persistence leaks', 
 
   await expect(page.getByLabel('Probe A positive node')).toBeVisible();
   await expect(page.getByLabel('Probe B negative node')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Resistance' })).toBeVisible();
+  // The dial button's accessible name carries its Ω symbol; anchoring it keeps
+  // the palette's "…whose resistance rises…" description out of the match.
+  const resistanceMode = page.getByRole('button', { name: /^ΩResistance$/ });
+  await expect(resistanceMode).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continuity' })).toBeVisible();
 
   // Switch to Resistance mode
-  await page.getByRole('button', { name: 'Resistance' }).click();
-  await expect(page.getByText('OHM')).toBeVisible();
+  await resistanceMode.click();
+  await expect(resistanceMode).toHaveAttribute('aria-pressed', 'true');
+  // The starter blink circuit has no conductive D13→GND path, so the solver
+  // reports an honest open loop instead of the DC voltage shown before.
+  await expect(page.getByText('O.L', { exact: true })).toBeVisible();
 
   // 3. Verify no trace memory leaked into localStorage
   const storageDump = await page.evaluate(() => Object.values(localStorage).join('\n'));

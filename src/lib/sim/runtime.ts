@@ -488,13 +488,16 @@ export class Circuit implements SimHost {
   }
 
   multimeterReading(
-    mode: MultimeterMode = 'dc-v',
+    mode?: MultimeterMode,
     probeA: string | null = null,
     probeB: string | null = null,
   ): MultimeterReading {
+    // Without an explicit mode argument the panel's selected dial wins: the
+    // snapshot must reflect the mode/probe prefs the student just chose.
+    const activeMode = mode ?? this.doc.sim?.multimeter?.mode ?? 'dc-v';
     const defaultA = probeA ?? this.doc.sim?.multimeter?.probeA ?? (this.board ? `${this.board.id}:D13` : null);
     const defaultB = probeB ?? this.doc.sim?.multimeter?.probeB ?? (this.board ? `${this.board.id}:GND` : null);
-    return solveMultimeter(this.doc, this.nl, this, mode, defaultA, defaultB);
+    return solveMultimeter(this.doc, this.nl, this, activeMode, defaultA, defaultB);
   }
 
   resetInstruments(): void {

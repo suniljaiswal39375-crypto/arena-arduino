@@ -93,7 +93,7 @@ test('Hindi mission selection on a phone loads the same canonical workspace', as
   await page.goto('/builder');
   await page.getByLabel('Language / भाषा').selectOption('hi');
   await page.getByRole('button', { name: 'अभ्यास', exact: true }).click();
-  await page.getByRole('button', { name: /ट्रैफिक लाइट का क्रम/ }).click();
+  await page.getByRole('menuitem', { name: /ट्रैफिक लाइट का क्रम/ }).click();
   await page.getByRole('button', { name: 'मार्गदर्शन और निरीक्षक', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'ट्रैफिक लाइट का क्रम' })).toBeVisible();
   await page.getByRole('button', { name: 'संकेत', exact: true }).first().click();

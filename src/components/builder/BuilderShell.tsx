@@ -137,12 +137,14 @@ export function BuilderShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, librariesSource, doc.board, doc.id, doc.engine, challengeSchedule]);
 
-  // Wiring and input changes are pushed without restarting the sketch.
+  // Wiring, input and instrument-pref changes are pushed without restarting
+  // the sketch (the multimeter dial/probes live in the worker's netlist solve).
   const diagramKey = JSON.stringify({
     parts: doc.diagram.parts.map((p) => [p.id, p.type, p.x, p.y, p.rotate, p.attrs]),
     wires: doc.diagram.connections,
     inputs: doc.sim.inputs,
     engine: doc.engine,
+    multimeter: doc.sim.multimeter,
   });
   useEffect(() => {
     clientRef.current?.update(doc);
