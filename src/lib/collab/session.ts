@@ -48,6 +48,8 @@ export interface PresenceState {
   color: string;
   selectedPartId: string | null;
   role: CollabRole;
+  /** Code-editor caret (file + character offset), when shared. */
+  caret?: { file: string; offset: number } | null;
   updatedAt: number;
 }
 
@@ -347,8 +349,8 @@ export class CollabSession {
     this.undoManager.redo();
   }
 
-  /** Update our presence (name / selection / role) and announce it. */
-  setPresence(patch: Partial<Pick<PresenceState, 'name' | 'selectedPartId' | 'role'>>): void {
+  /** Update our presence (name / selection / role / caret) and announce it. */
+  setPresence(patch: Partial<Pick<PresenceState, 'name' | 'selectedPartId' | 'role' | 'caret'>>): void {
     this.selfPresence = { ...this.selfPresence, ...patch, updatedAt: Date.now() };
     this.sendPresence();
   }
@@ -461,11 +463,14 @@ export class CollabSession {
         color: typeof msg.state.color === 'string' ? msg.state.color : peerColor(msg.from),
         selectedPartId: msg.state.selectedPartId,
         role: msg.state.role === 'viewer' ? 'viewer' : 'editor',
+        caret: msg.state.caret ?? null,
         updatedAt: Date.now(),
       };
       const before = this.peers.get(msg.from);
       this.peers.set(msg.from, state);
-      if (!before || before.name !== state.name || before.selectedPartId !== state.selectedPartId || before.role !== state.role) {
+      const caretChanged =
+        before?.caret?.file !== state.caret?.file || before?.caret?.offset !== state.caret?.offset;
+      if (!before || before.name !== state.name || before.selectedPartId !== state.selectedPartId || before.role !== state.role || caretChanged) {
         this.emitPeers();
       }
     }

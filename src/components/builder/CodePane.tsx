@@ -3,8 +3,21 @@
 import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { loader } from '@monaco-editor/react';
+import type { OnMount } from '@monaco-editor/react';
 import { useLab } from '@/store/lab';
 import { useI18n } from '@/lib/i18n/client';
+import { collabSession, collabState, subscribeCollab } from '@/store/collab';
+import { remoteCursors } from '@/lib/collab/cursors';
+import { WIRE_COLOR_HEX } from '@/lib/doc/types';
+import type { PeerInfo } from '@/lib/collab/session';
+
+type MonacoEditorInstance = Parameters<OnMount>[0];
+type MonacoNamespace = Parameters<OnMount>[1];
+
+/** Map a peer colour to a static CSS class (defined in globals.css). */
+const CURSOR_CLASS_BY_HEX: Record<string, string> = Object.fromEntries(
+  Object.entries(WIRE_COLOR_HEX).map(([name, hex]) => [hex, `peer-cursor-${name}`]),
+);
 
 loader.config({ paths: { vs: '/vendor/monaco/vs' } });
 
@@ -24,6 +37,67 @@ export function CodePane() {
   const [monacoReady, setMonacoReady] = useState(false);
   const [fallback, setFallback] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- Co-Lab remote code cursors (Monaco only; the fallback editor can't
+  // host decorations, so it honestly shows nothing) -------------------------
+  const editorRef = useRef<MonacoEditorInstance | null>(null);
+  const monacoRef = useRef<MonacoNamespace | null>(null);
+  const decorationsRef = useRef<ReturnType<MonacoEditorInstance['createDecorationsCollection']> | null>(null);
+  const fileRef = useRef(file);
+  fileRef.current = file;
+  const lastCaretSent = useRef(0);
+  const [bridge, setBridge] = useState(() => ({
+    peers: collabState().peers as PeerInfo[],
+    status: collabState().status,
+  }));
+
+  useEffect(() => subscribeCollab((s) => setBridge({ peers: s.peers, status: s.status })), []);
+
+  const handleEditorMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    decorationsRef.current = editor.createDecorationsCollection([]);
+    setMonacoReady(true);
+    editor.onDidChangeCursorPosition((e) => {
+      const session = collabSession();
+      if (!session) return;
+      const now = Date.now();
+      if (now - lastCaretSent.current < 40) return;
+      lastCaretSent.current = now;
+      const model = editor.getModel();
+      if (!model) return;
+      session.setPresence({
+        caret: { file: fileRef.current, offset: model.getOffsetAt(e.position) },
+      });
+    });
+  };
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    const decorations = decorationsRef.current;
+    if (!editor || !monaco || !decorations) return;
+    if (bridge.status !== 'active') {
+      decorations.set([]);
+      return;
+    }
+    const model = editor.getModel();
+    if (!model) return;
+    const length = model.getValueLength();
+    decorations.set(
+      remoteCursors(bridge.peers, file).map((cursor) => {
+        const pos = model.getPositionAt(Math.min(cursor.offset, length));
+        return {
+          range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+          options: {
+            className: `peer-cursor ${CURSOR_CLASS_BY_HEX[cursor.color] ?? 'peer-cursor-cyan'}`,
+            stickiness: monaco.editor.TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
+            hoverMessage: { value: cursor.name },
+          },
+        };
+      }),
+    );
+  }, [bridge, file]);
 
   useEffect(() => {
     if (monacoReady) {
@@ -72,7 +146,7 @@ export function CodePane() {
             defaultLanguage="cpp"
             path={file}
             value={content}
-            onMount={() => setMonacoReady(true)}
+            onMount={handleEditorMount}
             onChange={(value: string | undefined) => setFile(file, value ?? '')}
             options={{
               fontSize: 13,

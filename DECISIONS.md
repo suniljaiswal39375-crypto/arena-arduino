@@ -1062,3 +1062,15 @@ truncation, held in memory on the recording device, never transmitted and never 
 open comments, name) rather than a second live canvas: rebuilding a full interactive canvas per
 scrub tick would be work pretending to be cheap, and the summary states exactly what the room
 held at each moment.
+
+## Remote code cursors are ghost carets, not shared selections — 25 September 2026
+
+The caret travels as an optional presence field (file + character offset), so it reuses the
+presence pipeline and its liveness guarantees — a vanished peer loses its ghost caret the same
+way it loses its canvas halo, with no separate protocol. Monaco decorations are the rendering
+vehicle: one zero-width range at `getPositionAt(offset)`, coloured via a static CSS class per
+wire-palette colour, with the peer's name in the hover message (Monaco decorations can't carry
+per-peer inline styles, and a hover label is the honest middle ground). Broadcasts are throttled
+to 40 ms because cursor-move events fire far faster than presence needs to travel. The offline
+textarea fallback deliberately draws nothing: faking caret overlays there would be decoration
+pretending to be editing feedback.

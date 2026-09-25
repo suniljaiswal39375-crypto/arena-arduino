@@ -56,6 +56,15 @@ export function encodeWireFrame(msg: CollabWireMessage): WireFrame {
   return msg;
 }
 
+/** Validate an incoming caret, which travels as an optional plain field. */
+function parseCaret(raw: unknown): { file: string; offset: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.file !== 'string' || typeof obj.offset !== 'number') return null;
+  if (!Number.isFinite(obj.offset) || obj.offset < 0) return null;
+  return { file: obj.file.slice(0, 200), offset: Math.floor(obj.offset) };
+}
+
 export function decodeWireFrame(frame: WireFrame): CollabWireMessage | null {
   if (!frame || typeof frame !== 'object' || typeof frame.from !== 'string') return null;
   if (frame.kind === 'hello') return { kind: 'hello', from: frame.from };
@@ -77,6 +86,7 @@ export function decodeWireFrame(frame: WireFrame): CollabWireMessage | null {
       color: typeof state.color === 'string' ? state.color : '#888888',
       selectedPartId: typeof state.selectedPartId === 'string' ? state.selectedPartId : null,
       role: state.role === 'viewer' ? 'viewer' : 'editor',
+      caret: parseCaret(state.caret),
       updatedAt: typeof state.updatedAt === 'number' ? state.updatedAt : Date.now(),
     };
     return { kind: 'presence', from: frame.from, state: presence };

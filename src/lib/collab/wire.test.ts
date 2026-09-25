@@ -33,6 +33,7 @@ describe('collab wire protocol', () => {
           color: '#123456',
           selectedPartId: 'part-1',
           role: 'editor',
+          caret: null,
           updatedAt: 42,
         },
       },
@@ -103,5 +104,45 @@ describe('collab wire protocol', () => {
 
     expect(decodeServerFrame('garbage')).toBeNull();
     expect(decodeServerFrame(JSON.stringify({ t: 'msg' }))).toBeNull();
+  });
+
+  it('parses a valid remote caret and rejects malformed ones', () => {
+    const good = decodeWireFrame({
+      kind: 'presence',
+      from: 'p1',
+      state: {
+        clientId: 'p1',
+        name: 'Asha',
+        color: '#e63946',
+        role: 'editor',
+        selectedPartId: null,
+        caret: { file: 'sketch.ino', offset: 42 },
+        updatedAt: 1,
+      },
+    });
+    expect(good?.kind === 'presence' && good.state?.caret).toEqual({ file: 'sketch.ino', offset: 42 });
+
+    for (const bad of [
+      { file: 'sketch.ino', offset: 'twelve' },
+      { file: 'sketch.ino', offset: -1 },
+      { file: 'sketch.ino', offset: Number.NaN },
+      { offset: 5 },
+      'sketch.ino:5',
+    ]) {
+      const decoded = decodeWireFrame({
+        kind: 'presence',
+        from: 'p2',
+        state: {
+          clientId: 'p2',
+          name: 'Bo',
+          color: '#3a86ff',
+          role: 'editor',
+          selectedPartId: null,
+          caret: bad,
+          updatedAt: 1,
+        },
+      } as never);
+      expect(decoded?.kind === 'presence' && decoded.state?.caret).toBeNull();
+    }
   });
 });

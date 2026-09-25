@@ -1007,3 +1007,16 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; **1040 tests / 102 files** (3 new: exact rebuild per offset
   against a live-applied doc, span/windows, bound + drop count); scenarios 10/10; default and
   flagged builds and budgets green.
+
+### Checkpoint — Co-Lab remote code cursors, 2026-09-25 (local)
+
+- Presence now carries an optional caret `{ file, offset }`, validated on the wire and
+  re-emitted on change. `remoteCursors` (lib/collab/cursors.ts) is a pure filter so it is
+  testable without Monaco; CodePane renders one Monaco decoration per peer caret in the open
+  file — a 2px border-left in the peer's room colour (one static CSS class per palette colour)
+  with the peer's name in the hover message, caret broadcasts throttled to 40 ms. The offline
+  fallback textarea honestly shows nothing (documented in DECISIONS).
+- Verification: strict typecheck; **1046 tests / 104 files** (cursors filter, caret wire
+  round-trip + malformed rejection, caret propagation over presence; fixture caret added to the
+  round-trip case); new `e2e/collab-cursors.spec.ts` for CI (two pages, ghost caret visible);
+  scenarios 10/10; default and flagged builds and budgets green.

@@ -682,3 +682,46 @@ describe('CollabSession: room comments', () => {
     expect(events[events.length - 1]).toBe(1);
   });
 });
+
+describe('CollabSession: remote code cursors', () => {
+  it('caret presence propagates and updates when the caret moves', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const a = makeEditor(hub, 'a', start);
+    const b = makeEditor(hub, 'b', start);
+    await settle();
+
+    a.session.setPresence({ caret: { file: 'sketch.ino', offset: 0 } });
+    await until(
+      () => b.session.peerList().find((p) => p.clientId === a.session.clientId)?.caret?.file === 'sketch.ino',
+      1000,
+    );
+    const seen = b.session.peerList().find((p) => p.clientId === a.session.clientId)!;
+    expect(seen.caret).toEqual({ file: 'sketch.ino', offset: 0 });
+
+    // Moving the caret re-announces presence.
+    a.session.setPresence({ caret: { file: 'sketch.ino', offset: 128 } });
+    await until(
+      () => b.session.peerList().find((p) => p.clientId === a.session.clientId)?.caret?.offset === 128,
+      1000,
+    );
+
+    // Clearing the caret is visible too.
+    a.session.setPresence({ caret: null });
+    await until(
+      () => b.session.peerList().find((p) => p.clientId === a.session.clientId)?.caret === null,
+      1000,
+    );
+  });
+
+  it('peers without a caret expose caret null, not undefined', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const a = makeEditor(hub, 'a', start);
+    const b = makeEditor(hub, 'b', start);
+    await settle();
+    const seen = a.session.peerList().find((p) => p.clientId === b.session.clientId);
+    expect(seen).toBeDefined();
+    expect(seen?.caret ?? null).toBeNull();
+  });
+});

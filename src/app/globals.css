@@ -253,3 +253,22 @@ body {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* Co-Lab remote code cursors (Monaco decorations). One static class per wire
+   palette colour so a peer's ghost caret keeps its room colour. */
+.peer-cursor {
+  border-left: 2px solid var(--peer-cursor-color, #00b4d8);
+  margin-left: -1px;
+}
+.peer-cursor-green { --peer-cursor-color: #2a9d8f; }
+.peer-cursor-red { --peer-cursor-color: #e63946; }
+.peer-cursor-black { --peer-cursor-color: #12171d; }
+.peer-cursor-yellow { --peer-cursor-color: #ffb703; }
+.peer-cursor-blue { --peer-cursor-color: #3a86ff; }
+.peer-cursor-white { --peer-cursor-color: #e6edf3; }
+.peer-cursor-orange { --peer-cursor-color: #f77f00; }
+.peer-cursor-purple { --peer-cursor-color: #8338ec; }
+.peer-cursor-gray { --peer-cursor-color: #8d99ae; }
+.peer-cursor-brown { --peer-cursor-color: #7f5539; }
+.peer-cursor-cyan { --peer-cursor-color: #00b4d8; }
+.peer-cursor-magenta { --peer-cursor-color: #d81e5b; }
