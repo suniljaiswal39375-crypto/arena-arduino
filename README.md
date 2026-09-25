@@ -99,6 +99,7 @@ src/
   components/
     builder/               Toolbar, PartPalette, SchematicCanvas, CodePane,
                            BottomDock, Inspector, StepTracker, PartGlyph
+    ui/                    accessible primitives (menu-button; headless model in lib/ui)
     SiteHeader.tsx
   lib/
     brand.ts               the single rename point + fidelity labels
@@ -119,6 +120,7 @@ src/
     cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point),
                            MCP stdio client + editor-facing formatters
     billing/               plan model: free lab forever, hosted tiers, feature matrix
+    ui/                    headless interaction models (menu keyboard navigation)
     canvas/                grid and pin geometry, wire routing
     templates.ts           starter projects
   store/

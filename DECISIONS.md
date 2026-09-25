@@ -793,3 +793,27 @@ Phase 15 asked for pricing and school/org billing. The decision encoded in
   invariants — integration is the explicitly open remainder, blocked on the hosted-tier
   decision, which this model is designed to make reversible: tiers gate only hosted-planned
   rows.
+
+## Accessible popups: headless model first, no widget library — 25 September 2026
+
+The debt item said it plainly: skipping shadcn/Radix left the toolbar popups as plain buttons —
+no arrow-key navigation, no `role="menu"`, no focus return. The fix follows the repo's standing
+pattern instead of adding a dependency.
+
+- **The interaction model is a pure function.** `menuKeyNav(items, state, key, now)` implements
+  the WAI-ARIA menu-button pattern (arrows with wrap, Home/End, Enter/Space activation,
+  Escape/Tab dismissal, 500 ms-window character type-ahead that skips disabled labels). Every
+  decision is unit-testable in a node environment — 17 tests pin the matrix including the edge
+  cases (all-disabled lists, wrap direction, buffer expiry, disabled-label skips). The React
+  wrapper owns only DOM concerns: roving focus, outside-click dismissal, focus return.
+- **Semantics chosen from the APG, stated here:** opening focuses the first enabled item (last
+  for ArrowUp/Shift+F10); Escape and keyboard activation dismiss AND return focus to the
+  trigger; pointer selection and outside-click dismissal do not steal focus; `aria-controls`
+  exists only while the menu is open; the active item owns the roving tab stop.
+- **Migrated, not bolted on:** the toolbar Templates and Missions popups (including their
+  responsive small-screen placement, preserved via `panelClassName` merged under
+  tailwind-merge) now render through the primitive; the old hand-rolled Escape-only handlers
+  are gone.
+- **The honest remainder:** a combobox primitive ships when a consumer needs it (the palette
+  search is a plain filter input today), and screen-reader behaviour is verified in the CI
+  browser job (`e2e/menus.spec.ts`), not claimed from this sandbox.

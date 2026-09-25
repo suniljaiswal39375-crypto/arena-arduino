@@ -232,8 +232,12 @@ AI feature that talks without touching the simulator.
 2. **Nested calls inside expressions cannot suspend.** `x = helper()` and `helper();` run as
    generators, so a `delay()` inside them passes time visibly; `if (helper() > 3)` still runs the
    helper in one step. Rare in student sketches, but real.
-3. **No accessible combobox or menu primitives** now that shadcn/Radix was skipped. The Export menu
-   and palette are plain buttons. Needed before classrooms ship.
+3. **Accessible menu primitive shipped; combobox still open.** `lib/ui/menu-model` (pure WAI-ARIA
+   menu keyboard model: arrows/Home/End, Enter/Space, Escape/Tab, type-ahead) + `components/ui/Menu`
+   (menu-button with roving focus, outside dismissal, focus return) now power the toolbar's
+   Templates and Missions popups; behaviour is pinned by 23 unit/structure tests plus
+   `e2e/menus.spec.ts`. A combobox primitive waits for a real consumer (the palette search is a
+   plain filter today). Screen-reader verification still runs only in the CI browser job.
 4. **Keyboard wiring and a text connection table are shipped.** Precise pointer-free placement and screen-reader testing remain (see `/accessibility`).
 5. **The serial log is capped at 600 lines** in memory; the scenario runner reads a lifetime counter
    so it never misses a line, but the Serial panel loses its earliest output on long runs.
@@ -764,3 +768,29 @@ Phase 15 status after these four slices: hosted Co-Lab transport, VS Code extens
 the pricing model are shipped; remaining open items are Hindi/regional-language polish, the
 unsupported scenario steps (`take-screenshot`, `touch`, `publish-mqtt`), per-file `Y.Text`
 merging, and the hosted-tier payment decision.
+
+### Checkpoint — accessible menu primitive, 2026-09-25 (local)
+
+Debt item 3's menu half is closed with the repo's headless-first pattern:
+
+- **`src/lib/ui/menu-model.ts`:** pure WAI-ARIA menu-button keyboard model — ArrowUp/Down with
+  wrap skipping disabled items, Home/End, Enter/Space activation, Escape/Tab dismissal, and
+  character type-ahead with a 500 ms buffer window. 17 unit tests pin the full matrix.
+- **`src/components/ui/Menu.tsx`:** the React wrapper — trigger with `aria-haspopup/expanded/
+  controls`, popup `role="menu"` with roving focus, outside-click dismissal, focus return on
+  Escape/keyboard activation; small-screen placement overridable per call site. 6 SSR structure
+  tests pin the ARIA contract.
+- **Migration:** the toolbar Templates and Missions popups now render through the primitive
+  (the hand-rolled Escape-only handlers are gone); the builder render suite (18 tests) passes
+  unchanged.
+- **`e2e/menus.spec.ts`** (CI browser job): keyboard contract end-to-end — open with ArrowDown,
+  move, Home, Escape with focus return, type-ahead + Enter loading the template, pointer
+  outside-click dismissal.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **978 tests in 93 files**
+(2 opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget gate green
+(builder first load unchanged, 102.4 kB / 250 kB).
+
+Next open items: Wokwi-export custom-chip shims / emulator catalogue gap, the remaining
+Hindi/regional polish, `Y.Text` merging, and the scenario steps that need a renderer, a
+touchscreen part and an MQTT broker.

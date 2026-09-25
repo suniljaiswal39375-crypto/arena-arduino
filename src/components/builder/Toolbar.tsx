@@ -2,7 +2,7 @@
 
 import { useI18n } from '@/lib/i18n/client';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
-import { useState } from 'react';
+import { Menu } from '@/components/ui/Menu';
 import { useLab } from '@/store/lab';
 import { templateDoc, templates } from '@/lib/templates';
 import { missionWorkspace } from '@/lib/missions/workspace';
@@ -46,7 +46,6 @@ export function Toolbar({
   const rename = useLab((s) => s.rename);
   const loadDoc = useLab((s) => s.loadDoc);
   const clearCanvas = useLab((s) => s.clearCanvas);
-  const [menu, setMenu] = useState<'none' | 'templates' | 'missions'>('none');
 
   const clockSeconds = (snapshot?.clockUs ?? 0) / 1_000_000;
 
@@ -123,75 +122,37 @@ export function Toolbar({
         t={clockSeconds.toFixed(2)}s
       </span>
 
-      <div className="relative" onKeyDown={e => { if (e.key === 'Escape') { setMenu('none'); e.stopPropagation(); e.currentTarget.querySelector('button')?.focus(); } }}>
-        <button
-          type="button"
-          className="btn"
-          aria-expanded={menu === 'templates'}
-          onClick={() => setMenu(menu === 'templates' ? 'none' : 'templates')}
-        >
-          {t('templates')}
-        </button>
-        {menu === 'templates' && (
-          <div className="fixed inset-x-2 top-28 z-30 max-h-[65dvh] overflow-y-auto sm:absolute sm:inset-x-auto sm:left-0 sm:top-9 sm:w-64 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-            {templates().map((t) => (
-              <button
-                key={t.slug}
-                type="button"
-                lang="en"
-                className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-3)]"
-                onClick={() => {
-                  const next = templateDoc(t.slug);
-                  if (next) loadDoc(next);
-                  setMenu('none');
-                }}
-              >
-                <span className="block text-[12.5px] font-medium">{t.name}</span>
-                <span className="block text-[11px] text-[var(--color-text-dim)]">
-                  {t.description}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <Menu
+        label={t('templates')}
+        panelClassName="fixed inset-x-2 top-28 sm:absolute sm:inset-x-auto sm:left-0 sm:top-9 sm:w-64"
+        items={templates().map((tpl) => ({
+          id: tpl.slug,
+          label: tpl.name,
+          description: tpl.description,
+          lang: 'en',
+          onSelect: () => {
+            const next = templateDoc(tpl.slug);
+            if (next) loadDoc(next);
+          },
+        }))}
+      />
 
-      <div className="relative" onKeyDown={e => { if (e.key === 'Escape') { setMenu('none'); e.stopPropagation(); e.currentTarget.querySelector('button')?.focus(); } }}>
-        <button
-          type="button"
-          className="btn"
-          aria-expanded={menu === 'missions'}
-          onClick={() => setMenu(menu === 'missions' ? 'none' : 'missions')}
-        >
-          {t('missions')}
-        </button>
-        {menu === 'missions' && (
-          <div className="fixed inset-x-2 top-28 z-30 max-h-[65dvh] overflow-y-auto sm:absolute sm:inset-x-auto sm:left-0 sm:top-9 sm:max-h-80 sm:w-72 rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-1 shadow-xl">
-            {MISSIONS.map((m) => {
-              const { content: display, lang } = missionPresentation(m, locale);
-              return (
-              <button
-                key={m.slug}
-                type="button"
-                lang={lang}
-                className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-surface-3)]"
-                onClick={() => {
-                  loadDoc(missionWorkspace(m.slug));
-                  setMenu('none');
-                }}
-              >
-                <span className="block text-[12.5px] font-medium">
-                  {m.emoji} {display.title}
-                </span>
-                <span className="block text-[11px] text-[var(--color-text-dim)]">
-                  {t(LEVEL_MESSAGES[m.level])} · {t('minutes', { count: m.estMinutes })}
-                </span>
-              </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <Menu
+        label={t('missions')}
+        panelClassName="fixed inset-x-2 top-28 sm:absolute sm:inset-x-auto sm:left-0 sm:top-9 sm:max-h-80 sm:w-72"
+        items={MISSIONS.map((m) => {
+          const { content: display, lang } = missionPresentation(m, locale);
+          return {
+            id: m.slug,
+            label: `${m.emoji} ${display.title}`,
+            description: `${t(LEVEL_MESSAGES[m.level])} · ${t('minutes', { count: m.estMinutes })}`,
+            lang,
+            onSelect: () => {
+              loadDoc(missionWorkspace(m.slug));
+            },
+          };
+        })}
+      />
 
       <div className="ml-auto flex max-w-full flex-wrap items-center gap-1.5">
         <button
