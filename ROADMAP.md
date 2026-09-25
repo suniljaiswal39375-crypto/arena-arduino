@@ -201,7 +201,13 @@ This is what makes it a lab rather than a simulator.
   are a cooperation convention, not security — documented. **Session replay shipped:** every update a session sees is
   recorded with a timestamp into a bounded, session-only `RoomHistory`; the
   Co-Lab panel scrubs or plays the timeline and reads the room document as of
-  any offset (rebuilt through real Yjs merges). Remaining: remote code cursors.
+  any offset (rebuilt through real Yjs merges). **Remote code cursors shipped:** presence
+  carries an optional caret (file + offset); Monaco draws a colour-matched ghost caret per
+  peer in the same file (name on hover), throttled at 40 ms. That completes the Co-Lab tail
+  from the four-slice directive. Remaining buildable items: §17.1 MQTT broker (unblocks
+  `publish-mqtt` scenarios) and a touchscreen part (unlocks `touch` steps). Payment
+  processing and deployment-tier verification stay blocked on external credentials, as
+  documented.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
