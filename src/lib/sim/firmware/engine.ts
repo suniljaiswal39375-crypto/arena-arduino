@@ -611,6 +611,8 @@ export class FirmwareEngine {
       clockUs: this.clock,
       parts,
       serial: [...this.circuit.serialLog],
+      serialTotal: this.circuit.serialTotal,
+      serialDropped: 0,
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
       logicAnalyzers: this.circuit.logicTraces(),

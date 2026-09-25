@@ -33,6 +33,10 @@ export interface FirmwareSnapshot {
   clockUs: number;
   parts: Record<string, PartState>;
   serial: SerialLine[];
+  /** How many lines have ever been printed; survives the serial window cap. */
+  serialTotal: number;
+  /** Lines that left the retained panel view (the firmware engine reports 0). */
+  serialDropped: number;
   plot: number[][];
   plotLabels: Array<string | undefined>;
   logicAnalyzers: LogicTrace[];

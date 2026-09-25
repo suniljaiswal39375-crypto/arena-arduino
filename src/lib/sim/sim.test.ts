@@ -255,3 +255,74 @@ describe('electrical rule check', () => {
     expect(codes).toContain('missing-required-pin');
   });
 });
+
+describe('FT6206 touch controller model', () => {
+  const TOUCH_SKETCH = `#include <Adafruit_FT6206.h>
+
+Adafruit_FT6206 ts = Adafruit_FT6206();
+
+void setup() {
+  Serial.begin(9600);
+  ts.begin();
+}
+
+void loop() {
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    Serial.print("T ");
+    Serial.print(p.x);
+    Serial.print(" ");
+    Serial.println(p.y);
+    delay(100);
+  }
+  delay(20);
+}
+`;
+
+  function touchDoc() {
+    const doc = createProject();
+    const uno = makePart('arduino-uno', 100, 100);
+    const tft = makePart('ili9341-touch', 320, 90);
+    doc.diagram.parts.push(uno, tft);
+    return { doc, tft };
+  }
+
+  it('touched()/getPoint() follow the part\'s touch controls', () => {
+    const { doc, tft } = touchDoc();
+    const engine = new SimEngine(doc);
+    engine.load(doc, TOUCH_SKETCH);
+    engine.start();
+    expect(engine.error).toBeNull();
+
+    // Nothing pressed: no touch lines appear.
+    engine.tick(200, 1);
+    const before = engine.serialTranscript().lines.length;
+
+    doc.sim.inputs[`${tft.id}.touchX`] = 120;
+    doc.sim.inputs[`${tft.id}.touchY`] = 160;
+    doc.sim.inputs[`${tft.id}.touchPressed`] = 1;
+    engine.setDoc(doc);
+    engine.tick(300, 1);
+    const lines = engine.serialTranscript().lines.map((l) => l.text.trim());
+    expect(lines.some((l) => l === 'T 120 160')).toBe(true);
+
+    // Release: the sketch stops reporting.
+    const count = engine.serialTranscript().lines.length;
+    doc.sim.inputs[`${tft.id}.touchPressed`] = 0;
+    engine.setDoc(doc);
+    engine.tick(300, 1);
+    expect(engine.serialTranscript().lines.length).toBeLessThanOrEqual(count + 1);
+    expect(before).toBeLessThan(count);
+  });
+
+  it('reports "not touched" when no touch part is on the canvas', () => {
+    const doc = createProject();
+    doc.diagram.parts.push(makePart('arduino-uno', 100, 100));
+    const engine = new SimEngine(doc);
+    engine.load(doc, TOUCH_SKETCH);
+    engine.start();
+    engine.tick(300, 1);
+    expect(engine.error).toBeNull();
+    expect(engine.serialTranscript().lines.filter((l) => l.text.startsWith('T '))).toHaveLength(0);
+  });
+});

@@ -643,3 +643,462 @@ has been performed.
 - **Unexpected activity is a failure unless the pattern ends in `*`.** A pattern that names three
   segments against a capture with five runs has not been satisfied; silence after the pattern must
   be stated, not assumed.
+
+## Co-Lab foundation: one seeded history per room, proven before the network — 25 September 2026
+
+Spec §15 asks for multiplayer co-editing (shared circuit, presence, comments, roles). The slice
+shipped is the **converged-document foundation** behind `NEXT_PUBLIC_FEATURE_MULTIPLAYER` — the
+part that is pure, testable and transport-agnostic — rather than a networked demo we could not
+verify end-to-end from the sandbox.
+
+- **The whole `ProjectDoc` is one Yjs document.** `mapping.ts` lays meta, diagram, files, sim
+  prefs and chips into Y.Maps and projects back to a canonical `ProjectDoc` (parts/wires/files
+  sorted by id). Everything the document *contains* is shared; everything *derived* — the
+  per-part `fidelity` map — is recomputed on projection, never synced, so replicas can never
+  diverge on a computed field. `updatedAt` is local save metadata and stays out of the doc.
+- **Y.Maps must be attached before they are written.** Populating a detached Y.Map and then
+  attaching it throws in Yjs; the mapping layer always `parent.set(id, map)` first. This cost a
+  debugging session; the rule is encoded in tests.
+- **Join protocol: hello → grace → adopt or found.** Seeding the room document independently on
+  every peer is wrong: two seeds create two histories whose identical-looking keys carry equal
+  Yjs clocks, and last-writer-wins then resolves them by clientID tie-break — silently deleting
+  one peer's work. Instead, a new session announces `hello`, waits `joinGraceMs` (default
+  400 ms), and either adopts the existing history a peer sends back, or founds the room from its
+  local doc if nobody answers. A local edit before adoption founds immediately (the user has
+  already committed to their own copy). One room, one seeded history.
+- **The known edge, stated rather than hidden:** two editors opening the same *brand-new* room
+  within the grace window both found, and their identical starter content merges invisibly while
+  divergent first edits become a genuine fork. The hosted transport (authoritative server) is
+  what removes this class of ambiguity; until then the UI scopes rooms to one browser anyway.
+  Conversely, if a founder's state reply is delivered *after* a joiner's grace expired (possible
+  with slow transports), the joiner also founds — protocol-correct, so tests must drain the
+  transport before expecting adoption.
+- **The state-diff bridge invariant.** The store holds the merged truth: every remote projection
+  goes through `useLab.applyRemoteDoc` before the next local diff is computed, and `baseDoc`
+  advances past it. Breaking that order makes a diff against a stale local base express a peer's
+  additions as deletions — the classic bug, caught by a dedicated regression test that previously
+  passed vacuously.
+- **Undo stays local.** User-facing undo/redo remains the Zustand Immer stack; the store never
+  puts remote documents in history, so undo never resurrects a deleted part or rolls back a peer.
+  `CollabSession` additionally runs an origin-scoped `Y.UndoManager` (tracks only the session's
+  own origin; broadcasts the inverse) — verified isolated from remote work — as the documented
+  upgrade path for collaborative undo.
+- **Files and nested prefs are last-writer-wins per key.** Code files sync whole-file (the
+  editor emits files, not deltas); scope/multimeter pref maps and chip defs are JSON-encoded
+  values. `Y.Text` character merging arrives when the editor emits deltas; no command edits a
+  JSON key field-by-field today, so nothing is lost meanwhile — and the limit is said so.
+- **Presence is session-only and never in the document.** Heartbeat (1.5 s, spec), silence-based
+  expiry, and a strict rule: presence frames never touch the Y.Doc, so a state snapshot of a
+  room is exactly the project — verified by test.
+- **Zero-config honesty: BroadcastChannel only.** The shipped transport reaches other tabs of
+  the *same browser profile* and nothing else; the panel says so in the UI (EN + HI). A hosted
+  transport implements the same `CollabTransport` interface — the session layer is
+  transport-agnostic by construction, and `MemoryHub` with manual/shuffled flushes gives the
+  adversarial delivery tests a hosted-like environment without any network.
+- **Budget discipline:** yjs loads only as a lazy chunk opened with the Co-Lab rail tab; the
+  builder's first-load JS is unchanged (102.4 kB gzipped, gate 250 kB).
+
+## Co-Lab relay: the server keeps the merged room, so joins stop guessing — 25 September 2026
+
+The foundation slice joined rooms by *guessing* (hello → grace → adopt or found). That is
+correct on a reliable local channel, but over a real network a lost hello forks a room. The
+hosted slice therefore does not extend the guess — it replaces it with an answer.
+
+- **The relay is not a dumb pipe: it keeps the merged Yjs state of every room.** Every
+  `update` is applied to a per-room server Y.Doc, so the relay can answer "does this room have
+  history, and what is it?" authoritatively. Consequences, each one a test: a joiner adopts the
+  server state without any hello exchange (no network founder race); a late joiner converges
+  from the relay alone after every original peer left; a reconnecting client heals everything
+  it missed during an outage. A dumb relay would have needed a designated "state holder" peer
+  and reintroduced the races this design deletes.
+- **`requestSync` is an optional capability on `CollabTransport`; the session never loses its
+  fallback.** Hosted transports answer the join with state-or-null; peer-to-peer transports keep
+  hello/grace untouched. If the sync rejects, the session falls back to hello/grace; if it hangs
+  past `syncTimeoutMs`, the session founds locally — offline edits stay possible against a dead
+  relay and merge when the link returns. Capability over configuration: nothing about the
+  BroadcastChannel path changed.
+- **JSON frames with base64 updates.** Base64 costs ~33 % on update payloads in exchange for a
+  plain-JSON protocol that is trivially inspectable and strictly decodable (malformed frames get
+  an error frame, never a crash). At classroom-circuit scale this is the right trade; binary
+  framing is the documented optimisation if relay traffic ever matters.
+- **Memory-only honesty, enforced by design:** no accounts, no persistence, no end-to-end
+  encryption, presence names visible to room peers; restarting the relay clears every room.
+  Rooms also face a cap with idle-first eviction and a TTL, and oversized or malformed frames
+  are rejected. The UI says this when the server mode is chosen; persistent rooms belong to the
+  future hosted tier, which is exactly what this relay deliberately does not fake.
+- **Reconnect healing rides on Yjs idempotence.** On every (re)join the relay's current state is
+  merged back as an update from a synthetic `@relay` sender, then the bounded outbox (2 000
+  messages, oldest dropped) flushes. Updates are order-independent and the state is refetched on
+  rejoin, so overflow cannot corrupt a room — only delay it.
+- **A latent empty-doc bug, found by this slice:** `Y.encodeStateVector` of a brand-new doc is
+  one byte (`[0]`), so "state-vector length > 0" reports content where there is none. In the
+  foundation slice this was harmless (grace-expiry seeding is unconditional), but it would have
+  made the relay tell every new room it already had history — silently un-founding them. The
+  check now walks the decoded vector for any client clock > 0, in the session and the relay.
+- **Residual ambiguity, narrowed and stated:** two clients founding the same *truly empty*
+  hosted room simultaneously both seed; identical starters merge invisibly, divergent first
+  edits fork. The relay's authoritative answer shrinks this window to a same-tick race, and
+  server-side room persistence will close it.
+- **Bundle discipline:** `relay.ts` (the only file importing `ws`) is server-only and never
+  imported by app code — verified: zero `ws`/relay markers in any client chunk. The client
+  transport uses the platform WebSocket global, so the builder's first-load JS is unchanged
+  (102.4 kB gzipped, gate 250 kB) and yjs remains a lazy chunk.
+
+## The VS Code extension is a shell over MCP, not a second engine — 25 September 2026
+
+Spec §15 asks for an editor-panel integration. The shipped MCP server (`sparklab-cli mcp`)
+already exposes the whole headless surface as tools, so the extension *consumes* it instead of
+re-implementing anything.
+
+- **One engine, zero drift.** Inspect/ERC, free-run, scenario verdicts and Wokwi/KiCad/BOM
+  export all run in the CLI's engines through newline-delimited JSON-RPC over stdio; the
+  extension only spawns the server, calls tools and renders results. The sandbox rule (paths
+  confined to the server's working directory) is inherited, not re-decided. No telemetry, no
+  network: the server is a child process of the user's own editor.
+- **The testable core lives in the main tree, not the extension package.** `mcp-client.ts`
+  (spawn + JSON-RPC + timeouts + typed tool conveniences) and `mcp-format.ts` (result rendering
+  and HTML-escaped webview bodies) sit in `src/lib/cli/`, so the repo's typecheck and suite
+  cover them; the extension's `src/` is excluded from the root tsconfig and checked by its own
+  (`npm run ext:check`) because it needs the `vscode` types. The client imports only Node
+  builtins, so esbuild bundles it into the 20 kB extension verbatim with `vscode` external.
+- **Integration tests spawn the real server.** Ten tests exercise the full stdio path —
+  handshake identity, `tools/list`, project listing/loading, free-run, a scenario verdict, Wokwi
+  export, unknown-tool JSON-RPC error, sandbox-escape refusal, close semantics — against an
+  actual `sparklab-cli mcp` child process. Mocking the protocol here would test nothing that
+  matters.
+- **The stated verification boundary:** VS Code cannot run in this sandbox, so — same convention
+  as the Playwright specs — the editor-host wiring is verified by `tsc -p vscode-sparklab`, the
+  esbuild bundle, and the headless engine tests; what needs a real editor is left to the F5 dev
+  loop documented in `vscode-sparklab/README.md`. Marketplace packaging and richer in-editor
+  rendering (schematic preview, inline ERC squiggles) are explicitly open.
+
+## Pricing: the lab is free forever; paid tiers sell hosted convenience, never the lab — 25 September 2026
+
+Phase 15 asked for pricing and school/org billing. The decision encoded in
+`src/lib/billing/plans.ts` and shown on `/pricing`:
+
+- **Free means free, permanently.** Everything that runs in the browser or self-hosted —
+  builder, engines, missions, exports, CLI/MCP, classrooms on your own Postgres, Co-Lab rooms
+  via your own relay, the mentor gateway with your own key — is the ₹0 tier. The feature matrix
+  is code, and a test pins that every shipped row is reachable without paying.
+- **Paid tiers sell hosted convenience, not the lab.** Hosted Classroom and School & Org
+  cover managed accounts/cloud storage, a managed relay with persistent rooms, managed model
+  hosting, org administration and support. A commitment made now and written on the page: the
+  hosted tier will not move a currently-free capability behind a paywall.
+- **No invented prices.** `priceInr: null` means "to be decided"; the page renders "Pricing
+  TBD". Numbers belong to a business decision with pilot schools, not to a code sandbox, and
+  showing fabricated ones would break the project's honesty rule.
+- **No checkout, by construction.** Payment processing needs credentials, webhooks and a legal
+  entity; none of those belong in this repository. What ships is the model, the page and the
+  invariants — integration is the explicitly open remainder, blocked on the hosted-tier
+  decision, which this model is designed to make reversible: tiers gate only hosted-planned
+  rows.
+
+## Accessible popups: headless model first, no widget library — 25 September 2026
+
+The debt item said it plainly: skipping shadcn/Radix left the toolbar popups as plain buttons —
+no arrow-key navigation, no `role="menu"`, no focus return. The fix follows the repo's standing
+pattern instead of adding a dependency.
+
+- **The interaction model is a pure function.** `menuKeyNav(items, state, key, now)` implements
+  the WAI-ARIA menu-button pattern (arrows with wrap, Home/End, Enter/Space activation,
+  Escape/Tab dismissal, 500 ms-window character type-ahead that skips disabled labels). Every
+  decision is unit-testable in a node environment — 17 tests pin the matrix including the edge
+  cases (all-disabled lists, wrap direction, buffer expiry, disabled-label skips). The React
+  wrapper owns only DOM concerns: roving focus, outside-click dismissal, focus return.
+- **Semantics chosen from the APG, stated here:** opening focuses the first enabled item (last
+  for ArrowUp/Shift+F10); Escape and keyboard activation dismiss AND return focus to the
+  trigger; pointer selection and outside-click dismissal do not steal focus; `aria-controls`
+  exists only while the menu is open; the active item owns the roving tab stop.
+- **Migrated, not bolted on:** the toolbar Templates and Missions popups (including their
+  responsive small-screen placement, preserved via `panelClassName` merged under
+  tailwind-merge) now render through the primitive; the old hand-rolled Escape-only handlers
+  are gone.
+- **The honest remainder:** a combobox primitive ships when a consumer needs it (the palette
+  search is a plain filter input today), and screen-reader behaviour is verified in the CI
+  browser job (`e2e/menus.spec.ts`), not claimed from this sandbox.
+
+## Wokwi export: shipped chips go out as custom chips, the rest stay honest — 25 September 2026
+
+Debt item 6 framed the Wokwi export gap as "64 of 166 parts get skipped; shims would make it
+complete." Auditing each skip changed the answer: most of those parts are genuinely unmappable,
+and the small remainder that *is* fixable is now fixed properly.
+
+- **What was wrong to leave skipped.** The three shipped logic chips (NOT gate, window
+  comparator, pulse generator) already carry full `ChipDef`s whose `source` field is literal
+  Wokwi Chips API C. Skipping them at export meant a SparkLab project with a NOT gate lost a
+  wired, working part on the way to Wokwi — despite the repo owning everything needed to carry
+  it over.
+- **The fix.** `wokwiTypeFor` now maps `chip-<slug>` parts (when the chip registry knows them)
+  to Wokwi diagram type `chip-<slug>`, the same custom-chip mechanism user-authored chips
+  already used. `bundle.ts` gained `wokwiProjectFiles()`, the single source of truth for the
+  Wokwi project file set: diagram.json, sketch.ino, libraries.txt, plus `<slug>.chip.json` and
+  `<slug>.c` attached once per chip type on the canvas. Builder download, MCP `export_diagram`
+  and any future consumer all build from it; the CLI's single-file `diagram export --wokwi`
+  prints a warning when chips are present, since their files cannot ride in one JSON document.
+- **What was deliberately NOT done.** The analogue sensors (soil, rain, MQ-2, MQ-135, line
+  array, FSR, pH, pulse oximeter, …) and RF/IoT parts (HC-05, SIM800L, LoRa E32, RFID RC522,
+  Raspberry Pi 5, …) have no model in Wokwi: the Chips API expresses digital logic in C, not
+  physics or radios. Fabricating custom-chip shims for them would export parts that silently do
+  nothing, violating the honesty rule — and pin-name guesswork on approximate part mappings
+  (28BYJ-48 stepper, 4-channel relay, L298N) would silently break exported wiring. Those ~60
+  parts remain skipped and are reported by name at export time, exactly as before.
+- **Round-trip verified.** Exported chips carry their exact SparkLab type through the
+  `sparklabType` attribute; import restores `chip-<slug>` parts with wires intact. Four new
+  tests pin this (export type per shipped chip, wiring round trip, zip attachment/dedup with
+  exact chip.json and C content, and honesty — an analogue part next to an exported chip is
+  still reported).
+
+## Emulator catalogue: eight verified parts in, honesty tiers kept — 25 September 2026
+
+Debt item 7 asked to close the emulator-catalogue gap against spec §9.B "as data". Data is only
+honest when every field is defensible, so this slice shipped exactly the parts whose Wokwi part
+type could be verified, and deferred what could not be.
+
+- **What shipped (67 → 75).** 6 mm pushbutton (`wokwi-pushbutton-6mm`), 74HC595 (`wokwi-74hc595`),
+  74HC165 (`wokwi-74hc165`), NLSF595 (`wokwi-nlsf595`), biaxial stepper (`wokwi-biaxial-stepper`),
+  WS2812 ring (`wokwi-led-ring`) and strip (`wokwi-led-strip`), Franzininho WiFi
+  (`board-franzininho-wifi`). Every id, pin name and attribute was taken from the corresponding
+  docs.wokwi.com reference page — pin strings use Wokwi's exact names (including `VDD.2`/`VSS.2`
+  on the strip) so Wokwi export needs no translation. The landing-page counter reads
+  `EMULATOR_CATALOGUE.length` and updated itself.
+- **Tier honesty.** The two shift registers, the NLSF595 and the biaxial stepper get
+  `tier: 'visual'` with notes that say plainly: exported to Wokwi with real pin names where Wokwi
+  models them; the SparkLab firmware slice does not decode them yet, so they stay static in-lab.
+  The 6 mm pushbutton is `exact` because it is electrically the already-modelled button adapter;
+  the ring and strip reuse the verified WS2812 bit-timing model.
+- **Deliberately deferred.** (a) The spec's logic gates, MUX and flip-flops: Wokwi's docs list
+  them but publish no part-type ids, and guessing ids would write unverifiable mappings into
+  exports — they wait for a capture from a live Wokwi diagram. (b) The remaining ESP32 board
+  variants and the NeoPixel meter / ILI9341-touch variants, which are the next data pass.
+- **Pinned by tests.** `src/lib/parts/catalogue.test.ts` (4 tests): unique part ids, unique Wokwi
+  types within the emulator catalogue (the servo family's shared `wokwi-servo` stays legal across
+  catalogues by design), the eight verified id→type mappings plus the visual-tier promises, and a
+  Wokwi export/import round trip through one of the new parts.
+
+## Serial panel: session transcript over the engine window, drops counted not hidden — 25 September 2026
+
+Debt item 5 said the Serial panel loses its earliest output on long runs because the engines
+cap their serial log at 600 lines. The fix keeps that engine cap and stops losing history above
+it instead.
+
+- **Why the engine cap stays.** The engines run in a worker and their serial log is a bounded
+  window by design — an unbounded log there is an unbounded memory leak for a sketch that prints
+  forever. Spec §8 calls for a ring buffer; what was missing was a view that outlives one ring.
+- **The fix.** Snapshots now carry `serialTotal` (lines ever printed). The sim client folds each
+  window into a session transcript (`src/lib/sim/serial-transcript.ts`, pure and unit-tested):
+  windows are deduplicated by the lifetime counter, engine restarts rewind the transcript, gaps —
+  lines printed between snapshots that no window reaches back to — are counted in `dropped`, and
+  the retained view is capped at 2 000 lines with head eviction also counted. The panel renders
+  the transcript, and when `dropped > 0` shows a notice (new i18n key `serialDropped`, EN + HI)
+  stating exactly how many earlier lines were cleared. Nothing is forgotten silently.
+- **Honesty notes.** The engines themselves still report `serialDropped: 0`; only the client
+  knows about view evictions, and it says so. The scenario runner was never lossy (it reads the
+  lifetime counter) and is unchanged. This is a UI-session improvement, deliberately in-memory:
+  per the privacy stance, serial history is never persisted.
+
+## Nested calls suspend: one call path, no synchronous executor — 25 September 2026
+
+Debt item 2 said calls embedded in expressions — `if (helper() > 3)`, `foo(helper())`,
+`return helper() + 1;` — ran the helper in one synchronous step while statement-level calls
+suspended. The fix is structural, not another special case.
+
+- **One call path.** The interpreter had two executors: the generator path (`exec` →
+  `callDeclGenerator`) for statements, and a hand-maintained synchronous twin (`execSync`,
+  ~120 lines of duplicated statement machinery) reached through `callFunction` from inside
+  expressions. Expression evaluation is now generator-based end to end (`*eval`, `*evalCall`,
+  `*doAssign`, `*assignTargetKey`, `*preInc`, `*declareVar`, `*stringMethod`, `*userCall`), and
+  every sketch-defined call — including methods on class instances, which now also respect their
+  declaration closure — runs through `callFn` → `callDeclGenerator`. `execSync` is deleted, so
+  the two executors can never diverge again.
+- **What suspension buys.** A `delay()` inside an expression-embedded helper passes observable
+  time (mid-delay pin states are snapshot-visible, like statement calls); busy work credits
+  virtual time per yield and returns control to the engine tick, so a tight loop in a nested
+  helper no longer blocks a worker frame; evaluation order and short-circuiting are preserved
+  (`&&`, `||`, ternaries, argument lists — pinned by test).
+- **The two contexts with nothing to suspend into.** Global initialisers before `setup()` and
+  interrupt handlers fired from the circuit cannot yield into the engine, so they drive the same
+  generator through `runToCompletion` — bounded at 20 000 resumes with the same HANG diagnostic
+  the old executor raised. No other code path uses it.
+- **Verification.** 4 new runtime tests (condition-embedded call caught mid-delay,
+  argument-embedded call caught mid-delay, busy nested work advancing millis() then returning,
+  order + recursion + values through the generator path) on top of the full 996-test suite,
+  scenario runs and firmware-parity suites, all green.
+
+## `take-screenshot` renders engine state to deterministic SVG — 25 September 2026
+
+Wokwi's `take-screenshot` rasterises a part's rendered pixels; SparkLab has no renderer, and
+inventing a pixel pipeline just for CI comparison would be theatre. The honest equivalent uses
+what the engines already model: the *decoded* visual state — LCD/OLED text lines, matrix cells,
+seven-segment value, LED/RGB colour, servo angle. `lib/scenarios/screenshot.ts` renders each of
+those into a small, byte-deterministic SVG (fixed geometry, no timestamps, XML-escaped text), so
+two runs of the same simulation produce identical files. `save-to` writes the capture,
+`compare-with` does an exact text comparison (after trim) and fails the step on drift, matching
+Wokwi's semantics (a step needs at least one of the two). Parts with no modelled visual state —
+relay, buzzer, sensors — fail the step with an explicit message instead of producing a fake image.
+
+File access is a `ScenarioIO { readText, writeText }` adapter injected into `runScenario`: the CLI
+supplies a real-filesystem adapter rooted at the project under test; the builder, MCP and chaos
+runs use `memoryScenarioIO`, so browser artifacts stay collectible via `ScenarioResult.artifacts`
+and nothing in the web app touches the host filesystem. The §17.3 CLI flags
+`--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed simulated
+window. `touch` and `publish-mqtt` stay deferred for concrete reasons — no touch-capable part in
+the catalogue (ILI9341+FT6206 not yet implemented) and no MQTT broker in the codebase (§17.1 is
+unbuilt) — rather than shipping as always-erroring stubs.
+
+Verification: 13 new tests (5 renderer determinism/escaping/null cases, parse round-trip +
+validation, runner save/compare/mismatch/missing-file/no-visual-state through a real engine on the
+dht-lcd template, 3 CLI end-to-end runs writing and comparing real files) — suite at 1009 passed /
+2 skipped, scenarios 10/10, budgets unchanged.
+
+## File contents are Y.Text: same-file edits merge character-by-character — 25 September 2026
+
+Co-Lab's foundation shipped file collaboration as per-file last-writer-wins: the `files` map held
+plain strings, so two editors working the same sketch at once meant one whole file silently
+replaced the other. The shared document now stores each file's content as a `Y.Text`, and the
+store bridge emits *localised* deltas instead of whole replacements.
+
+- **How the diff works.** `diffAndApply` anchors on the base document's content (what the shared
+  state is known to represent), strips the shared prefix/suffix between base and new content, and
+  applies only the middle as a Y.Text delete + insert. Everything the command layer emits for a
+  file is a single contiguous edit, so real keystroke-scale changes become tiny deltas, and two
+  edits in different regions of the same file merge through Yjs intact — pinned by a session-level
+  test where two editors concurrently change the baud rate and the delay of one sketch and both
+  replicas project the merged result.
+- **The honest limits.** (1) If the shared text moved under the anchor — a concurrent remote edit
+  landed in the same file between base and diff — positional deltas would land in the wrong place,
+  so the delta code detects the mismatch and replaces the whole text: still correct content, with
+  the concurrent change re-asserted by its author on the next sync. (2) A remote change still
+  reaches the local editor as a full document projection, so the editor's caret position (UI
+  state, not document state) is not preserved through a remote edit; content is never lost. Both
+  are strictly better than the old overwrite.
+- **Compatibility.** Readers tolerate legacy plain-string values (rooms seeded before this
+  change), upgrading them to Y.Text on first edit; seeding now creates Y.Text directly. The undo
+  manager already tracked the `files` root, so collaboration-safe undo covers text deltas with no
+  extra wiring.
+- **Verification.** 6 new tests (seed/project round trip through Y.Text, localised delta, anchor
+  rebase, legacy upgrade, add/delete files, concurrent same-file merge through two CollabSessions)
+  on top of the existing convergence suites: 1015 passed / 2 skipped, scenarios 10/10, budgets
+  unchanged.
+
+## Hindi remainder: builder chrome now translated, honesty note widened — 25 September 2026
+
+The Phase-15 Hindi slice had left four builder surfaces with hardcoded English: the Chaos Lab
+rail, the export/import controls, the inspector headings and the code pane labels. They now go
+through the message catalogue (~40 new keys, EN + HI, placeholder parity enforced by the existing
+catalogue test): hint ladder buttons, repair-check states, every export format label and hint,
+import notices (including the skipped-parts warnings), inspector section headings and empty
+state, the sketch textarea label, the editor-loading and offline-editor notices.
+
+What stays English, and says so: the `partial` honesty banner (shown whenever the UI runs in
+Hindi) now names the remaining categories explicitly — component names, challenge stories,
+live-state readouts, skill descriptions and diagnostic explanations. These are authored or
+generated content (96 kit + 75 emulator part entries, 8 chaos challenges, 15 ERC diagnostics);
+translating them is a content project, not a chrome pass, and claiming otherwise would break the
+honesty rule. One copy change: the Wokwi-zip skipped-parts notice no longer inflects "it was /
+they were" — plural inflection is locale-shaped, so the sentence reads "those parts were left
+out" in both languages.
+
+Verification: 3 new Hindi render tests (export/import + file input aria, empty inspector, chaos
+panel chrome around English challenge content) on top of the catalogue parity tests — suite at
+1018 passed / 2 skipped; scenarios 10/10; budgets green (home +1.4 kB gz from the new strings).
+
+## The VS Code extension packages locally; no marketplace account — 25 September 2026
+
+`npm run ext:package` runs the extension typecheck, the esbuild bundle and `vsce package`,
+producing `vscode-sparklab/sparklab-vscode.vsix` — verified byte-clean by `unzip -t` and a valid
+VSIX manifest (publisher `sparklab`, engine `^1.90.0`, workspace kind). The `.vsix` is a local,
+git-ignored artifact: SparkLab is open-source-by-repository, the zero-config rule forbids
+accounts, and a marketplace publisher needs an Azure DevOps account plus a review pipeline that
+adds nothing a student needs. Anyone with the repo (or CI) can rebuild the exact package; the
+manifest's integrity (main path, menu→command wiring, shipped icons, and that the shell imports
+only `vscode`, node builtins or the tested lib) is pinned by `extension-manifest.test.ts` in the
+main suite so the package can never silently drift from the tested surface.
+
+## CI builds the opt-in Co-Lab flag on so the e2e job can test it — 25 September 2026
+
+Co-Lab stays off by default (zero-config rule): `NEXT_PUBLIC_FEATURE_MULTIPLAYER` gates the UI
+and the flag is absent in local builds. But a feature CI never runs is a feature CI never
+catches, so the CI production-build step now sets the flag, and the e2e job (which serves that
+build) exercises multiplayer end to end — starting with the selection-ghosts spec. Two honesty
+guards: the budgets are re-run on the flagged build (collab remains lazy, so first-load numbers
+are unchanged), and every multiplayer e2e spec starts with a probe that skips gracefully when
+the tab is absent, so flag-off local builds never report a false failure. Presence data
+(selection ghosts included) remains session-only: it is never written to the Yjs document, to
+storage, or to traces.
+
+## Co-Lab comments are room annotations, not circuit state — 25 September 2026
+
+Comment threads live in a `comments` root of the shared Yjs document (partId -> Y.Array of
+comment maps) and are deliberately absent from the projected `ProjectDoc`: they are notes the
+people in a room leave for each other, like sticky notes on a bench, not properties of the
+circuit. Consequences, all stated in the UI/README rather than implied: exporting or saving a
+project never carries its comments; a fork starts with a clean thread; and the collaboration-
+safe undo manager (which tracks every shared root) lets an editor take back their own comment
+post without touching anyone else's. `onComments` fires on every origin (local post, undo,
+remote merge) so badges and threads never disagree with the shared state; text is capped at 500
+characters and trimmed, and empty posts are refused before they reach the wire.
+
+## Co-Lab roles are cooperation, not access control — 25 September 2026
+
+View-only mode exists because a classroom wants watchers: a teacher projecting a fix, a
+student following along without risking the shared circuit. It is implemented where it can be
+honoured honestly — the viewer's own session refuses to push (`applyDiff` returns false, before
+any Yjs transaction), presence announces the role so editors see who is watching, and the wire
+parser defaults unknown roles to editor rather than inventing permissions. What it is *not* is
+security: a BroadcastChannel or relay room has no authority, and a modified client could ignore
+the convention. We state that in the README/ROADMAP instead of implying protection. The
+complementary guarantee is the useful one: a viewer can never lose work, because nothing they
+do locally is ever merged over someone else's edit.
+
+## Session replay is local, bounded, and replays real merges — 25 September 2026
+
+The replay history records raw Yjs updates, not a re-interpretation of them: `docAt(t)` feeds
+the recorded updates (offset ≤ t) through `Y.applyUpdate`, which is precisely the merge path the
+live room used, so the replay cannot disagree with what participants saw. It is deliberately
+small and private — 2000 events per session, an explicit dropped counter instead of silent
+truncation, held in memory on the recording device, never transmitted and never persisted
+(matching the privacy stance for traces). The UI shows a document-level summary (parts, wires,
+open comments, name) rather than a second live canvas: rebuilding a full interactive canvas per
+scrub tick would be work pretending to be cheap, and the summary states exactly what the room
+held at each moment.
+
+## Remote code cursors are ghost carets, not shared selections — 25 September 2026
+
+The caret travels as an optional presence field (file + character offset), so it reuses the
+presence pipeline and its liveness guarantees — a vanished peer loses its ghost caret the same
+way it loses its canvas halo, with no separate protocol. Monaco decorations are the rendering
+vehicle: one zero-width range at `getPositionAt(offset)`, coloured via a static CSS class per
+wire-palette colour, with the peer's name in the hover message (Monaco decorations can't carry
+per-peer inline styles, and a hover label is the honest middle ground). Broadcasts are throttled
+to 40 ms because cursor-move events fire far faster than presence needs to travel. The offline
+textarea fallback deliberately draws nothing: faking caret overlays there would be decoration
+pretending to be editing feedback.
+
+## The MQTT broker is a lab bus, not a network stack — 25 September 2026
+
+Spec §17.1 asks for an in-app MQTT broker view. What ships is exactly that: an in-memory topic
+bus implementing MQTT's topic semantics (levels, `+`/`#` wildcards, retained messages with the
+empty-payload-clears rule) plus a dock tab that publishes to it and shows its bounded log. The
+simulated sketches have no network stack — no WiFi part, no TCP model — so nothing on the
+canvas can subscribe; saying otherwise would claim connectivity the engines do not model. The
+panel states this plainly, `publish-mqtt` scenario steps feed the per-run bus, and the module's
+shape (subscribe/publish/retained/history) is what a future networked part would attach to
+without redesign. Refusals are actionable (the broker's reason surfaces in both the panel and
+the failed step), and history truncation is counted, never silent.
+
+## Touchscreen is a modelled controller, not a rendered display — 25 September 2026
+
+The ILI9341+FT6206 part models what the lab can verify: the touch controller, at the library
+level. `ts.touched()` and `ts.getPoint()` read the part's Touch X / Touch Y / Touching
+controls, so scenario steps, the Inputs dock, and sketches all drive one source of truth, and a
+`touch` step holding a press across simulated time is observable by the sketch. Coordinates
+travel in the controller's own space (0-239 × 0-319) and are passed through exactly as given —
+the sketch maps them to display space, precisely as on real hardware (Wokwi documents the same
+convention, including the bottom-right origin the firmware must flip). The TFT itself gets no
+framebuffer: `Adafruit_ILI9341` is an accepted-but-inert object, and the catalogue part states
+that plainly instead of pretending to render. `wait: true` on a `touch` step is parsed and
+treated as a no-op because the engine's virtual clock already advances through the whole press
+duration — there is no firmware latency to wait out. The firmware-catalogue `emu-ili9341`
+entry previously claimed FT6206 touch "emulated over I2C"; no such model exists, so the note
+was corrected rather than left as an unverified claim.

@@ -94,6 +94,51 @@ describe('sparklab-cli run', () => {
   });
 });
 
+describe('sparklab-cli screenshots', () => {
+  it('captures a part as SVG with --screenshot-part/--time/--file', async () => {
+    const dir = tempProject('dht-lcd');
+    const { io, out } = capture(dir);
+    const code = await runCli(['.', '--screenshot-part', 'lcd', '--screenshot-time', '500', '--screenshot-file', 'shot/lcd.svg'], io);
+    expect(code).toBe(EXIT.ok);
+    expect(out.join('\n')).toContain('screenshot of "lcd"');
+    const svg = readFileSync(join(dir, 'shot/lcd.svg'), 'utf8');
+    expect(svg.startsWith('<svg xmlns=')).toBe(true);
+    // Deterministic capture: a second run writes the identical file.
+    await runCli(['.', '--screenshot-part', 'lcd', '--screenshot-time', '500', '--screenshot-file', 'shot/lcd2.svg', '--quiet'], io);
+    expect(readFileSync(join(dir, 'shot/lcd2.svg'), 'utf8')).toBe(svg);
+  });
+
+  it('rejects captures of parts without visual state', async () => {
+    const dir = tempProject('dht-lcd');
+    const { io, err } = capture(dir);
+    expect(await runCli(['.', '--screenshot-part', 'dht', '--screenshot-file', 'x.svg'], io)).toBe(EXIT.fail);
+    expect(err.join('\n')).toContain('no visual state');
+    expect(await runCli(['.', '--screenshot-part', 'lcd'], io)).toBe(EXIT.usage);
+  });
+
+  it('saves and compares screenshots through the test command', async () => {
+    const dir = tempProject('dht-lcd');
+    writeFileSync(
+      join(dir, 'shot.test.yaml'),
+      'name: shot\nsteps:\n  - delay: 500ms\n  - take-screenshot: { part-id: lcd, save-to: out/lcd.svg }\n',
+    );
+    const { io, err } = capture(dir);
+    expect(await runCli(['test', '.', '--recursive'], io)).toBe(EXIT.ok);
+    expect(err.join('\n')).toContain('1 passed, 0 failed');
+    const svg = readFileSync(join(dir, 'out/lcd.svg'), 'utf8');
+    expect(svg.startsWith('<svg xmlns=')).toBe(true);
+
+    // Compare against the golden file: passes identical, fails after drift.
+    writeFileSync(
+      join(dir, 'compare.test.yaml'),
+      'name: compare\nsteps:\n  - delay: 500ms\n  - take-screenshot: { part-id: lcd, compare-with: out/lcd.svg }\n',
+    );
+    expect(await runCli(['test', '.', '--recursive'], io)).toBe(EXIT.ok);
+    writeFileSync(join(dir, 'out/lcd.svg'), `${svg}\n<!-- drift -->`);
+    expect(await runCli(['test', '.', '--recursive'], io)).toBe(EXIT.fail);
+  });
+});
+
 describe('sparklab-cli lint', () => {
   it('passes a correct circuit', async () => {
     const { io, err } = capture(tempProject());
@@ -207,6 +252,7 @@ describe('JUnit report', () => {
           steps: [{ index: 0, step: { kind: 'delay', ms: 1 }, ok: false, message: 'bad <thing>', atMs: 1 }],
           serial: ['beep\u0007', 'x < y'],
           simulatedMs: 1,
+          artifacts: [],
         },
       },
     ]);

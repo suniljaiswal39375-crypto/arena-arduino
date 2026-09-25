@@ -230,3 +230,74 @@ void loop() { delay(100); }`);
     expect(out.slice(0, 6)).toEqual(['11', '6', 'Hello', 'HELLO WORLD', 'yes', '43']);
   });
 });
+
+describe('nested calls suspend like statement calls', () => {
+  const engineFor = (source: string) => {
+    const doc = createProject();
+    doc.diagram.parts.push(makePart('arduino-uno', 0, 0));
+    const engine = new SimEngine(doc);
+    engine.load(doc, source);
+    engine.start();
+    return { engine, board: doc.diagram.parts[0]!.id };
+  };
+
+  it('lets time pass inside a helper called from a condition', () => {
+    // if (pulse()) ... used to run pulse() in one synchronous step, so no
+    // snapshot could ever catch the pin HIGH. The call now suspends.
+    const { engine, board } = engineFor(
+      'int pulse() { digitalWrite(7, HIGH); delay(500); digitalWrite(7, LOW); return 1; }\n' +
+        'int done = 0;\n' +
+        'void setup() { pinMode(7, OUTPUT); }\n' +
+        'void loop() { if (done == 0) { if (pulse()) { done = 1; } } delay(100); }',
+    );
+    engine.tick(100, 1);
+    expect(engine.error).toBeNull();
+    expect(engine.pinLevel(board, '7'), 'mid-pulse').toBe(1);
+    for (let i = 0; i < 8; i++) engine.tick(100, 1);
+    expect(engine.pinLevel(board, '7'), 'after the pulse').toBe(0);
+  });
+
+  it('lets time pass inside a helper called as an argument', () => {
+    const { engine, board } = engineFor(
+      'int pulse() { digitalWrite(7, HIGH); delay(500); digitalWrite(7, LOW); return 1; }\n' +
+        'void setup() { pinMode(7, OUTPUT); Serial.begin(9600); }\n' +
+        'void loop() { Serial.println(pulse()); delay(100); }',
+    );
+    engine.tick(100, 1);
+    expect(engine.error).toBeNull();
+    expect(engine.pinLevel(board, '7'), 'mid-pulse').toBe(1);
+    for (let i = 0; i < 10; i++) engine.tick(100, 1);
+    const out = engine.snapshot().serial.map((l) => l.text.trim());
+    expect(out[0]).toBe('1');
+  });
+
+  it('passes virtual time for busy work in a nested call, then finishes', () => {
+    // A helper that loops without delaying: millis() must advance while it
+    // runs, and the call must still return its result.
+    const { engine } = engineFor(
+      'long busy() { long acc = 0; for (long i = 0; i < 5000; i++) { acc = (acc + i) % 997; } return acc; }\n' +
+        'void setup() { Serial.begin(9600); long t0 = millis(); long v = busy() + busy(); long dt = millis() - t0; Serial.print("dt="); Serial.println(dt > 0); Serial.println(v == 2 * busy()); }\n' +
+        'void loop() { delay(100); }',
+    );
+    for (let i = 0; i < 8; i++) engine.tick(100, 1);
+    expect(engine.error).toBeNull();
+    const out = engine.snapshot().serial.map((l) => l.text.trim());
+    expect(out.slice(0, 2)).toEqual(['dt=1', '1']);
+  });
+
+  it('keeps values, evaluation order and recursion intact through the generator path', () => {
+    const { engine } = engineFor(
+      'int fib(int n) { return n < 2 ? n : fib(n - 1) + fib(n - 2); }\n' +
+        'int side(int v) { Serial.print("s"); Serial.print(v); return v; }\n' +
+        'void setup() { Serial.begin(9600); Serial.println(fib(10)); int sum = side(1) + side(2) * side(3); Serial.println(sum); }\n' +
+        'void loop() { delay(100); }',
+    );
+    for (let i = 0; i < 4 && engine.running; i++) engine.tick(100, 1);
+    expect(engine.error).toBeNull();
+    const out = engine.snapshot().serial.map((l) => l.text.trim());
+    expect(out[0]).toBe('55');
+    // Left-to-right operand order is preserved (s1 before s2 before s3), and
+    // 1 + 2*3 = 7 prints right after. print() adds no newline, so they join.
+    expect(out[1]).toBe('s1s2s37');
+  });
+});

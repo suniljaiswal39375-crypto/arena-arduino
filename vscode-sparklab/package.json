@@ -1,0 +1,90 @@
+{
+  "name": "sparklab-vscode",
+  "displayName": "SparkLab",
+  "description": "Drive SparkLab Arduino projects from VS Code — inspect, electrically lint, simulate (free-run or scenario YAML) and export Wokwi/KiCad/BOM through the repo's MCP server.",
+  "version": "0.1.0",
+  "publisher": "sparklab",
+  "license": "SEE LICENSE IN THE REPOSITORY",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suniljaiswal39375-crypto/arena-arduino.git",
+    "directory": "vscode-sparklab"
+  },
+  "icon": "media/icon.png",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Education",
+    "Simulation"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "sparklabProjects",
+          "name": "SparkLab Projects",
+          "icon": "media/spark.svg",
+          "contextualTitle": "SparkLab"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "sparklab.refreshProjects", "title": "Refresh Projects", "category": "SparkLab", "icon": "$(refresh)" },
+      { "command": "sparklab.inspectProject", "title": "Inspect Project", "category": "SparkLab" },
+      { "command": "sparklab.runFreeRun", "title": "Run Simulation (free-run)", "category": "SparkLab" },
+      { "command": "sparklab.runScenarioFile", "title": "Run Scenario File…", "category": "SparkLab" },
+      { "command": "sparklab.exportWokwi", "title": "Export Wokwi Files", "category": "SparkLab" },
+      { "command": "sparklab.exportKicad", "title": "Export KiCad Netlist", "category": "SparkLab" },
+      { "command": "sparklab.exportBom", "title": "Export BOM CSV", "category": "SparkLab" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "sparklab.refreshProjects", "when": "view == sparklabProjects", "group": "navigation" }
+      ],
+      "view/item/context": [
+        { "command": "sparklab.inspectProject", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@1" },
+        { "command": "sparklab.runFreeRun", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@2" },
+        { "command": "sparklab.runScenarioFile", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@3" },
+        { "command": "sparklab.exportWokwi", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@4" },
+        { "command": "sparklab.exportKicad", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@5" },
+        { "command": "sparklab.exportBom", "when": "view == sparklabProjects && viewItem == sparklabProject", "group": "sparklab@6" }
+      ]
+    },
+    "configuration": {
+      "title": "SparkLab",
+      "properties": {
+        "sparklab.freeRunMs": {
+          "type": "number",
+          "default": 3000,
+          "minimum": 50,
+          "maximum": 30000,
+          "description": "Virtual milliseconds for 'Run Simulation (free-run)'."
+        },
+        "sparklab.scanPath": {
+          "type": "string",
+          "default": "",
+          "description": "Directory (relative to the workspace root) scanned for projects. Empty = the whole workspace."
+        },
+        "sparklab.mcpCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Override the executable that runs `sparklab-cli mcp`. Empty = <workspace>/node_modules/.bin/vite-node."
+        },
+        "sparklab.mcpArgs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Override arguments for the MCP server command. Empty = the repository default."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "typecheck": "tsc -p ."
+  }
+}

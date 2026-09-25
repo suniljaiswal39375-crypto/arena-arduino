@@ -22,6 +22,10 @@ export interface SimSnapshot {
   clockUs: number;
   parts: Record<string, PartState>;
   serial: SerialLine[];
+  /** How many lines have ever been printed; survives the serial window cap. */
+  serialTotal: number;
+  /** Lines that left the retained panel view (engines report 0; the client counts). */
+  serialDropped: number;
   /** Numeric series harvested from the serial log, for the plotter. */
   plot: number[][];
   plotLabels: Array<string | undefined>;
@@ -253,6 +257,8 @@ export class SimEngine {
       clockUs: this.circuit.nowUs(),
       parts: this.circuit.snapshot(),
       serial: this.circuit.serialLog,
+      serialTotal: this.circuit.serialTotal,
+      serialDropped: 0,
       plot: this.plot.map((s) => [...s]),
       plotLabels: [...this.plotLabels],
       logicAnalyzers: this.circuit.logicTraces(),

@@ -30,6 +30,10 @@ jobs:
         run: npm test
 
       - name: Production build
+        # Co-Lab is opt-in by default (zero-config rule), but the e2e job
+        # below exercises the multiplayer surfaces, so CI builds them on.
+        env:
+          NEXT_PUBLIC_FEATURE_MULTIPLAYER: 'true'
         run: npm run build
 
       - name: Performance budgets

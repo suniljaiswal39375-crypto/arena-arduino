@@ -1,6 +1,7 @@
 import { createProject, makePart, makeWire } from '@/lib/doc/factory';
 import { WIRE_COLORS, type PartInstance, type ProjectDoc, type WireColor } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
+import { chipById } from '@/lib/chips/chips';
 import { PRODUCT_NAME } from '@/lib/brand';
 
 /**
@@ -78,6 +79,9 @@ const MAPPINGS: Record<string, PartMapping> = {
   'buzzer-passive': { type: 'wokwi-buzzer', pins: { '+': '2', '-': '1' } },
   'lcd-16x2-i2c': { type: 'wokwi-lcd1602', attrs: () => ({ pins: 'i2c' }) },
   'oled-128x64': { type: 'board-ssd1306' },
+  // Wokwi's ILI9341 carries the FT6206 touch controller on the same part; the
+  // resistive T_* pins have no counterpart and their wires drop on import.
+  'ili9341-touch': { type: 'wokwi-ili9341' },
   'pir-motion': { type: 'wokwi-pir-motion-sensor' },
   'ldr-module': { type: 'wokwi-photoresistor-sensor' },
   'led-rgb': { type: 'wokwi-rgb-led', pins: { K: 'COM' }, attrs: () => ({ common: 'cathode' }) },
@@ -136,6 +140,10 @@ export function wokwiTypeFor(type: string): string | null {
   // Authored chips export as Wokwi custom chips: type `chip-<name>` plus the
   // `<name>.chip.json` and `<name>.c` files wokwiZip attaches.
   if (type.startsWith('user-chip-')) return `chip-${type.slice('user-chip-'.length)}`;
+  // The three shipped logic chips export through the same custom-chip
+  // mechanism: their chip.json and Wokwi Chips API C source live in the chip
+  // registry and are attached by wokwiZip.
+  if (type.startsWith('chip-') && chipById(type)) return `chip-${type.slice('chip-'.length)}`;
   return MAPPINGS[type]?.type ?? getPart(type)?.wokwi ?? null;
 }
 

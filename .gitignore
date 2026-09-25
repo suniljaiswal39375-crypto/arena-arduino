@@ -28,6 +28,10 @@ coverage/
 
 # logs
 npm-debug.log*
+
+# vscode extension build output
+vscode-sparklab/dist/
+vscode-sparklab/*.vsix
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*

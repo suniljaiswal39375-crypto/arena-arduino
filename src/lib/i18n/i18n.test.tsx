@@ -5,6 +5,10 @@ import { LanguageProvider, useI18n } from './client';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { ConnectionsPanel } from '@/components/builder/ConnectionsPanel';
 import { Toolbar } from '@/components/builder/Toolbar';
+import { ProjectFiles } from '@/components/builder/ProjectFiles';
+import { Inspector } from '@/components/builder/Inspector';
+import { ChaosPanel } from '@/components/builder/ChaosPanel';
+import { CHAOS_CHALLENGES } from '@/lib/chaos/chaos';
 import { firstRunDoc, useLab } from '@/store/lab';
 
 const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
@@ -66,5 +70,28 @@ describe('translated controls', () => {
     expect(html).toContain('aria-label="पूर्ववत करें"');
     expect(html).toContain('value="firmware"');
     expect(html).not.toContain('value="firmware" disabled=""');
+  });
+  it('translates export/import controls and their file input', () => {
+    useLab.getState().loadDoc(firstRunDoc());
+    const html = renderToString(<LanguageProvider initialLocale="hi"><ProjectFiles /></LanguageProvider>);
+    expect(html).toContain('निर्यात');
+    expect(html).toContain('आयात');
+    expect(html).toContain('SparkLab प्रोजेक्ट, Wokwi diagram.json या Wokwi प्रोजेक्ट ज़िप आयात करें');
+  });
+  it('translates the empty inspector', () => {
+    useLab.getState().loadDoc(firstRunDoc());
+    useLab.getState().select(null);
+    const html = renderToString(<LanguageProvider initialLocale="hi"><Inspector states={{}} /></LanguageProvider>);
+    expect(html).toContain('पिन, गुण और सटीकता नोट देखने के लिए कोई घटक चुनें।');
+  });
+  it('translates the Chaos Lab panel chrome around the English challenge content', () => {
+    useLab.getState().loadDoc(firstRunDoc());
+    const challenge = CHAOS_CHALLENGES[0]!;
+    const html = renderToString(<LanguageProvider initialLocale="hi"><ChaosPanel challenge={challenge} onRestart={() => undefined} /></LanguageProvider>);
+    expect(html).toContain('मुझे संकेत चाहिए');
+    expect(html).toContain('मेरा सुधार जाँचें');
+    expect(html).toContain('aria-label="चुनौती फिर से शुरू करें"');
+    // The challenge story itself is authored content and stays in English.
+    expect(html).toContain(challenge.brief);
   });
 });

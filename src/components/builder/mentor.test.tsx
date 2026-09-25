@@ -26,6 +26,8 @@ function snapshotWith(serial: Array<{ at: number; text: string }> = []): SimSnap
     clockUs: 1_500_000,
     parts: {},
     serial,
+    serialTotal: serial.length,
+    serialDropped: 0,
     plot: [],
     plotLabels: [],
     logicAnalyzers: [],

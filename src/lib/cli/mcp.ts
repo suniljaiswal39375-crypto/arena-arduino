@@ -5,7 +5,7 @@ import { runERC } from '@/lib/erc/diagnostics';
 import { SimEngine } from '@/lib/sim/engine';
 import { parseScenario } from '@/lib/scenarios/parse';
 import { runScenario } from '@/lib/scenarios/runner';
-import { toWokwiDiagram, librariesTxt } from '@/lib/interop/wokwi';
+import { wokwiProjectFiles } from '@/lib/interop/bundle';
 import { bomCsv, kicadNetlist } from '@/lib/interop/exports';
 import { loadProject } from './project-dir';
 
@@ -166,6 +166,8 @@ const TOOLS: ToolDef[] = [
           serial: result.serial.slice(-200),
           simulatedMs: result.simulatedMs,
           error: result.error,
+          // Screenshots written by take-screenshot steps (in-memory IO).
+          artifacts: result.artifacts,
         };
       }
       const raw = typeof args.ms === 'number' ? args.ms : 3000;
@@ -187,7 +189,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'export_diagram',
-    description: 'Export a project: `wokwi` (diagram.json + libraries.txt as files), `kicad` (S-expression netlist) or `bom-csv` (bill of materials).',
+    description: 'Export a project: `wokwi` (diagram.json + sketch + libraries, plus custom-chip files when chips are on the canvas), `kicad` (S-expression netlist) or `bom-csv` (bill of materials).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -203,15 +205,10 @@ const TOOLS: ToolDef[] = [
       const format = str(args, 'format') ?? 'wokwi';
       if (format === 'kicad') return { format, text: kicadNetlist(doc) };
       if (format === 'bom-csv') return { format, text: bomCsv(doc) };
-      const { diagram, skipped } = toWokwiDiagram(doc);
-      const sketch = doc.files['sketch.ino'] ?? '';
+      const { files, skipped } = wokwiProjectFiles(doc);
       return {
         format,
-        files: [
-          { name: 'diagram.json', content: `${JSON.stringify(diagram, null, 2)}\n` },
-          { name: 'sketch.ino', content: sketch },
-          { name: 'libraries.txt', content: librariesTxt(sketch) },
-        ],
+        files,
         skipped: skipped.map((s) => `${s.name} (${s.id})`),
       };
     },

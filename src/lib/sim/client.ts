@@ -8,6 +8,7 @@ import type { FirmwareWorkerRequest, FirmwareWorkerResponse } from './firmware/w
 import type { FirmwareSnapshot } from './firmware/interfaces';
 import type { BuildMessage } from './firmware/build-events';
 import { firmwareSnapshotAsSim, firmwareLoadError } from './firmware/adapt';
+import { accumulateSerial, emptySerialTranscript, type SerialTranscriptState } from './serial-transcript';
 
 /** The subset of `FirmwareRuntime` the inline no-worker fallback calls. */
 interface FirmwareInline {
@@ -50,12 +51,28 @@ export class SimClient {
   onState: ((snapshot: SimSnapshot) => void) | null = null;
   onBuildEvent: ((event: BuildMessage) => void) | null = null;
 
+  /** Session serial view folded from each engine window; see serial-transcript. */
+  private serialTranscript: SerialTranscriptState = emptySerialTranscript();
+
+  /**
+   * Hand one snapshot to the UI, extending the engine's bounded serial window
+   * into the longer session transcript so the Serial panel keeps its history.
+   */
+  private deliver(snapshot: SimSnapshot): void {
+    this.serialTranscript = accumulateSerial(this.serialTranscript, snapshot.serial, snapshot.serialTotal);
+    this.onState?.({
+      ...snapshot,
+      serial: this.serialTranscript.lines,
+      serialDropped: this.serialTranscript.dropped,
+    });
+  }
+
   constructor() {
     if (typeof window === 'undefined') return;
     try {
       this.worker = new Worker(new URL('./worker.ts', import.meta.url));
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-        if (event.data.type === 'state') this.onState?.(event.data.snapshot);
+        if (event.data.type === 'state') this.deliver(event.data.snapshot);
       };
     } catch {
       this.worker = null;
@@ -77,7 +94,7 @@ export class SimClient {
         const msg = event.data;
         if (msg.type === 'state') {
           this.fwLoadError = null;
-          this.onState?.(firmwareSnapshotAsSim(msg.snapshot));
+          this.deliver(firmwareSnapshotAsSim(msg.snapshot));
         } else if (msg.type === 'build-event') {
           this.onBuildEvent?.(msg.event);
         } else if (msg.type === 'load-error') {
@@ -112,10 +129,10 @@ export class SimClient {
       this.lastFrame = now;
       if (this.inlineFw) {
         this.inlineFw.run(elapsed, this.speed);
-        this.onState?.(firmwareSnapshotAsSim(this.inlineFw.snapshot(), this.errorForLoadError()));
+        this.deliver(firmwareSnapshotAsSim(this.inlineFw.snapshot(), this.errorForLoadError()));
       } else if (this.inline) {
         this.inline.tick(elapsed, this.speed);
-        this.onState?.(this.inline.snapshot());
+        this.deliver(this.inline.snapshot());
       }
       this.raf = requestAnimationFrame(step);
     };
@@ -128,6 +145,7 @@ export class SimClient {
 
   load(doc: ProjectDoc, source: string, schedule: FaultSchedule = EMPTY_SCHEDULE): void {
     const epoch = ++this.loadEpoch;
+    this.serialTranscript = emptySerialTranscript();
     this.haltedEpoch = null;
     this.inlineCompileController?.abort();
     this.inlineCompileController = null;
@@ -158,7 +176,7 @@ export class SimClient {
           if (this.loadEpoch !== epoch) return;
           if (!res.ok) {
             this.fwLoadError = { message: res.message };
-            this.onState?.(firmwareSnapshotAsSim(rt.snapshot(), firmwareLoadError(res.message)));
+            this.deliver(firmwareSnapshotAsSim(rt.snapshot(), firmwareLoadError(res.message)));
             return;
           }
           this.inlineFw = rt;
@@ -229,6 +247,7 @@ export class SimClient {
   }
 
   reset(): void {
+    this.serialTranscript = emptySerialTranscript();
     if (this.doc?.engine === 'firmware') {
       if (this.fwWorker) this.sendFw({ type: 'reset' });
       else this.inlineFw?.reset();

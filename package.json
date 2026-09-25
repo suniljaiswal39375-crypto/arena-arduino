@@ -23,7 +23,11 @@
     "budget": "vite-node --config vitest.config.ts scripts/budget.ts",
     "db:migrate": "node scripts/classroom-admin.mjs migrate",
     "db:role": "node scripts/classroom-admin.mjs role",
-    "firmware:farm": "vite-node --config vitest.config.ts scripts/firmware-build-farm.ts"
+    "firmware:farm": "vite-node --config vitest.config.ts scripts/firmware-build-farm.ts",
+    "collab:relay": "vite-node --config vitest.config.ts scripts/collab-relay.ts",
+    "ext:check": "tsc -p vscode-sparklab",
+    "ext:build": "node vscode-sparklab/esbuild.mjs",
+    "ext:package": "npm run ext:check && npm run ext:build && cd vscode-sparklab && ../node_modules/.bin/vsce package --out sparklab-vscode.vsix"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",
@@ -46,7 +50,9 @@
     "server-only": "0.0.1",
     "tailwind-merge": "^2.6.0",
     "three": "^0.186.1",
+    "ws": "^8.21.3",
     "yaml": "^2.9.1",
+    "yjs": "^13.6.27",
     "zod": "^3.24.1",
     "zustand": "^5.0.3"
   },
@@ -59,6 +65,9 @@
     "@types/pg": "8.16.0",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@types/vscode": "^1.138.0",
+    "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^4.0.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "vite": "6.4.3",

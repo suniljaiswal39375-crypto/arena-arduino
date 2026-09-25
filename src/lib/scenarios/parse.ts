@@ -124,6 +124,17 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
       return { kind: 'assert-no-diagnostic', code };
     }
 
+    case 'take-screenshot': {
+      const b = record(body, at);
+      const partId = str(b, 'part-id', at);
+      const saveTo = b['save-to'] === undefined ? undefined : str(b, 'save-to', at);
+      const compareWith = b['compare-with'] === undefined ? undefined : str(b, 'compare-with', at);
+      if (saveTo === undefined && compareWith === undefined) {
+        throw new ScenarioParseError('take-screenshot needs "save-to" and/or "compare-with"', at);
+      }
+      return { kind: 'take-screenshot', partId, saveTo, compareWith };
+    }
+
     case 'assert-vcd-pattern': {
       const b = record(body, at);
       const channel = num(b, 'channel', at);
@@ -157,9 +168,42 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
       return { kind: 'repeat', times, steps: b.steps.map((s, i) => parseStep(s, `${at}.steps[${i}]`)) };
     }
 
+    case 'publish-mqtt': {
+      const b = record(body, at);
+      const topic = str(b, 'topic', at);
+      const payload = b.payload === undefined ? '' : str(b, 'payload', at);
+      const retain = b.retain === undefined ? undefined : b.retain === true;
+      return { kind: 'publish-mqtt', topic, payload, retain };
+    }
+
+    case 'touch': {
+      const b = record(body, at);
+      const durationMs = b.duration === undefined ? 50 : parseDuration(b.duration, `${at}.duration`);
+      const wait = b.wait === undefined ? false : b.wait === true;
+      return {
+        kind: 'touch',
+        partId: str(b, 'part-id', at),
+        x: num(b, 'x', at),
+        y: num(b, 'y', at),
+        durationMs,
+        wait,
+      };
+    }
+
+    case 'touch-press':
+    case 'touch-move': {
+      const b = record(body, at);
+      return { kind: action, partId: str(b, 'part-id', at), x: num(b, 'x', at), y: num(b, 'y', at) };
+    }
+
+    case 'touch-release': {
+      const b = typeof body === 'string' ? { 'part-id': body } : record(body, at);
+      return { kind: 'touch-release', partId: str(b, 'part-id', at) };
+    }
+
     default:
       throw new ScenarioParseError(
-        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, repeat`,
+        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, take-screenshot, publish-mqtt, touch, touch-press, touch-move, touch-release, repeat`,
         path,
       );
   }
@@ -216,6 +260,14 @@ function stepToYaml(step: ScenarioStep): Record<string, unknown> {
       return { 'write-serial': step.text };
     case 'assert-no-diagnostic':
       return { 'assert-no-diagnostic': step.code };
+    case 'take-screenshot':
+      return {
+        'take-screenshot': {
+          'part-id': step.partId,
+          ...(step.saveTo !== undefined ? { 'save-to': step.saveTo } : {}),
+          ...(step.compareWith !== undefined ? { 'compare-with': step.compareWith } : {}),
+        },
+      };
     case 'assert-vcd-pattern':
       return {
         'assert-vcd-pattern': {
@@ -226,6 +278,30 @@ function stepToYaml(step: ScenarioStep): Record<string, unknown> {
           ...(step.vcd !== undefined ? { vcd: step.vcd } : {}),
         },
       };
+    case 'publish-mqtt':
+      return {
+        'publish-mqtt': {
+          topic: step.topic,
+          payload: step.payload,
+          ...(step.retain === true ? { retain: true } : {}),
+        },
+      };
+    case 'touch':
+      return {
+        touch: {
+          'part-id': step.partId,
+          x: step.x,
+          y: step.y,
+          ...(step.durationMs !== 50 ? { duration: formatDuration(step.durationMs) } : {}),
+          ...(step.wait ? { wait: true } : {}),
+        },
+      };
+    case 'touch-press':
+      return { 'touch-press': { 'part-id': step.partId, x: step.x, y: step.y } };
+    case 'touch-move':
+      return { 'touch-move': { 'part-id': step.partId, x: step.x, y: step.y } };
+    case 'touch-release':
+      return { 'touch-release': { 'part-id': step.partId } };
     case 'repeat':
       return { repeat: { times: step.times, steps: step.steps.map(stepToYaml) } };
   }

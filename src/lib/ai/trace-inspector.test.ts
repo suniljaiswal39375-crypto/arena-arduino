@@ -18,6 +18,8 @@ function baseSnapshot(over: Partial<SimSnapshot> = {}): SimSnapshot {
     clockUs: 2_000_000,
     parts: {},
     serial: [],
+    serialTotal: 0,
+    serialDropped: 0,
     plot: [],
     plotLabels: [],
     logicAnalyzers: [],

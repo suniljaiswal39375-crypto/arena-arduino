@@ -46,7 +46,7 @@ explicitly when absent. Local `arduino-cli` spawning is for development only. AV
 common-cathode seven-segment segments and plain-GPIO ULN2003 inputs are decoded from register,
 bus or pin observations — not from the source sketch. Tests compare the observable outputs of
 both engines. This is an educational emulator with the stated clock bridge, not a blanket
-hardware-fidelity claim. The 166-part catalogue also includes visual/export-only parts.
+hardware-fidelity claim. The 174-part catalogue also includes visual/export-only parts.
 
 ---
 
@@ -54,18 +54,20 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 
 | Area | Status |
 | --- | --- |
-| 166-part catalogue (96 ATL kit + 67 emulator parts + 3 custom chips), with aliases, pin tables, wiring guides, virtual inputs | ✅ |
+| 174-part catalogue (96 ATL kit + 75 emulator parts + 3 custom chips), with aliases, pin tables, wiring guides, virtual inputs | ✅ |
 | Custom SVG schematic canvas: pan, zoom, grid snap, drag, rotate, wire by clicking pin to pin, coloured wires, wire hit-areas | ✅ |
 | Functional runtime: tokenizer → parser → interpreter, ~100 builtins, Servo/LCD/OLED/Stepper/DHT classes, virtual clock | ✅ |
 | Electrical rule check with 15 stable diagnostic IDs, each with a one-line explanation, the physics, a fix and a curriculum link | ✅ |
-| Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock | ✅ |
+| Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock, in-app MQTT broker tab (spec §17.1: wildcard subscriptions, retained messages, publish form) | ✅ |
 | 16 guided missions, each step checked against the live circuit; hints, stuck detection, locked reference sketch | ✅ |
 | 26-skill taxonomy with Bayesian Knowledge Tracing (pTransit 0.2, pGuess 0.35, pSlip 0.1) and 11 effort-based badges | ✅ |
 | Public site: landing, component library with per-part pages, mission pages, mastery map, docs; PWA-installable (manifest + generated service worker) | ✅ |
 | Quality gates: post-build performance budget on real gzipped output (fail the build, never raise the limit) and an axe audit per route in the CI browser job | ✅ critical-violations gate · non-critical reported |
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
-| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
+| Automation scenarios (Wokwi step vocabulary incl. `take-screenshot` and `touch*`, + extensions `publish-mqtt`/`assert-vcd-pattern`/`set-virtual-input`/`repeat`), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
+| VS Code extension shell (`vscode-sparklab/`): projects view, inspect/ERC, free-run and scenario simulation, Wokwi/KiCad/BOM export — driven over the shipped MCP stdio server; engine logic unit-tested headlessly | ✅ shell slice · see `vscode-sparklab/README.md` |
+| Pricing page + plan model (`/pricing`): local lab free forever; paid tiers = hosted convenience only, with "Pricing TBD" instead of invented numbers and no checkout | ✅ model shipped · payment integration pending the hosted-tier decision |
 | Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
 | AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
@@ -73,7 +75,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
 | 3D workbench: an orbitable viewing aid over the current sheet (lazy chunk; positions mirror the schematic) and a session-only photo-trace underlay | ✅ viewing aid |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, photo-to-circuit recognition | ⏳ see ROADMAP |
+| Co-Lab (multiplayer): Yjs CRDT document, strong convergence under concurrent edits, collaboration-safe undo, session-only presence with selection ghosts, remote code cursors, editor/view-only roles, room comment threads on parts, and a bounded local session replay — zero-config BroadcastChannel rooms **and** cross-device rooms over a WebSocket relay that keeps the merged room state (`npm run collab:relay`) | ✅ flag-gated (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`) · relay rooms memory-only |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, persistent multiplayer rooms (accounts/storage), photo-to-circuit recognition | ⏳ see ROADMAP |
 
 ---
 
@@ -91,10 +94,12 @@ src/
     ai/                    mentor tools, planner, guardrails, trace inspector
     skills/                mastery map and badge cabinet
     docs/                  documentation
+    pricing/               plan model + pricing page (free lab; hosted tiers TBD)
     accessibility/         accessibility statement
   components/
     builder/               Toolbar, PartPalette, SchematicCanvas, CodePane,
                            BottomDock, Inspector, StepTracker, PartGlyph
+    ui/                    accessible primitives (menu-button; headless model in lib/ui)
     SiteHeader.tsx
   lib/
     brand.ts               the single rename point + fidelity labels
@@ -108,8 +113,16 @@ src/
     chaos/                 the 8 Chaos Lab challenges and the repair check
     showcase/              the 20 showcase projects and their behaviour probes
     chips/                 3 custom chips: logic, chip.json, Wokwi Chips API C source
+    collab/                Co-Lab: Yjs doc model, join/founder protocol, state-diff
+                           bridge, presence (roles, carets), comments, bounded session
+                           replay; BroadcastChannel + memory + WebSocket transports,
+                           and a Node room relay (merged server state)
+    mqtt/                  in-app MQTT topic bus (§17.1 broker view)
     interop/               Wokwi diagram.json + zip, KiCad netlist, BOM CSV
-    cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point)
+    cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point),
+                           MCP stdio client + editor-facing formatters
+    billing/               plan model: free lab forever, hosted tiers, feature matrix
+    ui/                    headless interaction models (menu keyboard navigation)
     canvas/                grid and pin geometry, wire routing
     templates.ts           starter projects
   store/
@@ -277,8 +290,13 @@ npm run test:e2e             # starts a production server if needed
 
 Still unfinished: remaining Hindi catalogue/diagnostics/specialist content, full offline
 installation/update UX, live OAuth/hosted database validation, a hardened container build farm
-with SSE logs, non-AVR firmware, AI services, 3D/scan and collaboration. AVR firmware execution
-and the optional classroom foundation **are** shipped, with the limits above. See `ROADMAP.md`.
+with SSE logs, non-AVR firmware, AI services, 3D/scan, *persistent* multiplayer rooms
+(accounts/storage behind the relay), and payment processing for the hosted tier (the pricing
+model and page are shipped; final numbers are a business decision still in progress). Co-Lab itself is shipped behind
+`NEXT_PUBLIC_FEATURE_MULTIPLAYER` — converged co-editing in zero-config same-browser rooms and,
+with `npm run collab:relay`, cross-device rooms — with its limits in `DECISIONS.md`. AVR
+firmware execution and the optional classroom foundation **are** shipped, with the limits above.
+See `ROADMAP.md`.
 
 
 ## Language and smaller screens
@@ -332,6 +350,27 @@ packages on demand. Each build has bounded concurrency, runtime, logs, HEX
 size, CPU/memory/PIDs, no network and an ephemeral writable mount. This is
 **not** a general arbitrary-architecture Arduino cloud service; front the
 compile route with deployment-level abuse controls before public use.
+
+### Optional Co-Lab relay (cross-device multiplayer rooms)
+
+The local lab's Co-Lab rooms work with zero config over `BroadcastChannel`
+(other tabs/windows of the same browser). To let **different devices** share a
+room, run the tiny WebSocket relay and point the builder at it:
+
+```bash
+npm run collab:relay                       # listens on 0.0.0.0:8787 by default
+# then set for the builder:
+#   NEXT_PUBLIC_COLLAB_WS_URL=ws://your-host:8787
+#   NEXT_PUBLIC_FEATURE_MULTIPLAYER=true
+```
+
+The relay keeps the merged Yjs state of every room in memory, so joins are
+authoritative (no founder race), a late joiner converges even after the
+founder leaves, and reconnects heal missed edits. It is deliberately minimal:
+**no accounts, no persistence, no end-to-end encryption** — restarting it
+clears every room, and presence names are visible to room peers. Room caps,
+idle eviction, payload limits and protocol-abuse rejection are built in. See
+`src/lib/collab/README.md` and `DECISIONS.md` for the honest limits.
 
 ### Optional online classrooms
 

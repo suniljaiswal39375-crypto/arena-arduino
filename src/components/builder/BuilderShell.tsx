@@ -23,13 +23,16 @@ import { ChaosGeneratorCard } from './ChaosGeneratorCard';
 
 // The 3D workbench pulls three.js; keep it out of the main builder bundle.
 const Workbench3D = dynamic(() => import('./Workbench3D'), { ssr: false });
+// Co-Lab pulls yjs; same rule — it only loads when the rail tab opens.
+const CoLabPanel = dynamic(() => import('./CoLabPanel'), { ssr: false });
 import { cn } from '@/lib/cn';
 import { chaosBySlug, brokenProject } from '@/lib/chaos/chaos';
 import { brokenGenerated, generatedBySlug } from '@/lib/chaos/generator';
 import { EMPTY_SCHEDULE, type FaultSchedule } from '@/lib/sim/faults';
 import dynamic from 'next/dynamic';
 import { showcaseBySlug, showcaseDoc } from '@/lib/showcase';
-import { Flame, Layers, Sparkles, Wrench } from 'lucide-react';
+import { Flame, Layers, Sparkles, Users, Wrench } from 'lucide-react';
+import { collabEnabled } from '@/store/collab';
 
 export function BuilderShell({
   initialMissionSlug,
@@ -57,7 +60,7 @@ export function BuilderShell({
   const [buildEvents, setBuildEvents] = useState<BuildMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [rail, setRail] = useState<'inspector' | 'mission' | 'chaos' | 'mentor'>('inspector');
+  const [rail, setRail] = useState<'inspector' | 'mission' | 'chaos' | 'mentor' | 'colab'>('inspector');
   const origin = doc.provenance.forkedFrom;
   const generated = origin?.startsWith('generated:') ? generatedBySlug(origin.slice(6)) : undefined;
   const challenge = generated?.challenge ?? (origin?.startsWith('chaos:') ? chaosBySlug(origin.slice(6)) : undefined);
@@ -312,6 +315,14 @@ export function BuilderShell({
                 label={t('chaos')}
               />
             )}
+            {collabEnabled() && (
+              <RailTab
+                active={rail === 'colab'}
+                onClick={() => setRail('colab')}
+                icon={<Users size={13} />}
+                label={t('colabTab')}
+              />
+            )}
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rail === 'chaos' && challenge ? (
@@ -324,6 +335,8 @@ export function BuilderShell({
                 onConfirm={confirmStep}
                 onReveal={revealReference}
               />
+            ) : rail === 'colab' ? (
+              <CoLabPanel />
             ) : rail === 'mentor' ? (
               <MentorPanel snapshot={snapshot} />
             ) : (

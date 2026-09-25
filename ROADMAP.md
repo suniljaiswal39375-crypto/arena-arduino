@@ -15,13 +15,13 @@ being broad.
 | Area | Scope |
 | --- | --- |
 | Document | Schema-versioned project, Immer-patch undo/redo, persistence, first-run blink project |
-| Parts | 96 ATL kit + 67 emulator parts + 3 custom chips, pin tables, wiring guides, virtual inputs |
+| Parts | 96 ATL kit + 75 emulator parts + 3 custom chips, pin tables, wiring guides, virtual inputs |
 | Canvas | Custom SVG: pan, zoom, snap, drag, rotate, wire pin-to-pin, wire hit-areas |
 | Runtime | Tokenizer, parser, interpreter, virtual clock; C integer division, typed assignment, char literals, String class, arrays, interrupts on input edges, relay contacts |
 | ERC | All 15 diagnostic codes emitted, each with explanation, physics, fix and curriculum link; each proven to fire on a broken circuit and stay quiet on 41 working ones |
 | Missions | 16 guided builds; 11 behavioural steps that run the student's sketch headless to prove it works |
 | Skills | 26-skill taxonomy, BKT mastery that can be lost, 11 effort-based badges, Chaos Lab evidence |
-| Scenarios | Wokwi step vocabulary + 5 extensions, 10 seed scenarios, all executed in CI |
+| Scenarios | Wokwi step vocabulary + 5 extensions incl. deterministic `take-screenshot`, 10 seed scenarios, all executed in CI |
 | Chaos Lab | 8 challenges, each proven solvable, alternative fixes accepted, warning-silencing rejected |
 | Showcase | The 20 ATL projects, each a runnable revision with a behaviour probe run on every change |
 | Interchange | Wokwi diagram.json + project zip (lossless round trip verified on the 28 of 41 seed projects Wokwi can fully represent), KiCad netlist, BOM CSV |
@@ -177,17 +177,73 @@ This is what makes it a lab rather than a simulator.
 
 - Hindi and regional language UI. The strings are already centralised enough to extract; the
   layout needs to survive longer words.
-- Multiplayer Co-Lab over Yjs.
-- VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
-  `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
-  `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
-  same headless surface as the CLI. The **hosted transport shipped** too: `POST /api/mcp` speaks
-  the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN` (disabled without it) and confined to
-  `SPARKLAB_MCP_ROOT`.)
-- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`. They need a
-  renderer, a touchscreen part and an MQTT broker respectively. (`assert-vcd-pattern` **shipped**:
-  a level-segment pattern language — `H 1ms; L 500us; H *` — matched with a duration tolerance
-  against the live logic-analyzer capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
+- Multiplayer Co-Lab over Yjs — **foundation shipped** (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`, off by
+  default): `src/lib/collab/` models the whole `ProjectDoc` as a Yjs document with a deterministic
+  projection; `CollabSession` runs a hello/grace join protocol (one seeded history per room —
+  first editor founds, everyone else adopts), carries collaboration-safe undo and session-only
+  presence; the store bridge mirrors local commands as minimal Yjs diffs and applies remote
+  projections via `applyRemoteDoc`. Transport: BroadcastChannel (same browser, zero-config) plus a
+  memory hub for adversarial tests. Verified: round trips of all seeds, command parity, 10 seeded
+  randomised-concurrency runs, shuffled/late-joiner convergence, stale-base regression, undo
+  isolation. File contents are `Y.Text`, so two editors working the same file merge
+  character-by-character (localised prefix/suffix deltas with a whole-text rebase fallback when
+  the shared text moved under the anchor). **Selection ghosts shipped:** each peer's live part
+  selection renders on the canvas as a dashed halo + name tag in their presence
+  colour (pure presence data, pointer-transparent, never persisted; unit-,
+  render- and Playwright-covered). **Comment threads shipped:** parts carry
+  room comments (Y.Map partId -> Y.Array) with post/resolve/reopen, open-count
+  badges on the canvas and a thread UI in the Co-Lab panel; comments are room
+  annotations only — never projected into the circuit doc, never persisted to
+  a saved project. **Roles shipped:** a session joins as editor (default) or
+  view-only; viewers receive everything but `applyDiff` refuses their pushes,
+  presence carries the role (peer list says "viewing"), a mid-room switch
+  re-announces, and the panel shows a plain-language view-only notice. Roles
+  are a cooperation convention, not security — documented. **Session replay shipped:** every update a session sees is
+  recorded with a timestamp into a bounded, session-only `RoomHistory`; the
+  Co-Lab panel scrubs or plays the timeline and reads the room document as of
+  any offset (rebuilt through real Yjs merges). **Remote code cursors shipped:** presence
+  carries an optional caret (file + offset); Monaco draws a colour-matched ghost caret per
+  peer in the same file (name on hover), throttled at 40 ms. That completes the Co-Lab tail
+  from the four-slice directive. **§17.1 MQTT broker shipped:** an in-app topic
+  bus with `+`/`#` wildcards and retained messages, an MQTT dock tab
+  (publish form + message log), and the `publish-mqtt` scenario step that
+  feeds a per-run broker. **Touchscreen shipped:** an ILI9341 TFT + FT6206
+  touch part whose controller is modelled at the library level
+  (`ts.touched()`/`getPoint()`), plus Wokwi's `touch`, `touch-press`,
+  `touch-move`, `touch-release` scenario steps. With that, every buildable
+  item in the remaining-work inventory is done; only payment processing and
+  deployment-tier verification remain, blocked on external credentials as
+  documented.
+- VS Code extension, so a project can be driven from an editor panel — **shell shipped**
+  (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
+  simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
+  stdio server by a headlessly unit-tested client (`src/lib/cli/mcp-client.ts`, 10 integration
+  tests against the real server). **Packaging shipped:** `npm run ext:package` typechecks,
+  bundles and produces an installable `vscode-sparklab/sparklab-vscode.vsix` (brand icon
+  included; the `.vsix` is a git-ignored local artifact — the extension is distributed from the
+  repository, not the marketplace, and the manifest is kept honest by
+  `src/lib/cli/extension-manifest.test.ts`). Open: richer in-editor rendering.
+  (The **MCP server shipped**: `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with
+  `list_projects`, `load_project`, `run_simulation` — free-run or scenario YAML — and
+  `export_diagram`, wrapping the same headless surface as the CLI. The **hosted transport
+  shipped** too: `POST /api/mcp` speaks the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN`
+  (disabled without it) and confined to `SPARKLAB_MCP_ROOT`.)
+- Scenario step `take-screenshot` — **shipped:** captures a part's visual state (LCD/OLED text,
+  matrix cells, seven-segment value, LED/RGB colour, servo angle) as a byte-deterministic SVG and
+  supports `save-to` and/or `compare-with` for visual regression, exactly like Wokwi's step. File
+  access goes through a `ScenarioIO` adapter: the CLI writes real files next to the project under
+  test, the builder keeps them in memory and returns them in `ScenarioResult.artifacts`. New CLI
+  flags `--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed
+  simulated window. (`assert-vcd-pattern` **shipped**: a level-segment pattern language —
+  `H 1ms; L 500us; H *` — matched with a duration tolerance against the live logic-analyzer
+  capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
+- Scenario steps: `publish-mqtt` **shipped** — publishes into the run's in-app MQTT bus
+  (`lib/mqtt/broker.ts`: level/`+`/`#` matching, retained messages, bounded history) and fails
+  with the broker's reason on an invalid topic. `touch`/`touch-press`/`touch-move`/
+  `touch-release` **shipped** — they drive the ILI9341+FT6206 part's touch controls in the
+  controller's coordinate space (0-239 × 0-319), holding the press across simulated time and
+  auto-releasing, as Wokwi does; coordinates outside the part's range fail the step with an
+  actionable message.
 - PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
   hand-authored SVG icon; the service worker itself is the existing generated precache.
 - Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
@@ -197,7 +253,12 @@ This is what makes it a lab rather than a simulator.
 - Performance budget — **shipped as a hard gate:** `npm run budget` (also chained into postbuild)
   gzips the real first-load JS from `app-build-manifest.json` for `/`, `/builder`, `/missions` and
   fails the build over 250 kB. Current: builder 102 kB, landing 120 kB, missions 173 kB.
-- Pricing and school/org billing: still open (needs the hosted tier decision).
+- Pricing and school/org billing — **model + page shipped** (`/pricing`, `src/lib/billing/`):
+  the local lab is free forever; paid tiers sell hosted convenience only (managed accounts,
+  cloud storage, persistent cross-device Co-Lab, managed relay/model hosting, org admin);
+  hosted-tier prices are explicitly `null` = to-be-decided (no invented numbers), there is no
+  checkout, and the feature matrix is code with tests. Payment processing itself remains open
+  — it needs credentials/legal setup and the hosted-tier pricing decision.
 
 ---
 
@@ -211,18 +272,45 @@ AI feature that talks without touching the simulator.
 ## Known debt, in priority order
 
 1. **Monaco is local and cached on use.** Full offline installation/update UX and low-end Chromebook measurements remain.
-2. **Nested calls inside expressions cannot suspend.** `x = helper()` and `helper();` run as
-   generators, so a `delay()` inside them passes time visibly; `if (helper() > 3)` still runs the
-   helper in one step. Rare in student sketches, but real.
-3. **No accessible combobox or menu primitives** now that shadcn/Radix was skipped. The Export menu
-   and palette are plain buttons. Needed before classrooms ship.
+2. **Nested calls suspend.** Expression evaluation is generator-based end to end, so a
+   sketch-defined function called from *anywhere* — `if (helper() > 3)`, `foo(helper())`,
+   `return helper() + 1;`, a ternary branch — suspends at statement boundaries exactly like a
+   statement-level call: `delay()` inside it passes observable time, busy work credits virtual
+   time and yields to the engine instead of stalling a frame, and the old synchronous executor
+   (`execSync`, ~120 lines of duplicated statement machinery) is gone. The only contexts with
+   nothing to suspend into — global initialisers before `setup()` and interrupt handlers fired
+   from the circuit — drive the same generator to completion through a bounded
+   `runToCompletion` helper (HANG guard intact).
+3. **Accessible menu primitive shipped; combobox still open.** `lib/ui/menu-model` (pure WAI-ARIA
+   menu keyboard model: arrows/Home/End, Enter/Space, Escape/Tab, type-ahead) + `components/ui/Menu`
+   (menu-button with roving focus, outside dismissal, focus return) now power the toolbar's
+   Templates and Missions popups; behaviour is pinned by 23 unit/structure tests plus
+   `e2e/menus.spec.ts`. A combobox primitive waits for a real consumer (the palette search is a
+   plain filter today). Screen-reader verification still runs only in the CI browser job.
 4. **Keyboard wiring and a text connection table are shipped.** Precise pointer-free placement and screen-reader testing remain (see `/accessibility`).
-5. **The serial log is capped at 600 lines** in memory; the scenario runner reads a lifetime counter
-   so it never misses a line, but the Serial panel loses its earliest output on long runs.
-6. **Wokwi export skips parts Wokwi has no model for** (soil, rain, MQ-2, line array, L298N). It says
-   so at export time; a Wokwi custom-chip shim for each would make the export complete.
-7. **The emulator catalogue is 67 parts** against the ~72 Wokwi parts the spec lists. The gap is the
-   less common displays and motor drivers; add them as data.
+5. **The Serial panel keeps a 2 000-line session transcript.** The engines still cap their own
+   window (the worker cannot grow unbounded), but the sim client folds each window into a session
+   view keyed on the engine's lifetime line counter, so ordinary long runs keep their full history;
+   the scenario runner was never affected (it reads the lifetime counter). Lines that fall off the
+   view cap — or that were printed between two snapshots — are counted and surfaced as an honest
+   "earlier output cleared" note (EN + HI) instead of vanishing silently.
+6. **Wokwi export ships its own logic chips and stays honest about the rest.** The three shipped
+   chips (NOT gate, window comparator, pulse generator) now export through Wokwi's custom-chip
+   mechanism: diagram type `chip-<slug>` plus the `<slug>.chip.json` and `<slug>.c` (Wokwi Chips API
+   C) files, attached in the project zip, MCP `export_diagram`, and builder download alike. The
+   remaining skips (soil, rain, MQ-2, line array, L298N and the other ~60 analogue/RF parts Wokwi
+   has no model for) are still reported by name at export time rather than faked with stub shims —
+   see DECISIONS.md. Closing more of that gap means either upstream Wokwi parts or custom chips with
+   verified pinouts, not silence.
+7. **The emulator catalogue is 75 parts.** The documented gap in spec §9.B is closed: 6 mm
+   pushbutton, 74HC595, 74HC165, NLSF595, biaxial stepper, WS2812 ring and strip, and Franzininho
+   WiFi shipped as data with Wokwi ids verified against docs.wokwi.com (4 catalogue tests pin ids,
+   uniqueness and the export round trip). Parts the firmware slice does not decode yet carry the
+   `visual` tier with a note instead of a false EXACT. Remaining: the spec's logic gates / MUX /
+   flip-flops (Wokwi documents them without public part-type ids — need capture from a live Wokwi
+   diagram before mapping), the extra ESP32 board variants (DevKit v1, C5, C61, P4, XIAO family,
+   Wemos S2 mini, ESP32-2432S028R, M5Stack Core S3, S3-BOX-3), and the NeoPixel meter / ILI9341
+   FT6206 touch variants.
 
 ## Builder correctness and keyboard pass
 - Shipped: normalized compact pin sides, unique catalogue pin positions, invalid-pin rejection, corrected mission query initialization, keyboard connection/part controls and text connection table.
@@ -604,3 +692,385 @@ gate green.
 
 Next: multiplayer Co-Lab, pricing/billing decision, VS Code extension shell, then the remaining
 polish in Phase 15.
+
+### Checkpoint — Co-Lab foundation (Yjs), 2026-09-25 (local)
+
+Shipped the multiplayer foundation slice behind `NEXT_PUBLIC_FEATURE_MULTIPLAYER` (off by
+default, documented in `.env.example`). Spec §15, scoped to what is provably correct without a
+server:
+
+- **`src/lib/collab/mapping.ts`:** the whole `ProjectDoc` (meta, diagram, files, sim prefs,
+  chips) as Y.Maps in one Y.Doc; deterministic canonical projection with derived fidelity
+  recomputation; `diffAndApply` as the minimal-op write path. Maps are attached to their parent
+  before population (detached Y.Map writes are rejected by Yjs).
+- **`src/lib/collab/session.ts` — `CollabSession`:** hello/grace join protocol so every room has
+  exactly one seeded history (first editor founds from its local doc; joiners adopt via full
+  state; a local edit before adoption founds immediately), incremental updates, origin-scoped
+  `Y.UndoManager` (local undo never reverts remote work), presence with heartbeat + expiry,
+  `stateSnapshot()` for replay/inspect.
+- **`src/lib/collab/transports.ts`:** `BroadcastChannelTransport` (zero-config, same browser)
+  and `MemoryHub` with manual `flush`/`flushShuffled` for adversarial ordering.
+- **`src/store/collab.ts`:** the bridge — mirrors local command results as Yjs diffs, applies
+  remote projections through `useLab.applyRemoteDoc` (which keeps the Immer stack local-only),
+  mirrors selection into presence, leaves on project switch.
+- **UI:** Co-Lab rail panel (collaborator name, room, join/leave, peer list) behind the flag,
+  with an honesty note about same-browser scope; EN + HI keys; builder First Load unchanged
+  (yjs loads only as a lazy chunk when the tab is opened).
+- **Tests:** 32 new (28 collab + 4 store) — round trips of all seeds, per-command parity, 10
+  seeded randomised-concurrency runs, shuffled/late-joiner convergence, duplicate updates,
+  stale-base regression, undo isolation, presence isolation, BroadcastChannel end-to-end,
+  `applyRemoteDoc` history/selection/chip behaviour.
+
+Known limits (full honesty in `DECISIONS.md`): same-browser rooms only until a hosted transport;
+per-file last-writer-wins for code files; nested scope/multimeter prefs are JSON-LWW per key;
+the double-founder grace-window edge case.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **918 tests in 86 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green (builder first load 102.4 kB / 250 kB; yjs confined to a lazy chunk).
+
+Next: hosted Co-Lab transport (cross-device), per-file → `Y.Text` merging, pricing/billing
+decision, VS Code extension shell, then the remaining polish in Phase 15.
+
+### Checkpoint — Co-Lab hosted relay (cross-device rooms), 2026-09-25 (local)
+
+The multiplayer foundation now spans devices. Shipped behind the same
+`NEXT_PUBLIC_FEATURE_MULTIPLAYER` flag:
+
+- **`src/lib/collab/relay.ts` — the room relay** (`npm run collab:relay`,
+  `scripts/collab-relay.ts`): a small `ws` server that routes session frames per room AND
+  applies every update to a per-room Y.Doc. The merged server copy makes joins authoritative
+  (`joined { state | null }`), serves late joiners after the founder left, heals reconnects,
+  and removes the network founder race. Room caps with idle eviction, payload limits, ping/pong
+  liveness, presence-null on disconnect, and error frames for protocol abuse.
+- **`src/lib/collab/ws.ts` — `WebSocketTransport`:** browser-native WebSocket (no library in
+  the bundle), implements the transport interface plus `requestSync`, bounded outbox while
+  disconnected, backoff reconnect that re-joins and merges the relay's state.
+- **`src/lib/collab/wire.ts`:** the JSON frame protocol (base64 updates) shared by client and
+  relay, with strict decoders.
+- **Session join upgrade:** `CollabTransport.requestSync` (optional) — hosted joins adopt the
+  relay's answer or found on `null`; hello/grace stays the fallback on reject/timeout
+  (`syncTimeoutMs`). Also fixed a latent empty-doc detector bug: a fresh Y.Doc encodes a
+  1-byte state vector, so `docHasContent` now walks the decoded vector (`clock > 0`).
+- **Store/UI:** `startCollab({ mode: 'local' | 'server' })`; the panel offers a room-type
+  choice when `NEXT_PUBLIC_COLLAB_WS_URL` is set, with relay-link status; EN+HI keys;
+  `.env.example` documents the relay variables.
+- **Tests:** 17 new — wire round trips + malformed-frame rejection; relay integration over
+  real sockets (authoritative join/found, late joiner from server state, room isolation,
+  presence lifecycle, interleaved-edit convergence, reconnect healing, abuse handling, room
+  cap); session-level sync adopt/found/fallback/timeout.
+
+Honest limits (full text in `DECISIONS.md`): relay rooms are memory-only — no accounts, no
+persistence, no E2E encryption; restart clears them; presence names visible to peers. Two
+simultaneous founders of a truly empty room still both seed (tiny window; gone once rooms
+persist).
+
+Local verification: `npm run typecheck` passed; `npm test` passed **935 tests in 88 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green (builder first load 102.4 kB / 250 kB; `ws`/relay confined to the server, yjs still
+a lazy chunk); live relay smoke test answered `joined { state: null }` on a fresh room.
+
+Next: VS Code extension shell, AI-mentor hosted slice, pricing/billing decision, per-file →
+`Y.Text` merging, then the remaining polish in Phase 15.
+
+### Checkpoint — VS Code extension shell over the MCP server, 2026-09-25 (local)
+
+A project can now be driven from an editor panel without a second engine:
+
+- **`src/lib/cli/mcp-client.ts` — the engine of the slice:** a zero-dependency MCP stdio client
+  (spawn `sparklab-cli mcp`, newline-delimited JSON-RPC 2.0, handshake, timeouts, typed
+  conveniences). No `@/` imports, so the extension bundles it verbatim.
+- **`src/lib/cli/mcp-format.ts`:** pure renderers of tool results (load summary, run verdict with
+  serial/part states, export summary, escaped webview HTML) — unit-tested; the webview never
+  sees unescaped content.
+- **`vscode-sparklab/`:** the extension itself — projects tree view, Inspect (ERC findings),
+  Run free-run / Run scenario file with PASS/FAIL webviews, Export Wokwi/KiCad/BOM writing files
+  next to the project; settings for scan path, free-run length and server launch override;
+  sandboxed paths inherited from the MCP server. Its own tsconfig (`npm run ext:check`) and
+  esbuild bundle (`npm run ext:build`, 20 kB CJS with `vscode` external); the repo tsconfig
+  excludes it, the shared client/format modules stay in the main typecheck and suite.
+- **Tests:** 15 new — 10 integration tests driving the REAL spawned MCP server through every
+  tool (handshake identity, tools/list, list/load, free-run, scenario verdict, Wokwi export,
+  unknown-tool JSON-RPC error, sandbox escape refusal, close semantics) plus 5 formatter tests.
+
+Honest limits: VS Code itself cannot run in this sandbox, so per the repo convention the
+extension host wiring is verified by `tsc -p vscode-sparklab` + bundle + the headless engine
+tests; marketplace packaging and richer rendering are open. See `vscode-sparklab/README.md`.
+
+Local verification: `npm run typecheck` and `npm run ext:check` passed; `npm test` passed
+**950 tests in 90 files** (2 opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` + budget gate green (builder first load unchanged).
+
+Next: AI-mentor hosted slice, pricing/billing decision, per-file → `Y.Text` merging, then the
+remaining polish in Phase 15.
+
+### Checkpoint — pricing model and page, 2026-09-25 (local)
+
+The pricing/billing breadth item closes as far as a zero-config sandbox honestly can:
+
+- **`src/lib/billing/plans.ts`:** the typed plan model. Three tiers — Local Lab (₹0 forever),
+  Hosted Classroom, School & Org — and a feature matrix where every row carries its real
+  availability (`local` / `self-host` / `hosted-planned`). Invariants the tests pin: the free
+  tier reaches everything shipped today; paid tiers never claim unshipped features as shipped;
+  hosted-planned rows are attributed to concrete tiers; org-level items stay org-level.
+- **`/pricing`:** static page — plan cards, capability table, and an explicit honesty section.
+  Prices for hosted tiers render as "Pricing TBD" (`priceInr: null`), because inventing numbers
+  would violate the honesty rule; there is no checkout (payment processing needs credentials
+  and a legal entity this environment must not configure). Nav + footer links, `pricing` key
+  EN ('Pricing') + HI ('मूल्य').
+- **The decision (DECISIONS.md):** the lab itself is never paid; paid tiers sell hosted
+  convenience; the hosted tier launches without moving any currently-free capability behind a
+  paywall. Payment integration and final numbers remain the one genuinely open item, blocked on
+  the hosted-tier business decision.
+- **Tests:** 5 plan-model tests. (The AI-mentor hosted slice named earlier was verified to have
+  shipped in Phase 13 — `/api/mentor` + `server/mentor/gateway.ts`, 95 related tests — so it
+  needed no new work.)
+
+Local verification: `npm run typecheck` passed; `npm test` passed **955 tests in 91 files**
+(2 opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` green with /pricing
+prerendered static and budgets unchanged (builder 102.4 kB / 250 kB).
+
+Phase 15 status after these four slices: hosted Co-Lab transport, VS Code extension shell and
+the pricing model are shipped; remaining open items are Hindi/regional-language polish, the
+unsupported scenario steps (`take-screenshot`, `touch`, `publish-mqtt`), per-file `Y.Text`
+merging, and the hosted-tier payment decision.
+
+### Checkpoint — accessible menu primitive, 2026-09-25 (local)
+
+Debt item 3's menu half is closed with the repo's headless-first pattern:
+
+- **`src/lib/ui/menu-model.ts`:** pure WAI-ARIA menu-button keyboard model — ArrowUp/Down with
+  wrap skipping disabled items, Home/End, Enter/Space activation, Escape/Tab dismissal, and
+  character type-ahead with a 500 ms buffer window. 17 unit tests pin the full matrix.
+- **`src/components/ui/Menu.tsx`:** the React wrapper — trigger with `aria-haspopup/expanded/
+  controls`, popup `role="menu"` with roving focus, outside-click dismissal, focus return on
+  Escape/keyboard activation; small-screen placement overridable per call site. 6 SSR structure
+  tests pin the ARIA contract.
+- **Migration:** the toolbar Templates and Missions popups now render through the primitive
+  (the hand-rolled Escape-only handlers are gone); the builder render suite (18 tests) passes
+  unchanged.
+- **`e2e/menus.spec.ts`** (CI browser job): keyboard contract end-to-end — open with ArrowDown,
+  move, Home, Escape with focus return, type-ahead + Enter loading the template, pointer
+  outside-click dismissal.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **978 tests in 93 files**
+(2 opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget gate green
+(builder first load unchanged, 102.4 kB / 250 kB).
+
+Next open items: Wokwi-export custom-chip shims / emulator catalogue gap, the remaining
+Hindi/regional polish, `Y.Text` merging, and the scenario steps that need a renderer, a
+touchscreen part and an MQTT broker.
+
+### Checkpoint — Wokwi export: shipped chips as custom chips, 2026-09-25 (local)
+
+- Shipped logic chips (`chip-not-gate`, `chip-window-comparator`, `chip-pulse-generator`) now
+  export as Wokwi custom chips: diagram type `chip-<slug>`, with `<slug>.chip.json` + `<slug>.c`
+  (their Wokwi Chips API C source) attached to the project zip. Builder download, MCP
+  `export_diagram` and CLI share one assembly (`wokwiProjectFiles`); `diagram export --wokwi`
+  warns when chips are present since their files need the zip.
+- The remaining ~60 skips (analogue sensors, RF/IoT, motor drivers without exact Wokwi parts)
+  stay skipped and are reported by name — custom-chip shims for parts Wokwi cannot model would
+  be dishonest stubs (DECISIONS.md).
+- Verification: strict typecheck; 982 tests / 93 files passing (4 new interop tests: export
+  type per shipped chip, wiring round trip, zip attachment + dedup, honesty next to a chip);
+  scenarios 10/10; production build and budgets green (builder 102.4 kB gz).
+
+### Checkpoint — emulator catalogue 67 → 75 parts, 2026-09-25 (local)
+
+- Added the eight spec §9.B parts whose Wokwi ids are documented: 6 mm pushbutton, 74HC595 and
+  74HC165 shift registers, NLSF595 LED driver, biaxial stepper, WS2812 ring/strip, Franzininho
+  WiFi. Pin names copied verbatim from docs.wokwi.com so exports translate losslessly.
+- Honesty kept: undecoded parts carry `visual` tier + explicit notes (no false EXACT); the
+  6 mm button is exact via the existing button adapter; ring/strip reuse the WS2812 timing model.
+- Deferred with reasons: logic gates / MUX / flip-flops (no published Wokwi part-type ids) and
+  the remaining ESP32 board variants — next data pass (DECISIONS.md).
+- Verification: strict typecheck; 986 tests / 94 files (4 new catalogue tests); scenarios 10/10;
+  production build and budgets green (builder 102.4 kB, missions 175.1 kB gz). Billing plan copy
+  and README updated to the 174-part total; landing counter is dynamic.
+
+### Checkpoint — Serial panel session transcript, 2026-09-25 (local)
+
+- Engines keep their bounded serial window; snapshots now carry `serialTotal`. The sim client
+  folds windows into a 2 000-line session transcript (`serial-transcript.ts`, 6 unit tests:
+  overlap dedupe, idempotent snapshots, gap counting, restart rewind, bounded eviction, default
+  cap). Lines lost to the cap or to snapshot gaps are counted and shown as an EN + HI
+  "earlier output cleared" notice instead of disappearing.
+- Verification: strict typecheck; 992 tests / 95 files; scenarios 10/10; production build and
+  budgets green.
+
+### Checkpoint — nested calls suspend, 2026-09-25 (local)
+
+- Expression evaluation is generator-based end to end; every sketch-defined call suspends at
+  statement boundaries no matter where it appears (conditions, arguments, returns, ternaries,
+  class methods). The duplicated synchronous executor (`execSync`) is deleted; global inits and
+  interrupt handlers drive the generator through a bounded `runToCompletion`.
+- 4 new runtime tests pin mid-delay observability, virtual-time credit for busy nested work,
+  and evaluation-order/recursion/value preservation.
+- Verification: strict typecheck; 996 tests / 95 files; scenarios 10/10; production build and
+  budgets green (builder 102.4 kB gz, unchanged).
+
+### Checkpoint — scenario `take-screenshot` (deterministic SVG capture), 2026-09-25 (local)
+
+- New scenario step `take-screenshot { part-id, save-to, compare-with }` (Wokwi-compatible
+  shape): renders a part's modelled visual state — LCD/OLED text, matrix cells, seven-segment
+  value, LED/RGB colour, servo angle — into a byte-deterministic SVG (`lib/scenarios/screenshot.ts`).
+  Same simulation twice → identical file, which is what `compare-with` visual regression needs.
+  Parts with no visual state fail the step honestly instead of faking an image.
+- File IO is a `ScenarioIO` adapter: CLI writes real files next to the project under test
+  (single `run --scenario` and `test` modes); builder/MCP/chaos use in-memory IO and get the
+  captures back in `ScenarioResult.artifacts`. New §17.3 CLI flags
+  `--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed
+  simulated window.
+- `touch` and `publish-mqtt` remain deferred with concrete reasons (no touch-capable part in the
+  catalogue; no MQTT broker in the codebase) rather than shipping as always-erroring stubs.
+- Verification: strict typecheck; **1009 tests / 98 files** (13 new: renderer determinism and
+  escaping, parse round-trip and validation, real-engine save/compare/mismatch on the dht-lcd
+  template, three CLI end-to-end runs writing and comparing real files); scenarios 10/10;
+  production build and budgets green (builder 102.4 kB gz, unchanged).
+
+### Checkpoint — Co-Lab file contents as Y.Text (character-level merge), 2026-09-25 (local)
+
+- Shared `files` map now holds Y.Text instead of plain strings: two editors working the SAME
+  file concurrently merge character-by-character instead of one whole file overwriting the
+  other. `diffAndApply` emits localised prefix/suffix deltas anchored on the base document, with
+  a whole-text rebase fallback when a concurrent remote edit moved the shared text underneath.
+- Legacy plain-string file values are tolerated and upgraded on first edit; seeding creates
+  Y.Text directly; collaboration-safe undo already covered the files root.
+- Honest limits documented in DECISIONS.md: anchor-mismatch falls back to full replace (content
+  still correct), and a remote edit reaches the local editor as a full projection (caret
+  position is UI state and is not preserved; content is never lost).
+- Verification: strict typecheck; **1015 tests / 98 files** (6 new: Y.Text round trip, localised
+  delta, rebase fallback, legacy upgrade, add/delete, concurrent same-file merge through two
+  live sessions); scenarios 10/10; production build and budgets green (builder 102.4 kB gz).
+
+### Checkpoint — Hindi builder chrome (Chaos Lab, export/import, inspector, code pane), 2026-09-25 (local)
+
+- The four builder surfaces still carrying hardcoded English — Chaos Lab rail, export/import
+  menu, inspector headings, code pane labels — now use the message catalogue (~40 new keys,
+  EN + HI, placeholder parity enforced). Challenge stories, part names, live-state readouts and
+  diagnostics stay English as authored/generated content, and the `partial` honesty banner now
+  lists exactly those categories.
+- Verification: strict typecheck; **1018 tests / 98 files** (3 new Hindi render tests); scenarios
+  10/10; production build and budgets green (home 122.4 kB gz, +1.4 kB from the new strings).
+
+### Checkpoint — VS Code extension packaging (installable .vsix), 2026-09-25 (local)
+
+- `npm run ext:package` typechecks the extension, bundles `dist/extension.js` and packages
+  `vscode-sparklab/sparklab-vscode.vsix` with `@vscode/vsce` (now a devDependency): brand icon
+  PNG added, repository field set, `.vsix` git-ignored. Verified by `unzip -t` + manifest
+  inspection; install with `code --install-extension`.
+- New `src/lib/cli/extension-manifest.test.ts` pins the package to the tested surface (main
+  path, menus reference declared commands, icons exist, imports confined to vscode/node/the
+  tested lib). DECISIONS records the no-marketplace stance: the extension ships from the
+  repository, no account or token anywhere.
+- Verification: strict typecheck; **1023 tests / 99 files** (5 new manifest tests); scenarios
+  10/10; production build and budgets green.
+
+### Checkpoint — Co-Lab selection ghosts (peer halos on the canvas), 2026-09-25 (local)
+
+- New `PeerGhosts` overlay: every peer with a live part selection gets a dashed halo in their
+  presence colour plus a name tag, stacked when several peers select the same part, ignored for
+  parts that no longer exist. `SchematicCanvas` subscribes to the Co-Lab bridge when active
+  (tests inject peers via a prop); the overlay is pointer-transparent and aria-hidden — presence
+  only, never part of the document, never persisted.
+- New `e2e/collab-ghosts.spec.ts` proves it across two live editors over BroadcastChannel
+  (join both, select on A, halo appears on B, deselect removes it), with a graceful skip on
+  flag-off builds; the CI production build now sets `NEXT_PUBLIC_FEATURE_MULTIPLAYER=true` so
+  the e2e job exercises the multiplayer surfaces while the local default stays off (budgets
+  re-verified on the flagged build: unchanged, collab stays in lazy chunks).
+- Verification: strict typecheck; **1028 tests / 100 files** (5 new: ghost overlay unit tests +
+  canvas wiring render test); scenarios 10/10; default and flagged builds green.
+
+### Checkpoint — Co-Lab room comment threads, 2026-09-25 (local)
+
+- `comments` joined the shared Yjs roots: partId -> ordered Y.Array of comment maps
+  (id/author/color/text/at/resolved). `CollabSession` gains `comments()`, `addComment()`,
+  `setCommentResolved()` and an `onComments` change feed; the Co-Lab bridge carries the threads
+  to the UI. The canvas shows open-count badges (`CommentBadges`), the Co-Lab panel shows the
+  thread for the selected part with add/resolve/reopen (EN + HI keys). Collaboration-safe undo
+  covers comment posts because the undo manager already tracks all shared roots.
+- Honesty: comments are annotations for the people in a room, not circuit state — they are
+  never projected into the ProjectDoc and never written to saved project files (stated in
+  DECISIONS.md and in the module docs).
+- Verification: strict typecheck; **1035 tests / 101 files** (7 new: two-session comment
+  convergence + resolve propagation + onComments feed, badge unit tests, canvas wiring, mapping
+  non-projection); scenarios 10/10; default and flagged builds green; the collab e2e spec now
+  also posts, badges, resolves and reopens a comment across two live editors.
+
+### Checkpoint — Co-Lab roles (editor / view-only), 2026-09-25 (local)
+
+- Presence now carries a `role`. A session can join view-only or switch mid-room;
+  `applyDiff` returns false for viewers so their local edits never enter the room (they still
+  receive every remote change), the peer list marks viewers "(viewing)", and the Co-Lab panel
+  shows a plain-language notice that a viewer's changes stay on their device. The relay's wire
+  parser validates the new field with editor as the safe default. EN + HI keys for the role
+  controls and notice.
+- Honesty (DECISIONS.md): peer-to-peer rooms have no authority, so roles are a convention the
+  shipped clients honour — cooperation, not access control.
+- Verification: strict typecheck; **1037 tests / 101 files** (2 new: viewer push-refusal +
+  mid-room unlock, role propagation over presence); scenarios 10/10; default and flagged builds
+  and budgets green.
+
+### Checkpoint — Co-Lab session replay, 2026-09-25 (local)
+
+- `RoomHistory` (lib/collab/history.ts) records every Yjs update a session observes (own and
+  remote) with an offset, bounded at 2000 events with an honest `dropped` counter; `docAt`
+  rebuilds the room through `Y.applyUpdate`, so a replay reproduces exactly the merges the live
+  room performed. The session records automatically; the Co-Lab panel gains a replay section:
+  play/pause + scrub slider + a document summary at the offset (parts/wires/open comments/name),
+  EN + HI, with the privacy note that the history never leaves the device and dies with the
+  room.
+- Verification: strict typecheck; **1040 tests / 102 files** (3 new: exact rebuild per offset
+  against a live-applied doc, span/windows, bound + drop count); scenarios 10/10; default and
+  flagged builds and budgets green.
+
+### Checkpoint — Co-Lab remote code cursors, 2026-09-25 (local)
+
+- Presence now carries an optional caret `{ file, offset }`, validated on the wire and
+  re-emitted on change. `remoteCursors` (lib/collab/cursors.ts) is a pure filter so it is
+  testable without Monaco; CodePane renders one Monaco decoration per peer caret in the open
+  file — a 2px border-left in the peer's room colour (one static CSS class per palette colour)
+  with the peer's name in the hover message, caret broadcasts throttled to 40 ms. The offline
+  fallback textarea honestly shows nothing (documented in DECISIONS).
+- Verification: strict typecheck; **1046 tests / 104 files** (cursors filter, caret wire
+  round-trip + malformed rejection, caret propagation over presence; fixture caret added to the
+  round-trip case); new `e2e/collab-cursors.spec.ts` for CI (two pages, ghost caret visible);
+  scenarios 10/10; default and flagged builds and budgets green.
+
+### Checkpoint — §17.1 in-app MQTT broker + publish-mqtt step, 2026-09-25 (local)
+
+- `lib/mqtt/broker.ts`: a pure in-memory MQTT topic bus — concrete-topic validation, `+` and
+  `#` subscription matching (including `sport/#` matching `sport`), retained messages with the
+  empty-payload-clears rule, bounded 200-message history with a dropped counter, and change
+  listeners for the UI. `lib/mqtt/bus.ts` exposes one lab-wide bus per page; headless scenario
+  runs get their own instance.
+- Builder gains an MQTT dock tab: a publish form (topic / payload / retain) with the broker's
+  refusal reasons shown inline, a newest-first message log with retained markers, a clear
+  button, and an honesty note that sketches do not model a network stack yet — the bus is fed
+  by `publish-mqtt` scenario steps and by the panel itself (EN + HI).
+- Scenario vocabulary: `publish-mqtt {topic, payload, retain}` parses, serialises
+  (`scenarioToYaml` round-trips), and runs against the run broker; an invalid topic fails the
+  step with the broker's reason.
+- Verification: strict typecheck; **1064 tests / 105 files** (11 broker + 4 scenario + 3 panel
+  render); scenarios 10/10; default and flagged builds and budgets green (builder unchanged at
+  102.4 kB).
+
+### Checkpoint — touchscreen part + touch scenario steps, 2026-09-25 (local)
+
+- New functional part `ili9341-touch` (ILI9341 TFT 240×320 with FT6206 capacitive touch):
+  Touch X / Touch Y / Touching controls feed an `Adafruit_FT6206` library model
+  (`begin`/`touched`/`getPoint` returning a `TS_Point`), and `Adafruit_ILI9341` is accepted as
+  an inert object — the TFT framebuffer is deliberately not rendered and the part says so.
+  Coordinates are the controller's own space, passed through exactly as set; the sketch maps
+  them, matching real hardware. The stale "emulated over I2C" note on the firmware-catalogue
+  `emu-ili9341` was corrected, and Wokwi import/export maps the part to `wokwi-ili9341`.
+- Interpreter fix that made it possible: an object declaration initialised from an expression
+  (`TS_Point p = ts.getPoint();`) now evaluates the initialiser instead of constructing a fresh
+  instance of the declared class.
+- Wokwi touch vocabulary lands in the scenario runner: `touch` (press, hold for `duration`
+  across simulated time, auto-release; `wait` accepted as a no-op under the virtual clock),
+  `touch-press`, `touch-move`, `touch-release`; out-of-range coordinates and non-touch parts
+  fail with actionable messages.
+- Verification: strict typecheck; **1070 tests / 106 files** (2 engine + 4 scenario, including
+  an end-to-end press→serial and a press/move/release gesture); scenarios 10/10; default and
+  flagged builds and budgets green.

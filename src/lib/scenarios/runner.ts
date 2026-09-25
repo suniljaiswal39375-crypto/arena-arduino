@@ -1,8 +1,10 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
 import { runERC } from '@/lib/erc/diagnostics';
+import { MqttBroker } from '@/lib/mqtt/broker';
 import { SimEngine } from '@/lib/sim/engine';
-import type { Scenario, ScenarioResult, ScenarioStep, StepResult } from './types';
+import { capturePartSvg } from './screenshot';
+import type { Scenario, ScenarioIO, ScenarioResult, ScenarioStep, StepResult } from './types';
 import { intervalsForChannel, matchPattern, parsePattern, parseVcd, vcdAsTrace, type PatternSegment } from './vcd-pattern';
 
 function currentError(engine: SimEngine): SimEngine['error'] {
@@ -11,6 +13,18 @@ function currentError(engine: SimEngine): SimEngine['error'] {
 
 /** Simulated milliseconds advanced per tick while waiting. */
 const TICK_MS = 10;
+
+/** In-memory ScenarioIO for the builder and tests; `files` keeps what it wrote. */
+export function memoryScenarioIO(seed?: Record<string, string>): ScenarioIO & { files: Map<string, string> } {
+  const files = new Map<string, string>(Object.entries(seed ?? {}));
+  return {
+    files,
+    readText: (path) => files.get(path) ?? null,
+    writeText: (path, content) => {
+      files.set(path, content);
+    },
+  };
+}
 
 /**
  * Wokwi control names that differ from SparkLab's input ids. Wokwi's
@@ -50,9 +64,42 @@ export function resolveControl(
   return { key: `${partId}.${id}`, value: scaled };
 }
 
+/**
+ * Resolve a touch step against the canvas. Touch lives in the controller's
+ * own coordinate space (0..touchWidth-1 × 0..touchHeight-1 for ILI9341 +
+ * FT6206) and is passed through to the part exactly as given — the sketch
+ * maps it, as on real hardware.
+ */
+export function resolveTouch(
+  doc: ProjectDoc,
+  partId: string,
+  x: number,
+  y: number,
+): { width: number; height: number } | { error: string } {
+  const inst = doc.diagram.parts.find((p) => p.id === partId);
+  if (!inst) {
+    const ids = doc.diagram.parts.map((p) => p.id).join(', ');
+    return { error: `no part with id "${partId}" on the canvas (parts: ${ids})` };
+  }
+  const def = getPart(inst.type);
+  if (!def || def.defaults?.sensor !== 'ft6206' || !def.controls.some((c) => c.id === 'touchPressed')) {
+    return { error: `part "${partId}" (${inst.type}) is not touch-capable — use the ILI9341 TFT with FT6206 Touch part` };
+  }
+  const width = Number(def.defaults?.touchWidth ?? 240);
+  const height = Number(def.defaults?.touchHeight ?? 320);
+  if (!Number.isFinite(x) || x < 0 || x > width) return { error: `touch x=${x} is outside 0..${width} for "${partId}"` };
+  if (!Number.isFinite(y) || y < 0 || y > height) return { error: `touch y=${y} is outside 0..${height} for "${partId}"` };
+  return { width, height };
+}
+
 interface RunState {
   engine: SimEngine;
   doc: ProjectDoc;
+  io: ScenarioIO;
+  /** The run's in-app MQTT bus (§17.1). */
+  mqtt: MqttBroker;
+  /** Files written by steps so far, mirrored into the result. */
+  artifacts: Array<{ path: string; content: string }>;
   /** Serial lines already consumed by a wait step. */
   consumed: number;
   serial: string[];
@@ -168,6 +215,15 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
         : { ok: false, message: `${step.code}: ${hits[0]?.title ?? ''}` };
     }
 
+    case 'publish-mqtt': {
+      const r = state.mqtt.publish(step.topic, step.payload, { retain: step.retain });
+      if (!r.ok) return { ok: false, message: `publish refused: ${r.reason}` };
+      return {
+        ok: true,
+        message: `published to "${step.topic}"${step.retain === true ? ' (retained)' : ''}`,
+      };
+    }
+
     case 'assert-vcd-pattern': {
       let trace;
       if (step.vcd !== undefined) {
@@ -202,6 +258,67 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
         : { ok: false, message: `waveform mismatch on ${name} D${step.channel}: ${match.failures.join('; ')}` };
     }
 
+    case 'take-screenshot': {
+      const inst = state.doc.diagram.parts.find((p) => p.id === step.partId);
+      if (!inst) return { ok: false, message: `no part with id "${step.partId}" on the canvas` };
+      const svg = capturePartSvg(state.engine.snapshot().parts[step.partId], getPart(inst.type));
+      if (svg === null) {
+        return { ok: false, message: `"${step.partId}" (${inst.type}) has no visual state to capture` };
+      }
+      if (step.compareWith !== undefined) {
+        const expected = state.io.readText(step.compareWith);
+        if (expected === null) {
+          return { ok: false, message: `cannot read comparison file "${step.compareWith}"` };
+        }
+        if (expected.trim() !== svg.trim()) {
+          return { ok: false, message: `screenshot of "${step.partId}" differs from ${step.compareWith}` };
+        }
+      }
+      if (step.saveTo !== undefined) {
+        state.io.writeText(step.saveTo, svg);
+        state.artifacts.push({ path: step.saveTo, content: svg });
+      }
+      const target = step.compareWith !== undefined ? ` matches ${step.compareWith}` : '';
+      const saved = step.saveTo !== undefined ? `saved to ${step.saveTo}` : '';
+      return { ok: true, message: [`captured "${step.partId}"`, saved, target && `capture${target}`].filter(Boolean).join(', ') };
+    }
+
+    case 'touch': {
+      const r = resolveTouch(state.doc, step.partId, step.x, step.y);
+      if ('error' in r) return { ok: false, message: r.error };
+      const x = Math.round(step.x);
+      const y = Math.round(step.y);
+      setInput(state, `${step.partId}.touchX`, x);
+      setInput(state, `${step.partId}.touchY`, y);
+      setInput(state, `${step.partId}.touchPressed`, 1);
+      // Hold the press across simulated time so the sketch can observe it,
+      // then release, as Wokwi's auto-release does.
+      const error = advance(state, Math.max(0, step.durationMs));
+      setInput(state, `${step.partId}.touchPressed`, 0);
+      if (error) return { ok: false, message: error };
+      return { ok: true, message: `touched ${step.partId} at (${x}, ${y}) for ${step.durationMs} ms` };
+    }
+
+    case 'touch-press':
+    case 'touch-move': {
+      const r = resolveTouch(state.doc, step.partId, step.x, step.y);
+      if ('error' in r) return { ok: false, message: r.error };
+      setInput(state, `${step.partId}.touchX`, Math.round(step.x));
+      setInput(state, `${step.partId}.touchY`, Math.round(step.y));
+      if (step.kind === 'touch-press') setInput(state, `${step.partId}.touchPressed`, 1);
+      return {
+        ok: true,
+        message: `${step.kind === 'touch-press' ? 'pressed' : 'moved'} ${step.partId} at (${Math.round(step.x)}, ${Math.round(step.y)})`,
+      };
+    }
+
+    case 'touch-release': {
+      const inst = state.doc.diagram.parts.find((p) => p.id === step.partId);
+      if (!inst) return { ok: false, message: `no part with id "${step.partId}" on the canvas` };
+      setInput(state, `${step.partId}.touchPressed`, 0);
+      return { ok: true, message: `released ${step.partId}` };
+    }
+
     case 'repeat': {
       for (let i = 0; i < step.times; i++) {
         for (const inner of step.steps) {
@@ -218,13 +335,19 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
  * Run a scenario against a project, headless. Deterministic: the same project
  * and scenario always produce the same result, because the clock is virtual.
  */
-export function runScenario(project: ProjectDoc, scenario: Scenario, source?: string): ScenarioResult {
+export function runScenario(
+  project: ProjectDoc,
+  scenario: Scenario,
+  source?: string,
+  io: ScenarioIO = memoryScenarioIO(),
+  mqtt: MqttBroker = new MqttBroker(),
+): ScenarioResult {
   const doc: ProjectDoc = structuredClone(project);
   const engine = new SimEngine(doc);
   engine.load(doc, source ?? doc.files['sketch.ino'] ?? '');
   engine.start();
 
-  const state: RunState = { engine, doc, consumed: 0, serial: [], elapsedMs: 0 };
+  const state: RunState = { engine, doc, io, mqtt, artifacts: [], consumed: 0, serial: [], elapsedMs: 0 };
   const steps: StepResult[] = [];
   const finish = (error?: string): ScenarioResult => {
     const t = engine.serialTranscript();
@@ -239,6 +362,7 @@ export function runScenario(project: ProjectDoc, scenario: Scenario, source?: st
       serial,
       simulatedMs: nowMs(state),
       error,
+      artifacts: state.artifacts,
     };
   };
 
