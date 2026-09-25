@@ -128,11 +128,26 @@ This is what makes it a lab rather than a simulator.
 
 - **Saksham, the AI mentor.** Typed tool calls into the simulator, never a free-form chatbot: it
   must be able to *read the live circuit*, not just talk about code. Hard per-student rate limit.
-- **Chaos Lab generator**: the 8 hand-written challenges exist; generating new seeded faults from
-  any working project (spec 12.5) does not. The fault model in `src/lib/chaos` is the foundation.
+  **Shipped (offline slice):** `src/lib/ai` — strictly typed tool contract over the Immer command
+  layer (undoable, auditable), deterministic rule-based planner fallback, locked-mission-solution
+  refusal with smallest-next-hint, injection filtering, PII redaction before egress, EN/HI,
+  session + per-IP rate limits, "AI-generated — verify with the hardware" label, confirm gate for
+  destructive tools, post-run trace inspector (floating pins, relay chatter, servo refresh, PWM
+  duty mismatch, serial gaps) with confidence + dock/timebase jump, and the right-rail mentor chat
+  (`NEXT_PUBLIC_FEATURE_MENTOR=true` enables the optional hosted-model gateway; without it the
+  offline planner answers). **Still open:** hosted-model tool-calling loop end-to-end in CI,
+  thumbs-down regression-issue pipeline, MCP surface (spec 12.7).
+- **Chaos Lab generator** — **shipped:** `src/lib/chaos/generator.ts` seeds validated solvable
+  faults (missing return path, reversed polarity, shorted pin, missing pull-up, wrong pin) into any
+  ERC-clean working project, with hint ladders and fingerprint-verified repair; "Break this
+  project" in the inspector rail. Remaining: difficulty tiers surfaced in UI.
 - **Chip authoring flow**: the 3 chips ship as data; writing a new chip in the browser does not exist.
-- **"Mystery hardware" faults** (a part that fails after 30 s, a drifting sensor) need a fault
-  schedule in the runtime.
+- **"Mystery hardware" faults** — **shipped:** `src/lib/sim/faults.ts` gives the functional engine
+  a session-local fault schedule (sensor drift, sensor failure after warm-up) applied at the
+  sensor-read funnel; never stored in a ProjectDoc. One authored mystery challenge ("the lying
+  sensor": an LDR that drifts as it warms up) and two generator families join the Chaos Lab; a
+  candidate ships only if the fault is observable in the run fingerprint *and* a fresh same-type
+  part on the same pins provably repairs it.
 
 ## Phase 14 — P1: 3D and scanning
 
@@ -370,3 +385,66 @@ passed **10/10**; `npm run build` compiled successfully and generated **215 stat
 
 Next: proceed to typed-tool AI mentor ("Saksham-class"), generated Chaos Lab exercises, custom chip authoring,
 and later roadmap phases in the order specified in the PDF.
+
+
+---
+
+## Phase 13 checkpoint — AI mentor core + UI, seeded Chaos generator — 25 September 2026
+
+- **Typed AI tool contract (`src/lib/ai/tools.ts`):** `placePart`, `removePart`, `wire`, `unwire`,
+  `setAttr`, `setInput`, `writeSketch` (replace/patch/append), `explainSketch`, `runSimulation`,
+  `readSerial`, `readDiagnostics`, `diffAgainstReference`, `applyReferenceStep`,
+  `recommendNextMission`, `explainTopic`. Mutations return `Command[]` applied through the store's
+  Immer `applyAll` — every AI edit is undoable (Ctrl+Z) and labelled `AI: …` in history. Destructive
+  tools (`removePart`, `unwire`, `writeSketch:replace`) require explicit confirmation; the session
+  parks the call until confirmed or cancelled.
+- **Deterministic offline planner (`planner.ts`):** recipe-based EN/HI intent matching → plan line,
+  reply, tool calls. Byte-identical on repeat input. Gateway (`client.ts` → `POST /api/mentor` →
+  `server/mentor/gateway.ts`) is opt-in via `NEXT_PUBLIC_FEATURE_MENTOR=true` + `OPENAI_API_KEY`;
+  the server zod-validates bodies (≤32 KB) and responses (calls ≤8, invalid calls dropped),
+  rate-limits per IP (`MENTOR_RATE_LIMIT_PER_HOUR`, default 60) and never persists prompts.
+- **Guardrails (`guardrails.ts`, `redact.ts`):** locked-mission refusal at 0.85 identifier/number
+  Jaccard vs `referenceSketch` (smallest-next-hint instead), injection-pattern filtering, email/
+  phone/Aadhaar redaction before egress, audit log of hashes only.
+- **Trace inspector (`trace-inspector.ts`):** post-run findings over snapshot + ERC — floating
+  channels, ungrounded analyzer refs, dead pins, relay chatter, servo refresh-window violations,
+  PWM duty mismatch vs expectation, scope flatline, missing/gappy serial — each with confidence,
+  severity, plain-language fix ("explain simply" = ELI13 phrasing) and a jump link that opens the
+  right dock and sets the scope timebase. Honest boundary: baud-mismatch, I2C-NACK and slow-rise
+  findings are **not** emitted because neither engine models those physics yet.
+- **Seeded Chaos generator (`chaos/generator.ts`):** five fault families over any ERC-clean project
+  (missing return path d1; reversed part, shorted output pin, missing pull-up d2; wrong pin d3),
+  mulberry32-seeded; a candidate is accepted only if the broken copy raises a new error ERC or
+  changes the behaviour fingerprint and the computed inverse restores both. Session registry
+  (cap 20) keeps seed + inverse; expired slugs fail loudly. UI: "Break this project" card under
+  the inspector; repaired challenges resolve through the existing Chaos rail with hints.
+- **UI:** mentor right-rail tab (Sparkles icon, also in the toolbar) with chat, per-turn plan line,
+  tool cards with JSON details, confirm/cancel dialog, findings with jump, thumbs-down feedback,
+  inspect-last-run. EN + HI strings throughout (23 `mentor*` + 4 `chaosGenerate*` keys).
+
+### Mystery-hardware fault schedule — 25 September 2026 (Phase 13 follow-up)
+
+- **`src/lib/sim/faults.ts`:** `FaultSchedule` = session-local list of `sensor-drift`
+  (linear drift from `afterMs`) and `sensor-fails` (reads return NaN or a stuck value) events,
+  keyed by part id. Applied in the interpreter's sensor-read funnel (`inputValue`, gated to
+  `adapter === 'sensor-value'`), so `analogRead`, the DHT library reads, the scope probe and the
+  behaviour fingerprint all see the same lying sensor.
+- **Plumbing:** the schedule rides the sim `load` message (engine → worker → Circuit), survives
+  reset, and is re-attached on every load. It is never stored in a `ProjectDoc`, exported, or
+  persisted. The avr8js firmware path does not apply mystery faults — its sensor pipeline does not
+  model the failure physics — so a mystery challenge's check always runs on the functional engine.
+- **Chaos integration:** challenges may carry `mystery: { schedule, runMs }` instead of a structural
+  `fault`; `brokenProject` then ships the healthy base unchanged. `checkRepair` compares the
+  student's doc (run *with* the schedule) against the base's *healthy* fingerprint (authored
+  challenges derive it from the named base; generated ones store it at generation time). The
+  generator's two new families ship a candidate only if the fault is observable in the fingerprint
+  and a fresh same-type part on the same pins provably repairs it — a `sensor-fails` on a sketch
+  whose LCD `print()` swallows NaN is correctly rejected as unobservable.
+- **Authored challenge:** "the lying sensor" (streetlight, LDR drifts +140/s from 2 s, relay drops
+  out) — the ninth Chaos challenge.
+
+Local verification for this checkpoint: `npm run typecheck` passed; `npm test` passed
+**826 tests in 75 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully.
+
+Next: chip authoring flow (the last Phase 13 item), MCP surface, then Phase 14.

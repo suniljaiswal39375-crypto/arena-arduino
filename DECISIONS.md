@@ -495,3 +495,54 @@ has been performed.
   696 Vitest tests (2 CLI/Docker opt-ins skipped), 10/10 scenarios, and production build with
   215 static pages passed cleanly.
 
+
+## AI mentor: typed tools through the command layer, offline-first, honest inspector — 25 September 2026
+
+- **All AI mutations flow through the Immer command layer.** Tool handlers return `Command[]`; the
+  host applies them with the store's `applyAll` so every AI edit is undoable and appears in the
+  history log labelled `AI: …`. The model never writes DOM, localStorage or the database directly;
+  the server gateway is stateless and persists nothing.
+- **Offline-first, hosted optional.** With no `NEXT_PUBLIC_FEATURE_MENTOR`/`OPENAI_API_KEY`, the
+  deterministic rule-based planner answers from catalogue, ERC diagnostics, mission steps and the
+  glossary — zero-config remains a hard requirement. The hosted gateway is a thin, validated proxy
+  (zod in/out, per-IP rate limit, 20 s abort, invalid tool calls dropped) and is off by default.
+- **Locked solutions stay locked.** `writeSketch`/`explainSketch` requests matching a locked
+  mission's `referenceSketch` at ≥0.85 identifier/number Jaccard are refused with the smallest next
+  hint instead — same rule for hosted and offline paths, enforced client-side in the tool layer so
+  a misbehaving model cannot bypass it.
+- **Redaction before egress.** Email/phone/Aadhaar patterns are stripped from every outgoing
+  message; the audit trail records event types and content hashes only, never text. Private traces
+  and student code are never cached.
+- **The trace inspector only reports physics the engines actually model.** Floating pins, chatter,
+  servo refresh windows, PWM duty, serial gaps and ERC errors are emitted with confidence; baud
+  mismatch, I2C NACK and slow-rise findings are deliberately absent because neither engine simulates
+  those failure modes. Inventing them would break the project's honesty rule.
+- **Generated Chaos faults must prove solvability.** A seeded fault ships only if the broken copy
+  differs observably (new error ERC or changed behaviour fingerprint) *and* the computed inverse
+  restores the base exactly. Inverse-only faults (e.g. bypass-part with no automatic inverse) are
+  not offered by the generator. Generated challenges live in a session registry (cap 20) and expire
+  loudly rather than guessing.
+- **Waveform buffers stay out of the mentor context.** The inspector consumes reduction results
+  (edge lists, measurements), consistent with the zero-persistence instrument guarantee.
+
+## Mystery-hardware faults: a session-local schedule, never document state — 25 September 2026
+
+- **A part that lies is not a wiring change, so it must not live in the document.** The fault
+  schedule is session state passed with the sim load call (engine → worker → Circuit) and applied at
+  the interpreter's sensor-read funnel. It never enters a `ProjectDoc`, so exports, Wokwi
+  interchange, persistence and undo stay honest: the canvas really is healthy.
+- **Only modelled physics are faulted.** Sensor modules (`adapter: 'sensor-value'` — LDR, DHT, and
+  friends) drift or fail; potentiometers and buttons are student controls, not hardware under test.
+  The avr8js firmware engine does not apply mystery faults because its sensor pipeline does not
+  model those failure modes; a mystery challenge's repair check therefore always runs on the
+  functional engine, and the challenge copy says so. Mentor tools that spin throwaway engines
+  (`runSimulation`) model the healthy world for the same reason.
+- **Generated mystery faults must be observable and repairable before they ship.** The generator
+  accepts a candidate only if the scheduled run's fingerprint differs from the healthy run *and* a
+  fresh same-type part on the same pins reproduces the healthy fingerprint exactly. This rejects
+  real traps — e.g. a dead DHT feeding a sketch whose `lcd.print()` swallows NaN shows nothing, so
+  it is not a lesson, it is a dead end.
+- **The repair check runs the student's world with the fault still armed.** The reference
+  fingerprint is the base's healthy run; the student's document is run with the schedule active, so
+  an un-replaced faulty part still fails the check even though the canvas looks perfect. The
+  canonical fix — swap the module — works because the schedule keys on the old part id.

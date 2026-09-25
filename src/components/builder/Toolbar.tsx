@@ -8,7 +8,7 @@ import { templateDoc, templates } from '@/lib/templates';
 import { missionWorkspace } from '@/lib/missions/workspace';
 import { missionPresentation, LEVEL_MESSAGES } from '@/lib/missions/localize';
 import { MISSIONS } from '@/lib/missions/missions';
-import { Eraser, Play, Redo2, RotateCcw, Square, Undo2 } from 'lucide-react';
+import { Eraser, Play, Redo2, RotateCcw, Sparkles, Square, Undo2 } from 'lucide-react';
 import type { SimSnapshot } from '@/lib/sim/engine';
 import { ProjectFiles } from './ProjectFiles';
 import { PRODUCT_NAME } from '@/lib/brand';
@@ -21,6 +21,7 @@ export function Toolbar({
   onReset,
   onSpeed,
   speed,
+  onMentor,
 }: {
   running: boolean;
   snapshot: SimSnapshot | null;
@@ -29,6 +30,7 @@ export function Toolbar({
   onReset: () => void;
   onSpeed: (value: number) => void;
   speed: number;
+  onMentor?: () => void;
 }) {
   const { t, locale } = useI18n();
   const saveError = useLab(s => s.saveError);
@@ -75,6 +77,11 @@ export function Toolbar({
       <button type="button" className="btn" onClick={onReset}>
         <RotateCcw size={13} /> {t('reset')}
       </button>
+      {onMentor && (
+        <button type="button" className="btn" onClick={onMentor} title={t('mentorTitle')}>
+          <Sparkles size={13} /> {t('mentor')}
+        </button>
+      )}
 
       <label className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-dim)]">
         {t('speed')}

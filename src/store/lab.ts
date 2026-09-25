@@ -42,7 +42,7 @@ interface LabState {
   hasSaved: boolean;
 
   apply: (cmd: Command) => void;
-  applyAll: (cmds: Command[]) => void;
+  applyAll: (cmds: Command[], label?: string) => void;
   undo: () => void;
   redo: () => void;
 
@@ -117,15 +117,15 @@ export const useLab = create<LabState>((set, get) => ({
     get().save();
   },
 
-  applyAll: (cmds) => {
+  applyAll: (cmds, label) => {
     const current = get().doc;
-    const { doc, patches, inverse, label } = executeAll(current, cmds);
+    const { doc, patches, inverse, label: auto } = executeAll(current, cmds);
     if (doc === current) return;
     const next = refresh(doc);
     set((s) => ({
       doc: next,
       missionSlug: next.provenance.mission ?? null,
-      past: [...s.past, { label, patches, inverse }].slice(-200),
+      past: [...s.past, { label: label ?? auto, patches, inverse }].slice(-200),
       future: [],
       diagnostics: withDiagnostics(next),
       dirty: true,

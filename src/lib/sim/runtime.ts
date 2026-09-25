@@ -7,6 +7,7 @@ import type { PinMode, SimHost } from './host';
 import { INPUT, INPUT_PULLUP, OUTPUT } from './host';
 import { GpioStepperDecoder, Max7219Decoder, SEGMENT_PINS, sevenSegmentValue, type SerialPins } from './gpio-devices';
 import { LogicCapture, LOGIC_CHANNELS, MAX_LOGIC_ANALYZERS, type LogicLevel, type LogicTrace } from './instruments/logic-analyzer';
+import { applyFaultEvents, EMPTY_SCHEDULE, type FaultSchedule } from './faults';
 import { Oscilloscope, type ScopeTrace } from './instruments/oscilloscope';
 import {
   solveMultimeter,
@@ -175,6 +176,12 @@ export class Circuit implements SimHost {
   private oscilloscope = new Oscilloscope('scope-main');
 
   clock = 0;
+  /**
+   * Session-local mystery-hardware schedule (sim/faults). The engine owns the
+   * authoritative copy and re-attaches it here on every load(), because a
+   * reset() rebuilds the Circuit from scratch.
+   */
+  faultSchedule: FaultSchedule = EMPTY_SCHEDULE;
   /** Lines printed since the plotter last harvested, used for CSV extraction. */
   serialBuffer: SerialLine[] = [];
   /** The full visible log, capped. This is what the Serial panel shows. */
@@ -712,7 +719,13 @@ export class Circuit implements SimHost {
     const inputs = this.doc.sim.inputs;
     const fallback = def?.controls.find((c) => c.id === name)?.default ?? (override ? undefined : def?.controls[0]?.default);
     const raw = inputs[`${inst.id}.${name}`] ?? inputs[name] ?? fallback ?? 0;
-    return typeof raw === 'number' ? raw : 0;
+    const value = typeof raw === 'number' ? raw : 0;
+    // Mystery-hardware faults (sim/faults) hit sensor modules only: a
+    // potentiometer or button is a student control, not hardware under test.
+    if (this.faultSchedule.length > 0 && def?.adapter === 'sensor-value') {
+      return applyFaultEvents(this.faultSchedule, inst.id, value, this.clock / 1000);
+    }
+    return value;
   }
 
   /* ------------------------------------------------------------ SimHost */

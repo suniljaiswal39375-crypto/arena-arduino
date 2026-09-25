@@ -65,12 +65,13 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
 | Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action | ✅ |
-| Chaos Lab: 8 broken-on-purpose projects, each proven solvable | ✅ |
+| Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
+| AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
 | 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, AI mentor, multiplayer, 3D/scanning | ⏳ see ROADMAP |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, 3D/scanning | ⏳ see ROADMAP |
 
 ---
 
@@ -84,7 +85,8 @@ src/
     missions/              mission index + per-mission pages
     parts/                 component library + per-part pages
     showcase/              the 20 showcase projects
-    chaos/                 Chaos Lab challenges
+    chaos/                 Chaos Lab challenges + seeded fault generator
+    ai/                    mentor tools, planner, guardrails, trace inspector
     skills/                mastery map and badge cabinet
     docs/                  documentation
     accessibility/         accessibility statement

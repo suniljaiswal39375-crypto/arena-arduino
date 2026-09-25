@@ -18,10 +18,14 @@ import { BottomDock } from './BottomDock';
 import { StepTracker } from './StepTracker';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { ChaosPanel } from './ChaosPanel';
+import { MentorPanel } from './MentorPanel';
+import { ChaosGeneratorCard } from './ChaosGeneratorCard';
 import { cn } from '@/lib/cn';
 import { chaosBySlug, brokenProject } from '@/lib/chaos/chaos';
+import { brokenGenerated, generatedBySlug } from '@/lib/chaos/generator';
+import { EMPTY_SCHEDULE, type FaultSchedule } from '@/lib/sim/faults';
 import { showcaseBySlug, showcaseDoc } from '@/lib/showcase';
-import { Flame, Layers, Wrench } from 'lucide-react';
+import { Flame, Layers, Sparkles, Wrench } from 'lucide-react';
 
 export function BuilderShell({
   initialMissionSlug,
@@ -49,9 +53,13 @@ export function BuilderShell({
   const [buildEvents, setBuildEvents] = useState<BuildMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [rail, setRail] = useState<'inspector' | 'mission' | 'chaos'>('inspector');
+  const [rail, setRail] = useState<'inspector' | 'mission' | 'chaos' | 'mentor'>('inspector');
   const origin = doc.provenance.forkedFrom;
-  const challenge = origin?.startsWith('chaos:') ? chaosBySlug(origin.slice(6)) : undefined;
+  const generated = origin?.startsWith('generated:') ? generatedBySlug(origin.slice(6)) : undefined;
+  const challenge = generated?.challenge ?? (origin?.startsWith('chaos:') ? chaosBySlug(origin.slice(6)) : undefined);
+  // Mystery-hardware challenges look healthy on the canvas — the runtime
+  // sabotages a part on this session-local schedule (sim/faults).
+  const challengeSchedule: FaultSchedule = challenge?.mystery?.schedule ?? EMPTY_SCHEDULE;
   const confirmed = useMemo(() => new Set(doc.provenance.confirmedSteps ?? []), [doc.provenance.confirmedSteps]);
   const initializedLink = useRef<string | null>(null);
   const clientRef = useRef<SimClient | null>(null);
@@ -115,12 +123,12 @@ export function BuilderShell({
     if (!client) return;
     setBuildEvents([]);
     client.setSpeed(speed);
-    client.load(doc, source);
+    client.load(doc, source, challengeSchedule);
     setRunning(true);
     // The document is intentionally read fresh here; other changes are pushed
     // to the already running engine by the diagram effect below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, librariesSource, doc.board, doc.id, doc.engine]);
+  }, [source, librariesSource, doc.board, doc.id, doc.engine, challengeSchedule]);
 
   // Wiring and input changes are pushed without restarting the sketch.
   const diagramKey = JSON.stringify({
@@ -145,24 +153,37 @@ export function BuilderShell({
   }, []);
 
   // A restored mission already contains the student's work. Never replace it
-  // with a starter document just because the active mission changed.
+  // with a starter document just because the active mission changed. A mentor
+  // tab the student opened themselves is not overridden here either.
   useEffect(() => {
-    setRail(mission ? 'mission' : challenge ? 'chaos' : 'inspector');
+    setRail((prev) =>
+      prev === 'mentor' ? prev : mission ? 'mission' : challenge ? 'chaos' : 'inspector',
+    );
   }, [mission, challenge]);
+
+  const openMentor = useCallback(() => {
+    setRail('mentor');
+    setMobilePanel(true);
+  }, []);
 
   const revealReference = useCallback(() => {
     if (!mission) return;
     setFile('sketch.ino', mission.referenceSketch);
   }, [mission, setFile]);
 
+  const restartChallenge = useCallback(() => {
+    if (!challenge) return;
+    loadDoc(generated ? brokenGenerated(generated) : brokenProject(challenge));
+  }, [challenge, generated, loadDoc]);
+
   /* ------------------------------------------------------------- render */
 
   const onRun = useCallback(() => {
     setBuildEvents([]);
-    clientRef.current?.load(doc, source);
+    clientRef.current?.load(doc, source, challengeSchedule);
     clientRef.current?.start();
     setRunning(true);
-  }, [doc, source]);
+  }, [doc, source, challengeSchedule]);
 
   const onStop = useCallback(() => {
     clientRef.current?.stop();
@@ -204,6 +225,7 @@ export function BuilderShell({
         onReset={onReset}
         onSpeed={setSpeed}
         speed={speed}
+        onMentor={openMentor}
       />
 
       {error && (
@@ -260,6 +282,12 @@ export function BuilderShell({
               icon={<Wrench size={13} />}
               label={t('inspector')}
             />
+            <RailTab
+              active={rail === 'mentor'}
+              onClick={() => setRail('mentor')}
+              icon={<Sparkles size={13} />}
+              label={t('mentorTab')}
+            />
             {mission && (
               <RailTab
                 active={rail === 'mission'}
@@ -279,7 +307,7 @@ export function BuilderShell({
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rail === 'chaos' && challenge ? (
-              <div lang="en" className="h-full"><ChaosPanel key={`${doc.id}:${challenge.slug}`} challenge={challenge} onRestart={() => loadDoc(brokenProject(challenge))} /></div>
+              <div lang="en" className="h-full"><ChaosPanel key={`${doc.id}:${challenge.slug}`} challenge={challenge} onRestart={restartChallenge} /></div>
             ) : rail === 'mission' && mission ? (
               <StepTracker
                 key={`${doc.id}:${mission.slug}`}
@@ -288,8 +316,18 @@ export function BuilderShell({
                 onConfirm={confirmStep}
                 onReveal={revealReference}
               />
+            ) : rail === 'mentor' ? (
+              <MentorPanel snapshot={snapshot} />
             ) : (
-              <div lang="en"><Inspector states={states} /></div>
+              <div lang="en" className="flex h-full flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto"><Inspector states={states} /></div>
+                <ChaosGeneratorCard
+                  onChallenge={(gen, broken) => {
+                    loadDoc(broken);
+                    setRail('chaos');
+                  }}
+                />
+              </div>
             )}
           </div>
         </aside>

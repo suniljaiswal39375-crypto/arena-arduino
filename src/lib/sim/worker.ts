@@ -1,9 +1,10 @@
 /// <reference lib="webworker" />
 import type { ProjectDoc } from '@/lib/doc/types';
 import { SimEngine, type SimSnapshot } from './engine';
+import { EMPTY_SCHEDULE, type FaultSchedule } from './faults';
 
 export type WorkerRequest =
-  | { type: 'load'; doc: ProjectDoc; source: string }
+  | { type: 'load'; doc: ProjectDoc; source: string; schedule?: FaultSchedule }
   | { type: 'update'; doc: ProjectDoc }
   | { type: 'start' }
   | { type: 'stop' }

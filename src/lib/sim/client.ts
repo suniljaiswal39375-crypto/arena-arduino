@@ -2,6 +2,7 @@
 
 import type { ProjectDoc } from '@/lib/doc/types';
 import { SimEngine, type SimSnapshot } from './engine';
+import { EMPTY_SCHEDULE, type FaultSchedule } from './faults';
 import type { WorkerRequest, WorkerResponse } from './worker';
 import type { FirmwareWorkerRequest, FirmwareWorkerResponse } from './firmware/worker';
 import type { FirmwareSnapshot } from './firmware/interfaces';
@@ -125,7 +126,7 @@ export class SimClient {
     return this.fwLoadError ? firmwareLoadError(this.fwLoadError.message) : null;
   }
 
-  load(doc: ProjectDoc, source: string): void {
+  load(doc: ProjectDoc, source: string, schedule: FaultSchedule = EMPTY_SCHEDULE): void {
     const epoch = ++this.loadEpoch;
     this.haltedEpoch = null;
     this.inlineCompileController?.abort();
@@ -174,10 +175,11 @@ export class SimClient {
     this.fwLoadError = null;
     this.disposeFirmwareWorker();
     if (this.worker) {
-      this.send({ type: 'load', doc, source });
+      this.send({ type: 'load', doc, source, schedule });
       return;
     }
     this.inline = new SimEngine(doc);
+    this.inline.setFaultSchedule(schedule);
     this.inline.load(doc, source);
     this.inline.start();
     this.startInlineLoop();
