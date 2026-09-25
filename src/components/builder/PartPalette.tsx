@@ -5,14 +5,18 @@ import { useLab } from '@/store/lab';
 import { PART_CATEGORIES, type PartCategory } from '@/lib/parts/types';
 import { searchParts, categoryCounts } from '@/lib/parts';
 import { FIDELITY_LABEL } from '@/lib/brand';
-import { Plus } from 'lucide-react';
+import { Plus, Cpu } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n/client';
+import { ChipStudio } from './ChipStudio';
 
 export function PartPalette() {
   const doc = useLab((s) => s.doc);
   const addPartAt = useLab((s) => s.addPartAt);
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<PartCategory | 'All'>('All');
+  const [studioOpen, setStudioOpen] = useState(false);
 
   const counts = useMemo(() => categoryCounts(), []);
   const engine: 'functional' | 'firmware' =
@@ -51,6 +55,14 @@ export function PartPalette() {
             </Chip>
           ))}
         </div>
+        <button
+          type="button"
+          className="btn btn-sm mt-2 w-full"
+          onClick={() => setStudioOpen(true)}
+          title={t('chipStudio')}
+        >
+          <Cpu size={12} /> {t('chipStudioOpen')}
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -89,6 +101,7 @@ export function PartPalette() {
           </p>
         )}
       </div>
+      {studioOpen && <ChipStudio onClose={() => setStudioOpen(false)} />}
     </div>
   );
 }

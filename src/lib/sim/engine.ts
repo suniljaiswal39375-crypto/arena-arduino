@@ -8,6 +8,7 @@ import { SkethError } from './tokens';
 import type { LogicTrace } from './instruments/logic-analyzer';
 import type { ScopeTrace } from './instruments/oscilloscope';
 import type { MultimeterMode, MultimeterReading } from './instruments/multimeter';
+import { EMPTY_SCHEDULE, type FaultSchedule } from './faults';
 
 export interface SimError {
   message: string;
@@ -56,6 +57,7 @@ export class SimEngine {
   running = false;
   error: SimError | null = null;
   source = '';
+  private faultSchedule: FaultSchedule = EMPTY_SCHEDULE;
 
   constructor(doc: ProjectDoc) {
     this.doc = doc;
@@ -66,6 +68,15 @@ export class SimEngine {
     this.doc = doc;
     this.circuit.update(doc);
     this.takeIsrError();
+  }
+
+  /**
+   * Session-local mystery-hardware schedule (sim/faults). Survives reset()
+   * and doc updates; it never rides inside a ProjectDoc.
+   */
+  setFaultSchedule(schedule: FaultSchedule): void {
+    this.faultSchedule = schedule;
+    this.circuit.faultSchedule = schedule;
   }
 
   /** An interrupt handler that throws stops the sketch like any runtime error. */
@@ -85,6 +96,9 @@ export class SimEngine {
     this.plot = [];
     this.plotLabels = [];
     this.circuit.update(doc);
+    // The engine owns the mystery-fault schedule; a reset() rebuilt the
+    // Circuit, so re-attach the schedule on every load.
+    this.circuit.faultSchedule = this.faultSchedule;
     this.circuit.resetLogicCaptures();
     this.gen = null;
     this.interp = null;

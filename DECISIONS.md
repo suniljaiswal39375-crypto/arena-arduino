@@ -495,3 +495,151 @@ has been performed.
   696 Vitest tests (2 CLI/Docker opt-ins skipped), 10/10 scenarios, and production build with
   215 static pages passed cleanly.
 
+
+## AI mentor: typed tools through the command layer, offline-first, honest inspector — 25 September 2026
+
+- **All AI mutations flow through the Immer command layer.** Tool handlers return `Command[]`; the
+  host applies them with the store's `applyAll` so every AI edit is undoable and appears in the
+  history log labelled `AI: …`. The model never writes DOM, localStorage or the database directly;
+  the server gateway is stateless and persists nothing.
+- **Offline-first, hosted optional.** With no `NEXT_PUBLIC_FEATURE_MENTOR`/`OPENAI_API_KEY`, the
+  deterministic rule-based planner answers from catalogue, ERC diagnostics, mission steps and the
+  glossary — zero-config remains a hard requirement. The hosted gateway is a thin, validated proxy
+  (zod in/out, per-IP rate limit, 20 s abort, invalid tool calls dropped) and is off by default.
+- **Locked solutions stay locked.** `writeSketch`/`explainSketch` requests matching a locked
+  mission's `referenceSketch` at ≥0.85 identifier/number Jaccard are refused with the smallest next
+  hint instead — same rule for hosted and offline paths, enforced client-side in the tool layer so
+  a misbehaving model cannot bypass it.
+- **Redaction before egress.** Email/phone/Aadhaar patterns are stripped from every outgoing
+  message; the audit trail records event types and content hashes only, never text. Private traces
+  and student code are never cached.
+- **The trace inspector only reports physics the engines actually model.** Floating pins, chatter,
+  servo refresh windows, PWM duty, serial gaps and ERC errors are emitted with confidence; baud
+  mismatch, I2C NACK and slow-rise findings are deliberately absent because neither engine simulates
+  those failure modes. Inventing them would break the project's honesty rule.
+- **Generated Chaos faults must prove solvability.** A seeded fault ships only if the broken copy
+  differs observably (new error ERC or changed behaviour fingerprint) *and* the computed inverse
+  restores the base exactly. Inverse-only faults (e.g. bypass-part with no automatic inverse) are
+  not offered by the generator. Generated challenges live in a session registry (cap 20) and expire
+  loudly rather than guessing.
+- **Waveform buffers stay out of the mentor context.** The inspector consumes reduction results
+  (edge lists, measurements), consistent with the zero-persistence instrument guarantee.
+
+## Mystery-hardware faults: a session-local schedule, never document state — 25 September 2026
+
+- **A part that lies is not a wiring change, so it must not live in the document.** The fault
+  schedule is session state passed with the sim load call (engine → worker → Circuit) and applied at
+  the interpreter's sensor-read funnel. It never enters a `ProjectDoc`, so exports, Wokwi
+  interchange, persistence and undo stay honest: the canvas really is healthy.
+- **Only modelled physics are faulted.** Sensor modules (`adapter: 'sensor-value'` — LDR, DHT, and
+  friends) drift or fail; potentiometers and buttons are student controls, not hardware under test.
+  The avr8js firmware engine does not apply mystery faults because its sensor pipeline does not
+  model those failure modes; a mystery challenge's repair check therefore always runs on the
+  functional engine, and the challenge copy says so. Mentor tools that spin throwaway engines
+  (`runSimulation`) model the healthy world for the same reason.
+- **Generated mystery faults must be observable and repairable before they ship.** The generator
+  accepts a candidate only if the scheduled run's fingerprint differs from the healthy run *and* a
+  fresh same-type part on the same pins reproduces the healthy fingerprint exactly. This rejects
+  real traps — e.g. a dead DHT feeding a sketch whose `lcd.print()` swallows NaN shows nothing, so
+  it is not a lesson, it is a dead end.
+- **The repair check runs the student's world with the fault still armed.** The reference
+  fingerprint is the base's healthy run; the student's document is run with the schedule active, so
+  an un-replaced faulty part still fails the check even though the canvas looks perfect. The
+  canonical fix — swap the module — works because the schedule keys on the old part id.
+
+## Chip Studio: compose, don't compile — 25 September 2026
+
+- **Authoring is guided composition over the three behaviour families the simulator actually
+  models** — inverter, window comparator, pulse generator — not free-form C. There is no C compiler
+  in the browser and no AVR-side chip execution in the firmware engine; a chip we could not
+  simulate would break the honesty rule, so the studio composes data (the same `ChipLogic` the
+  runtime evaluates) and generates the reference C source from battle-tested templates instead.
+- **Authored chips are project data, not global state.** The definition embeds in `ProjectDoc.chips`,
+  travels with save/export/reload, and re-registers into the shared part registries on load.
+  Registration goes through the same registries the shipped chips use — one code path, no second
+  class of part. Authored ids are forced under the `user-chip-` prefix so nothing a student writes
+  can shadow a shipped part.
+- **Authoring is undoable and reversible.** `addChip`/`removeChip` are commands in the Immer layer;
+  a chip with instances on the canvas refuses removal rather than leaving dangling types, and undo
+  removes the definition and placement together.
+- **The Wokwi export carries the real artifacts** (`<name>.chip.json` + `<name>.c`, diagram type
+  `chip-<name>`), so what the student composed in SparkLab is exactly what a Wokwi project would
+  compile — and the C templates mirror the shipped chips' implementations pin-for-pin.
+
+## The MCP server is the CLI surface, by process not by promise — 25 September 2026
+
+- **`sparklab-cli mcp` wraps exactly the headless surface the CLI already had** — project loading,
+  ERC, free-runs, scenario execution, exports — through the same `loadProject` / `SimEngine` /
+  `runScenario` functions. There is no second execution path to drift out of sync with the CLI.
+- **Tool failures are data, not protocol errors.** A bad path or a compile error comes back as an
+  `isError` tool result the agent can read and reason about; only genuinely malformed JSON-RPC
+  produces protocol-level error frames. Unknown notifications stay silent, as the transport requires.
+- **A local stdio server carries no token.** The client host spawned the process; demanding
+  `SPARKLAB_CLI_TOKEN` there would be theatre. The token gates hosted/remote transports, which do
+  not exist yet — when they do, auth arrives with them.
+- **Bounds are enforced at the tool boundary** (free-run 50–30 000 ms, serial tails capped at 200
+  lines, project scans capped at 50 hits / depth 3) so one careless agent call cannot stall a
+  session or flood a context window.
+
+## The 3D workbench looks, it does not simulate — 25 September 2026
+
+- **A viewing aid, badged as one.** The bench mirrors the schematic sheet (positions, category
+  colours, straight wire segments); it does not model breadboard electrical geometry, strain
+  relief, or physical routing. The dialog says so in one line, because a student who believes the
+  3D view is electrically meaningful has been misled.
+- **three.js never enters the builder's first load.** The workbench is a dynamic import and the
+  build manifest is checked: the builder route stays at 105 kB First Load JS against the <250 kB
+  budget. A viewing aid that cost 60+ kB on every builder visit would be a budget violation
+  dressed as a feature.
+- **One selection, one source of truth.** Clicking a block selects through the same store the
+  schematic uses — the 3D view introduces no parallel selection state.
+- **Photo tracing is a reference, not recognition.** The underlay is session-only (object URL,
+  revoked on replace/close), never persisted or exported, and its caption states that nothing is
+  recognized or auto-placed. Auto photo-to-circuit needs a hosted vision model; when one exists it
+  must emit an editable, obviously uncertain starting point — the confidently wrong part list is
+  the failure mode this rule exists to prevent.
+
+## Quality gates measure reality, and honest gates fail loudly — 25 September 2026
+
+- **The performance budget is computed from the built output, gzipped, per route** — never from
+  source sizes, estimates, or bundle-analyzer screenshots. It runs in postbuild, so `npm run build`
+  itself fails on a breach. When a budget is breached you ship less JavaScript or split a chunk;
+  raising the limit is not an option the tooling offers. A route missing from the manifest is a
+  failure too: a gate with a silent skip path is theatre.
+- **The axe audit gates critical violations only, and says so out loud.** Serious and moderate
+  findings are printed with selectors on every CI run so they are countable and cannot rot
+  unnoticed; the gate tightens to them once the lists are empty. Claiming full WCAG 2.2 AA with a
+  red log would violate the honesty rule; gating nothing would too. This is the staged path
+  between them.
+- **The PWA manifest declares what is real.** Standalone display, brand colours, an SVG icon
+  authored in-repo (no binary assets, no build step). Offline capability remains the generated
+  service worker's job; the manifest only makes the install prompt truthful.
+
+## Hosted MCP: the token gate arrives with the network — 25 September 2026
+
+- **Two transports, one protocol, different trust.** The local stdio server was spawned by the
+  user's host and stays token-free (zero-config); the hosted endpoint serves whoever holds the
+  token, so it is disabled (`503`) until `SPARKLAB_CLI_TOKEN` exists and answers `401` on every
+  missing or wrong bearer. The previous decision anticipated exactly this: the gate ships with the
+  network transport, not before.
+- **The token holder gets the project tree, not the machine.** Path arguments are sandboxed to
+  `SPARKLAB_MCP_ROOT` centrally in the `tools/call` dispatch rather than per-tool, so the guarantee
+  cannot be forgotten by a future tool. Escapes are ordinary tool errors the agent can read.
+- **Both transports share one dispatcher** (`handleMcpMessage`); the line handler and the HTTP
+  route are thin shells. Protocol semantics — silence for notifications, `isError` for tool
+  failures — cannot drift between local and hosted.
+
+## Waveform assertions assert levels, tolerate durations — 25 September 2026
+
+- **`assert-vcd-pattern` is a contract over the bounded capture, not a sampler.** The pattern
+  language describes maximal level runs (`H 1ms; L 500us; H *`) and the matcher collapses the
+  analyzer's event edges into exactly those runs. Levels must match exactly — a HIGH is never
+  "close enough" — while durations carry an explicit tolerance (default ±25 %) because real
+  sketches jitter around `delay()`. A final segment the window cut short is matched as *at least*
+  its duration and the failure says so, rather than inventing a duration nobody observed.
+- **The same matcher serves live captures and recorded dumps.** `vcd:` parses the analyzer's own
+  export (the format `toVcd` produces, verified by round-trip), so CI can assert a waveform a
+  student recorded in the builder — and the round-trip test guarantees the writer and reader agree.
+- **Unexpected activity is a failure unless the pattern ends in `*`.** A pattern that names three
+  segments against a capture with five runs has not been satisfied; silence after the pattern must
+  be stated, not assumed.

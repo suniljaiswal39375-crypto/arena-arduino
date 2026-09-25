@@ -32,6 +32,11 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Performance budgets
+        # postbuild already runs the gate; an explicit step keeps the verdict
+        # visible in the job summary instead of buried in build output.
+        run: npm run budget
+
       - name: Install browser
         run: npx playwright install --with-deps chromium
 

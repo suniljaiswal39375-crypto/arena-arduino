@@ -61,16 +61,19 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock | ✅ |
 | 16 guided missions, each step checked against the live circuit; hints, stuck detection, locked reference sketch | ✅ |
 | 26-skill taxonomy with Bayesian Knowledge Tracing (pTransit 0.2, pGuess 0.35, pSlip 0.1) and 11 effort-based badges | ✅ |
-| Public site: landing, component library with per-part pages, mission pages, mastery map, docs | ✅ |
+| Public site: landing, component library with per-part pages, mission pages, mastery map, docs; PWA-installable (manifest + generated service worker) | ✅ |
+| Quality gates: post-build performance budget on real gzipped output (fail the build, never raise the limit) and an axe audit per route in the CI browser job | ✅ critical-violations gate · non-critical reported |
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
-| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action | ✅ |
-| Chaos Lab: 8 broken-on-purpose projects, each proven solvable | ✅ |
+| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
+| Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
+| AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
-| 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
+| 3 shipped custom chips + **Chip Studio**: author your own chip (inverter, window comparator, pulse generator) in the browser — palette part, Wokwi `chip.json` and reference C source, embedded in the project file | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, AI mentor, multiplayer, 3D/scanning | ⏳ see ROADMAP |
+| 3D workbench: an orbitable viewing aid over the current sheet (lazy chunk; positions mirror the schematic) and a session-only photo-trace underlay | ✅ viewing aid |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, photo-to-circuit recognition | ⏳ see ROADMAP |
 
 ---
 
@@ -84,7 +87,8 @@ src/
     missions/              mission index + per-mission pages
     parts/                 component library + per-part pages
     showcase/              the 20 showcase projects
-    chaos/                 Chaos Lab challenges
+    chaos/                 Chaos Lab challenges + seeded fault generator
+    ai/                    mentor tools, planner, guardrails, trace inspector
     skills/                mastery map and badge cabinet
     docs/                  documentation
     accessibility/         accessibility statement

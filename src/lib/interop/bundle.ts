@@ -1,5 +1,6 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { fromWokwiDiagram, librariesTxt, toWokwiDiagram, type WokwiDiagram, type WokwiImport } from './wokwi';
+import { chipJson } from '@/lib/chips/chips';
 import { createZip, readZip } from './zip';
 
 /**
@@ -14,6 +15,12 @@ export function wokwiZip(doc: ProjectDoc): { bytes: Uint8Array; skipped: string[
     { name: 'sketch.ino', content: sketch },
     { name: 'libraries.txt', content: librariesTxt(sketch) },
   ];
+  // Authored chips travel as Wokwi custom-chip files next to the diagram.
+  for (const chip of doc.chips ?? []) {
+    const name = chip.id.replace(/^user-chip-/, '');
+    files.push({ name: `${name}.chip.json`, content: `${JSON.stringify(chipJson(chip), null, 2)}\n` });
+    files.push({ name: `${name}.c`, content: chip.source });
+  }
   return { bytes: createZip(files), skipped: skipped.map((s) => `${s.name} (${s.id})`) };
 }
 

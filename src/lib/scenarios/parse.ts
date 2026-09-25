@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { ScenarioParseError, type Scenario, type ScenarioStep } from './types';
+import { PatternError, parsePattern } from './vcd-pattern';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
@@ -123,6 +124,29 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
       return { kind: 'assert-no-diagnostic', code };
     }
 
+    case 'assert-vcd-pattern': {
+      const b = record(body, at);
+      const channel = num(b, 'channel', at);
+      if (!Number.isInteger(channel) || channel < 0 || channel > 7) {
+        throw new ScenarioParseError('channel must be a whole number 0-7 (the analyzer pins D0-D7)', at);
+      }
+      const pattern = str(b, 'pattern', at);
+      try {
+        parsePattern(pattern);
+      } catch (err) {
+        if (err instanceof PatternError) throw new ScenarioParseError(err.message, at);
+        throw err;
+      }
+      const tolerance = b.tolerance === undefined ? undefined : num(b, 'tolerance', at);
+      if (tolerance !== undefined && (tolerance < 0 || tolerance > 0.95)) {
+        throw new ScenarioParseError('tolerance must be between 0 and 0.95', at);
+      }
+      const vcd = typeof b.vcd === 'string' ? b.vcd : undefined;
+      // part-id names the live analyzer capture; an inline VCD has none.
+      const partId = vcd !== undefined ? (b['part-id'] === undefined ? 'vcd' : str(b, 'part-id', at)) : str(b, 'part-id', at);
+      return { kind: 'assert-vcd-pattern', partId, channel, pattern, tolerance, vcd };
+    }
+
     case 'repeat': {
       const b = record(body, at);
       const times = num(b, 'times', at);
@@ -135,7 +159,7 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
 
     default:
       throw new ScenarioParseError(
-        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, repeat`,
+        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, repeat`,
         path,
       );
   }
@@ -192,6 +216,16 @@ function stepToYaml(step: ScenarioStep): Record<string, unknown> {
       return { 'write-serial': step.text };
     case 'assert-no-diagnostic':
       return { 'assert-no-diagnostic': step.code };
+    case 'assert-vcd-pattern':
+      return {
+        'assert-vcd-pattern': {
+          'part-id': step.partId,
+          channel: step.channel,
+          pattern: step.pattern,
+          ...(step.tolerance !== undefined ? { tolerance: step.tolerance } : {}),
+          ...(step.vcd !== undefined ? { vcd: step.vcd } : {}),
+        },
+      };
     case 'repeat':
       return { repeat: { times: step.times, steps: step.steps.map(stepToYaml) } };
   }

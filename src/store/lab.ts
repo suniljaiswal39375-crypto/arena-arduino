@@ -14,6 +14,8 @@ import type { PartInstance, PinRef, ProjectDoc, WireColor, ScopePrefs, Multimete
 import { runERC, type Diagnostic } from '@/lib/erc/diagnostics';
 import { lastProjectId, loadProject } from '@/lib/doc/persistence';
 import { getPart, tierForType } from '@/lib/parts';
+import { unregisterUserChip, type ChipDef } from '@/lib/chips/chips';
+import { registerUserChip } from '@/lib/chips/registry';
 import { templateDoc } from '@/lib/templates';
 import { saveProject } from '@/lib/doc/persistence';
 
@@ -42,7 +44,7 @@ interface LabState {
   hasSaved: boolean;
 
   apply: (cmd: Command) => void;
-  applyAll: (cmds: Command[]) => void;
+  applyAll: (cmds: Command[], label?: string) => void;
   undo: () => void;
   redo: () => void;
 
@@ -64,6 +66,10 @@ interface LabState {
   rename: (name: string) => void;
   setEngine: (engine: ProjectDoc['engine']) => void;
   setBoard: (board: string) => void;
+  /** Register an authored chip on the project and make it placeable. */
+  addChip: (chip: ChipDef) => void;
+  /** Remove an authored chip; refused while instances are on the canvas. */
+  removeChip: (id: string) => boolean;
 
   loadDoc: (doc: ProjectDoc) => void;
   newProject: () => void;
@@ -117,15 +123,15 @@ export const useLab = create<LabState>((set, get) => ({
     get().save();
   },
 
-  applyAll: (cmds) => {
+  applyAll: (cmds, label) => {
     const current = get().doc;
-    const { doc, patches, inverse, label } = executeAll(current, cmds);
+    const { doc, patches, inverse, label: auto } = executeAll(current, cmds);
     if (doc === current) return;
     const next = refresh(doc);
     set((s) => ({
       doc: next,
       missionSlug: next.provenance.mission ?? null,
-      past: [...s.past, { label, patches, inverse }].slice(-200),
+      past: [...s.past, { label: label ?? auto, patches, inverse }].slice(-200),
       future: [],
       diagnostics: withDiagnostics(next),
       dirty: true,
@@ -243,9 +249,24 @@ export const useLab = create<LabState>((set, get) => ({
   setEngine: (engine) => get().apply({ t: 'setEngine', engine }),
   setBoard: (board) => get().apply({ t: 'setBoard', board }),
 
+  addChip: (chip) => {
+    registerUserChip(chip);
+    get().apply({ t: 'addChip', chip });
+  },
+
+  removeChip: (id) => {
+    if (get().doc.diagram.parts.some((p) => p.type === id)) return false;
+    unregisterUserChip(id);
+    get().apply({ t: 'removeChip', id });
+    return true;
+  },
+
   loadDoc: (doc) => {
     if (get().dirty) get().flushSave();
     if (saveTimer) clearTimeout(saveTimer);
+    // Authored chips travel inside the project; re-register them so the
+    // palette, ERC and simulator resolve their part types again.
+    for (const chip of doc.chips ?? []) registerUserChip(chip);
     const next = refresh(doc);
     set({
       doc: next,

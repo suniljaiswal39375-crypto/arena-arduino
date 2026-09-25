@@ -6,6 +6,8 @@ import { templateDoc } from '@/lib/templates';
 import { runERC, type DiagnosticCode } from '@/lib/erc/diagnostics';
 import { parseScenario } from '@/lib/scenarios/parse';
 import { runScenario } from '@/lib/scenarios/runner';
+import { SimEngine } from '@/lib/sim/engine';
+import { EMPTY_SCHEDULE, type FaultSchedule } from '@/lib/sim/faults';
 
 /**
  * Chaos Lab: a working project, broken on purpose, for the student to repair.
@@ -25,6 +27,8 @@ export type ChaosFault =
   | { kind: 'move-wire-end'; from: [string, string]; to: [string, string]; end: 'from' | 'to'; newPin: string }
   | { kind: 'add-wire'; from: [string, string]; to: [string, string] }
   | { kind: 'replace-in-sketch'; find: string; replace: string }
+  /** Swap the two wire ends on a two-pin part — a reversed LED or diode. */
+  | { kind: 'swap-wire-ends'; partId: string; pinA: string; pinB: string }
   /** Take a two-legged part out and join what it was connected to, as a bare wire would. */
   | { kind: 'bypass-part'; partId: string };
 
@@ -34,6 +38,17 @@ export interface ChaosCheck {
   noDiagnostics: DiagnosticCode[];
   /** Behaviour that must hold once fixed, as an automation scenario. */
   scenario?: string;
+  /**
+   * Behavioural fingerprint the repaired project must reproduce (generated
+   * challenges). Computed from the clean base at generation time; a run whose
+   * serial output and actuator states match the base is fixed.
+   */
+  fingerprint?: string;
+  /**
+   * Virtual-time run length for the fingerprint check. Mystery faults need a
+   * run that outlives the fault's `afterMs`; structural ones use the default.
+   */
+  runMs?: number;
 }
 
 export interface ChaosChallenge {
@@ -44,7 +59,19 @@ export interface ChaosChallenge {
   brief: string;
   /** `mission:<slug>` or `template:<slug>`. */
   base: string;
-  fault: ChaosFault;
+  /**
+   * The structural defect baked into the broken document. Mystery-hardware
+   * challenges have none — their broken document *is* the healthy base —
+   * and carry a `mystery` schedule instead.
+   */
+  fault?: ChaosFault;
+  /**
+   * Mystery hardware (spec §12.5): the doc looks clean; the runtime
+   * sabotages a part on this session-local schedule (sim/faults). The
+   * schedule is applied by the functional engine only and is never stored
+   * in a ProjectDoc.
+   */
+  mystery?: { schedule: FaultSchedule; runMs: number };
   /** Three hints, from a nudge to nearly the answer. */
   hints: [string, string, string];
   /** What was wrong and why, shown after the fix is confirmed. */
@@ -272,6 +299,27 @@ steps:
     check: { noDiagnostics: ['level-mismatch'] },
     skills: ['pc.analog-conditioning', 'pc.power-budget'],
   },
+  {
+    slug: 'the-lying-sensor',
+    title: 'The streetlight with a mind of its own',
+    difficulty: 3,
+    brief:
+      'Dusk fell, the lamp came on, everyone smiled. A few seconds later it switched itself off — and it keeps doing that. The code is exactly the version that worked last week, and the meter says every connection is good.',
+    base: 'template:ldr-relay-lamp',
+    // Mystery hardware: the wiring and sketch are innocent. A couple of
+    // seconds in, the LDR module's reading starts climbing (~+140/s), the
+    // sketch decides the street is bright again, and the lamp drops out.
+    mystery: { schedule: [{ kind: 'sensor-drift', partId: 'ldr', afterMs: 2000, perSecond: 140 }], runMs: 4500 },
+    hints: [
+      'Do not just glance at it — let it run. Does the trouble need warm-up time to appear?',
+      'Watch the numbers, not the lamp: print the sensor reading (or scope A0) while it runs and see whether the input itself is moving.',
+      'The light sensor is the liar — fine at first, then its reading climbs though the street has not got brighter. Swap it for a fresh module on the same pins.',
+    ],
+    answer:
+      'The light-sensor module was failing as it warmed up: a couple of seconds after power-on its reading started drifting upward, so the sketch decided the street was bright again and switched the lamp off. Nothing in the code or wiring was wrong — real sensor modules fail exactly like this, drifting with temperature and age. Replacing the module on the same pins fixes it.',
+    check: { noDiagnostics: [], runMs: 4500 },
+    skills: ['pc.analog-conditioning', 'al.self-diagnosis'],
+  },
 ];
 
 /** The clean project a challenge starts from, before the fault is applied. */
@@ -301,20 +349,23 @@ export function baseProject(challenge: ChaosChallenge): ProjectDoc {
   return doc;
 }
 
-/** Apply a challenge's defect to a fresh copy of its base project. */
-export function brokenProject(challenge: ChaosChallenge): ProjectDoc {
-  const doc = structuredClone(baseProject(challenge));
-  const fault = challenge.fault;
+/**
+ * Apply one seeded defect to a document. Pure: clones, never mutates.
+ * Shared by the authored challenges (`brokenProject`) and the seeded
+ * generator, so a fault means exactly one thing everywhere.
+ */
+export function applyFault(clean: ProjectDoc, fault: ChaosFault, slug: string): ProjectDoc {
+  const doc = structuredClone(clean);
   switch (fault.kind) {
     case 'remove-wire': {
       const w = findWire(doc, fault.from, fault.to);
-      if (!w) throw new Error(`${challenge.slug}: no wire ${fault.from.join('.')} - ${fault.to.join('.')} to remove`);
+      if (!w) throw new Error(`${slug}: no wire ${fault.from.join('.')} - ${fault.to.join('.')} to remove`);
       doc.diagram.connections = doc.diagram.connections.filter((x) => x.id !== w.id);
       break;
     }
     case 'move-wire-end': {
       const w = findWire(doc, fault.from, fault.to);
-      if (!w) throw new Error(`${challenge.slug}: no wire to move`);
+      if (!w) throw new Error(`${slug}: no wire to move`);
       const end = sameEnd(w, fault[fault.end], 'from') ? 'from' : 'to';
       w[end] = { part: w[end].part, pin: fault.newPin };
       break;
@@ -326,8 +377,24 @@ export function brokenProject(challenge: ChaosChallenge): ProjectDoc {
       break;
     case 'replace-in-sketch': {
       const src = doc.files['sketch.ino'] ?? '';
-      if (!src.includes(fault.find)) throw new Error(`${challenge.slug}: sketch does not contain "${fault.find}"`);
+      if (!src.includes(fault.find)) throw new Error(`${slug}: sketch does not contain "${fault.find}"`);
       doc.files['sketch.ino'] = src.replace(fault.find, fault.replace);
+      break;
+    }
+    case 'swap-wire-ends': {
+      const touch = (pin: string) =>
+        doc.diagram.connections.filter((w) =>
+          (w.from.part === fault.partId && w.from.pin === pin) || (w.to.part === fault.partId && w.to.pin === pin),
+        );
+      const wa = touch(fault.pinA)[0];
+      const wb = touch(fault.pinB)[0];
+      if (!wa || !wb || wa === wb) throw new Error(`${slug}: swap-wire-ends needs two distinct wired pins`);
+      const swap = (w: Wire, pin: string): void => {
+        if (w.from.part === fault.partId && w.from.pin === pin) w.from = { part: w.from.part, pin: fault.pinA === pin ? fault.pinB : fault.pinA };
+        if (w.to.part === fault.partId && w.to.pin === pin) w.to = { part: w.to.part, pin: fault.pinA === pin ? fault.pinB : fault.pinA };
+      };
+      swap(wa, fault.pinA);
+      swap(wb, fault.pinB);
       break;
     }
     case 'bypass-part': {
@@ -335,13 +402,29 @@ export function brokenProject(challenge: ChaosChallenge): ProjectDoc {
         (w) => w.from.part === fault.partId || w.to.part === fault.partId,
       );
       const far = touching.map((w) => (w.from.part === fault.partId ? w.to : w.from));
-      if (far.length !== 2) throw new Error(`${challenge.slug}: ${fault.partId} must have exactly two wires to bypass`);
+      if (far.length !== 2) throw new Error(`${slug}: ${fault.partId} must have exactly two wires to bypass`);
       doc.diagram.parts = doc.diagram.parts.filter((p) => p.id !== fault.partId);
       doc.diagram.connections = doc.diagram.connections.filter((w) => !touching.includes(w));
       doc.diagram.connections.push(makeWire(far[0]!, far[1]!, 'green'));
       break;
     }
   }
+  return doc;
+}
+
+/** Apply faults in order; the generator's repair path uses this too. */
+export function applyFaults(clean: ProjectDoc, faults: ChaosFault[], slug: string): ProjectDoc {
+  let doc = clean;
+  for (const fault of faults) doc = applyFault(doc, fault, slug);
+  return doc;
+}
+
+/** Apply a challenge's defect to a fresh copy of its base project. */
+export function brokenProject(challenge: ChaosChallenge): ProjectDoc {
+  const clean = baseProject(challenge);
+  // A mystery challenge's document is innocent — the runtime schedule does
+  // the damage — so the broken project is simply the clean base.
+  const doc = challenge.fault ? applyFault(clean, challenge.fault, challenge.slug) : structuredClone(clean);
   doc.provenance = { ...doc.provenance, forkedFrom: `chaos:${challenge.slug}` };
   return doc;
 }
@@ -352,7 +435,57 @@ export interface ChaosVerdict {
   remaining: string[];
 }
 
-/** Has the student repaired the project? Checks both the ERC and behaviour. */
+/**
+ * A deterministic behavioural fingerprint of a run: serial text plus the
+ * observable state of every actuator-ish part after a fixed virtual-time run.
+ * The runtime's RNG is seeded xorshift32, so the same document always
+ * fingerprints the same — which is what makes generated challenges checkable.
+ */
+export function behaviourFingerprint(doc: ProjectDoc, ms = 1_500, schedule: FaultSchedule = EMPTY_SCHEDULE): string {
+  const engine = new SimEngine(doc);
+  engine.setFaultSchedule(schedule);
+  engine.load(doc, doc.files['sketch.ino'] ?? '');
+  engine.start();
+  for (let t = 0; t < ms && !engine.error; t += 50) engine.tick(50, 1);
+  const snap = engine.snapshot();
+  const serial = snap.serial.map((l) => l.text).join('');
+  const states = Object.entries(snap.parts)
+    .map(([id, state]) => {
+      switch (state.kind) {
+        case 'led':
+          return `${id}:led:${state.on ? 1 : 0}:${Math.round(state.brightness * 100)}`;
+        case 'relay':
+          return `${id}:relay:${state.closed ? 1 : 0}`;
+        case 'servo':
+          return `${id}:servo:${Math.round(state.angle)}`;
+        case 'buzzer':
+          return `${id}:buzzer:${state.active ? Math.round(state.frequency) : 0}`;
+        case 'motor':
+          return `${id}:motor:${Math.round(state.speed * 100)}`;
+        case 'lcd':
+          return `${id}:lcd:${state.lines.join('|')}`;
+        case 'oled':
+          return `${id}:oled:${state.lines.join('|')}`;
+        case 'seven-seg':
+          return `${id}:seg:${state.value}`;
+        case 'matrix':
+          return `${id}:matrix:${state.cells.map((c) => (c ? 1 : 0)).join('')}`;
+        case 'rgb':
+          return `${id}:rgb:${state.r},${state.g},${state.b}`;
+        default:
+          return '';
+      }
+    })
+    .filter(Boolean)
+    .sort()
+    .join('\n');
+  let h = 5381;
+  const text = `${serial}‖${states}`;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16) + `:${text.length}`;
+}
+
+/** Has the student repaired the project? Checks the ERC, behaviour and (generated) fingerprint. */
 export function checkRepair(challenge: ChaosChallenge, doc: ProjectDoc): ChaosVerdict {
   const remaining: string[] = [];
   const found = runERC(doc);
@@ -364,6 +497,24 @@ export function checkRepair(challenge: ChaosChallenge, doc: ProjectDoc): ChaosVe
     const result = runScenario(doc, parseScenario(challenge.check.scenario));
     if (!result.passed) {
       remaining.push(result.error ?? `It still does not behave: ${result.failure?.message ?? 'check failed'}`);
+    }
+  }
+  if (challenge.check.fingerprint !== undefined || challenge.mystery) {
+    const runMs = challenge.check.runMs ?? 1_500;
+    const schedule = challenge.mystery?.schedule ?? EMPTY_SCHEDULE;
+    // Generated challenges carry the expected fingerprint from generation
+    // time (their base is 'adhoc', not rebuildable); authored mystery
+    // challenges derive it from their named base project. The reference is
+    // the base's *healthy* run; the student's document is then run *with*
+    // the schedule, so an un-replaced faulty part still fails the check.
+    const expected = challenge.check.fingerprint ?? behaviourFingerprint(baseProject(challenge), runMs);
+    const now = behaviourFingerprint(doc, runMs, schedule);
+    if (now !== expected) {
+      remaining.push(
+        runERC(doc).length > 0
+          ? 'The electrical check still reports a problem.'
+          : 'It runs, but not the way the original project did — compare what the parts are doing now.',
+      );
     }
   }
   return { fixed: remaining.length === 0, remaining };

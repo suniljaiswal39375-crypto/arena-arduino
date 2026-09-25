@@ -250,8 +250,32 @@ void chip_init(void) {
 
 const CHIP_BY_ID = new Map(CHIPS.map((c) => [c.id, c]));
 
+/** Student-authored chips (see compose.ts + registry.ts). */
+const USER_CHIPS = new Map<string, ChipDef>();
+
 export function chipById(id: string): ChipDef | undefined {
-  return CHIP_BY_ID.get(id);
+  return CHIP_BY_ID.get(id) ?? USER_CHIPS.get(id);
+}
+
+/** Store an authored chip definition. Returns false when the id is taken. */
+export function addUserChip(def: ChipDef): boolean {
+  if (CHIP_BY_ID.has(def.id) || USER_CHIPS.has(def.id)) return false;
+  USER_CHIPS.set(def.id, def);
+  return true;
+}
+
+/**
+ * Drop a chip from the definition registry. Parts already placed on a canvas
+ * keep working (their catalogue entry stays registered); only authoring and
+ * re-export disappear.
+ */
+export function unregisterUserChip(id: string): void {
+  USER_CHIPS.delete(id);
+}
+
+/** The student-authored chips registered this session. */
+export function userChips(): ChipDef[] {
+  return [...USER_CHIPS.values()];
 }
 
 /**

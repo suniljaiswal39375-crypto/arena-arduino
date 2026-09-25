@@ -1,3 +1,4 @@
+import type { ProjectDoc } from '@/lib/doc/types';
 import { describe, expect, it } from 'vitest';
 import { CHAOS_CHALLENGES, baseProject, brokenProject, chaosBySlug, checkRepair } from './chaos';
 import { runERC } from '@/lib/erc/diagnostics';
@@ -5,9 +6,9 @@ import { SKILL_BY_ID } from '@/lib/skills';
 import { parseScenario } from '@/lib/scenarios/parse';
 
 describe('Chaos Lab catalogue', () => {
-  it('ships eight challenges across all three difficulties', () => {
-    expect(CHAOS_CHALLENGES).toHaveLength(8);
-    expect(new Set(CHAOS_CHALLENGES.map((c) => c.slug)).size).toBe(8);
+  it('ships nine challenges across all three difficulties', () => {
+    expect(CHAOS_CHALLENGES).toHaveLength(9);
+    expect(new Set(CHAOS_CHALLENGES.map((c) => c.slug)).size).toBe(9);
     expect(new Set(CHAOS_CHALLENGES.map((c) => c.difficulty))).toEqual(new Set([1, 2, 3]));
   });
 
@@ -46,8 +47,14 @@ describe('every challenge is provably solvable', () => {
     describe(challenge.slug, () => {
       it('starts from a project that passes its own check', () => {
         const verdict = checkRepair(challenge, baseProject(challenge));
-        expect(verdict.remaining, 'the clean base must already count as fixed').toEqual([]);
-        expect(verdict.fixed).toBe(true);
+        if (challenge.mystery) {
+          // Mystery hardware: the "clean" base doc IS the broken project —
+          // the runtime schedule sabotages it the moment it runs.
+          expect(verdict.fixed, 'the mystery base must fail its own check').toBe(false);
+        } else {
+          expect(verdict.remaining, 'the clean base must already count as fixed').toEqual([]);
+          expect(verdict.fixed).toBe(true);
+        }
       });
 
       it('is really broken once the fault is applied', () => {
@@ -59,6 +66,18 @@ describe('every challenge is provably solvable', () => {
       it('leaves exactly one thing changed', () => {
         const base = baseProject(challenge);
         const broken = brokenProject(challenge);
+        if (challenge.mystery) {
+          // The mystery document is innocent by design: nothing changes
+          // (wire ids are minted per document, so compare structure).
+          const sig = (d: ProjectDoc) =>
+            JSON.stringify([
+              d.diagram.parts.map((p) => [p.id, p.type, p.attrs]),
+              d.diagram.connections.map((w) => [w.from, w.to, w.color]),
+            ]);
+          expect(sig(broken)).toBe(sig(base));
+          expect(broken.files['sketch.ino']).toBe(base.files['sketch.ino']);
+          return;
+        }
         const sketchChanged = base.files['sketch.ino'] !== broken.files['sketch.ino'];
         const wiresChanged =
           JSON.stringify(base.diagram.connections.map((w) => [w.from, w.to]).sort()) !==
@@ -95,6 +114,24 @@ describe('the repair check reads the circuit, not the answer key', () => {
     doc.diagram.connections = doc.diagram.connections.filter((w) => w.from.part !== 'led' && w.to.part !== 'led');
     expect(runERC(doc).some((d) => d.code === 'missing-return-path')).toBe(false);
     expect(checkRepair(c, doc).fixed).toBe(false);
+  });
+
+  it('accepts the mystery fix: a fresh sensor on the same pins', () => {
+    const c = chaosBySlug('the-lying-sensor')!;
+    expect(c.mystery).toBeDefined();
+    const fixed = brokenProject(c);
+    // The simulated student fix: swap the faulty module for an identical
+    // fresh one (new part id, same wires). The schedule keys on the old id,
+    // so the replacement runs clean.
+    const newId = 'ldr-fresh';
+    fixed.diagram.parts = fixed.diagram.parts.map((p) => (p.id === 'ldr' ? { ...p, id: newId } : p));
+    fixed.diagram.connections = fixed.diagram.connections.map((w) => ({
+      ...w,
+      from: w.from.part === 'ldr' ? { ...w.from, part: newId } : w.from,
+      to: w.to.part === 'ldr' ? { ...w.to, part: newId } : w.to,
+    }));
+    expect(runERC(fixed).some((d) => d.severity === 'error')).toBe(false);
+    expect(checkRepair(c, fixed).fixed).toBe(true);
   });
 
   it('explains what is still wrong in plain language', () => {

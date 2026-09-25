@@ -1,4 +1,5 @@
 import { applyPatches, enablePatches, produceWithPatches, type Patch } from 'immer';
+import type { ChipDef } from '@/lib/chips/chips';
 import type {
   AttrValue,
   Engine,
@@ -27,6 +28,8 @@ export type Command =
   | { t: 'setMultimeterPrefs'; prefs: Partial<MultimeterPrefs> }
   | { t: 'setEngine'; engine: Engine }
   | { t: 'setBoard'; board: string }
+  | { t: 'addChip'; chip: ChipDef }
+  | { t: 'removeChip'; id: string }
   | { t: 'rename'; name: string }
   | { t: 'confirmStep'; note: string }
   | { t: 'setProvenance'; mission?: string | null; step?: number }
@@ -70,6 +73,10 @@ function labelFor(c: Command): string {
       return 'switch engine';
     case 'setBoard':
       return 'change board';
+    case 'addChip':
+      return `author chip ${c.chip.name}`;
+    case 'removeChip':
+      return 'remove chip';
     case 'rename':
       return 'rename project';
     case 'confirmStep':
@@ -142,6 +149,15 @@ function mutate(draft: ProjectDoc, c: Command): void {
       break;
     case 'setBoard':
       draft.board = c.board;
+      break;
+    case 'addChip': {
+      // Replace any earlier draft of the same authored chip; the registry
+      // update itself happens in the store's applier (commands stay pure).
+      draft.chips = [...(draft.chips ?? []).filter((x) => x.id !== c.chip.id), c.chip];
+      break;
+    }
+    case 'removeChip':
+      draft.chips = (draft.chips ?? []).filter((x) => x.id !== c.id);
       break;
     case 'rename':
       draft.name = c.name;

@@ -312,8 +312,20 @@ npm run cli -- my-project --expect-text "ready" --timeout 5000
 npm run cli -- my-project --scenario blink.test.yaml --junit-report junit.xml
 npm run cli -- lint my-project
 npm run cli -- test examples --recursive
-npm run cli -- diagram export my-project --wokwi --out diagram.json`}
+npm run cli -- diagram export my-project --wokwi --out diagram.json
+npm run cli -- mcp`}
           </pre>
+          <p className="mt-3 text-[13.5px] leading-relaxed text-[var(--color-text-dim)]">
+            The last command starts a{" "}
+            <a className="text-[var(--color-accent)] underline" href="https://modelcontextprotocol.io">
+              Model Context Protocol
+            </a>{" "}
+            server on stdio, so an MCP client (VS Code, an agent) can list projects, load and lint
+            them, run free-runs or scenario YAML, and export diagrams — the same headless surface as
+            the CLI, as tools: <code className="mono">list_projects</code>,{" "}
+            <code className="mono">load_project</code>, <code className="mono">run_simulation</code>{" "}
+            and <code className="mono">export_diagram</code>.
+          </p>
           <p className="mt-3 text-[13.5px] leading-relaxed text-[var(--color-text-dim)]">
             In GitHub Actions, the repository&apos;s reusable action runs every scenario and uploads a JUnit
             report:

@@ -128,31 +128,76 @@ This is what makes it a lab rather than a simulator.
 
 - **Saksham, the AI mentor.** Typed tool calls into the simulator, never a free-form chatbot: it
   must be able to *read the live circuit*, not just talk about code. Hard per-student rate limit.
-- **Chaos Lab generator**: the 8 hand-written challenges exist; generating new seeded faults from
-  any working project (spec 12.5) does not. The fault model in `src/lib/chaos` is the foundation.
-- **Chip authoring flow**: the 3 chips ship as data; writing a new chip in the browser does not exist.
-- **"Mystery hardware" faults** (a part that fails after 30 s, a drifting sensor) need a fault
-  schedule in the runtime.
+  **Shipped (offline slice):** `src/lib/ai` — strictly typed tool contract over the Immer command
+  layer (undoable, auditable), deterministic rule-based planner fallback, locked-mission-solution
+  refusal with smallest-next-hint, injection filtering, PII redaction before egress, EN/HI,
+  session + per-IP rate limits, "AI-generated — verify with the hardware" label, confirm gate for
+  destructive tools, post-run trace inspector (floating pins, relay chatter, servo refresh, PWM
+  duty mismatch, serial gaps) with confidence + dock/timebase jump, and the right-rail mentor chat
+  (`NEXT_PUBLIC_FEATURE_MENTOR=true` enables the optional hosted-model gateway; without it the
+  offline planner answers). **Still open:** hosted-model tool-calling loop end-to-end in CI,
+  thumbs-down regression-issue pipeline, MCP surface (spec 12.7).
+- **Chaos Lab generator** — **shipped:** `src/lib/chaos/generator.ts` seeds validated solvable
+  faults (missing return path, reversed polarity, shorted pin, missing pull-up, wrong pin) into any
+  ERC-clean working project, with hint ladders and fingerprint-verified repair; "Break this
+  project" in the inspector rail. Remaining: difficulty tiers surfaced in UI.
+- **Chip authoring flow** — **shipped:** Chip Studio (`ChipStudio.tsx` + `lib/chips/compose.ts`):
+  guided composition of a custom chip from the three behaviour families the simulator honestly
+  models — inverter, window comparator (two threshold sliders), pulse generator (rate + duty).
+  Composing produces the same artifacts the shipped chips carry (palette part, Wokwi `chip.json`,
+  reference C source), embeds the definition in the project file (undoable `addChip`/`removeChip`
+  commands, re-registered on load), places the part on the canvas, and exports it in the Wokwi zip
+  as `<name>.chip.json` + `<name>.c` with a `chip-<name>` diagram type. Free-form C authoring stays
+  out of scope: there is no C compiler in the browser, and an unsimulatable chip would be a broken
+  promise.
+- **"Mystery hardware" faults** — **shipped:** `src/lib/sim/faults.ts` gives the functional engine
+  a session-local fault schedule (sensor drift, sensor failure after warm-up) applied at the
+  sensor-read funnel; never stored in a ProjectDoc. One authored mystery challenge ("the lying
+  sensor": an LDR that drifts as it warms up) and two generator families join the Chaos Lab; a
+  candidate ships only if the fault is observable in the run fingerprint *and* a fresh same-type
+  part on the same pins provably repairs it.
 
 ## Phase 14 — P1: 3D and scanning
 
-- react-three-fiber workbench: a breadboard you can actually look at, for students who cannot hold
-  the real thing.
-- Photo-to-circuit scanning. Treat as research: the failure mode is confidently wrong output, so it
-  must always produce an editable, obviously-uncertain starting point rather than a finished
-  circuit.
+- react-three-fiber workbench — **shipped (viewing-aid slice):** a "3D" toolbar button opens an
+  orbitable bench over the current sheet (`Workbench3D`, dynamic import). Parts render as
+  category-coloured blocks (click to select, shared with the schematic), wires as straight
+  coloured segments, a grid helper sizes itself to the sheet. The scene data is pure
+  (`lib/canvas/workbench3d.ts`); three.js lives in a lazy chunk and is **verified absent from the
+  builder's first-load manifest** (builder First Load JS stays 105 kB against the <250 kB budget).
+- Photo-to-circuit scanning — **research conclusion + honest slice:** without a hosted vision model
+  the lab ships *photo trace* instead: a session-only reference underlay behind the schematic with
+  an opacity slider, labelled "nothing is recognized or auto-placed". Auto-recognition stays out of
+  scope offline (no server, no model weights in the browser bundle, and a confidently wrong part
+  list is worse than none). When a hosted model arrives it must emit an editable, obviously
+  uncertain starting point — low-confidence boxes and a diff against the current sheet — never a
+  finished circuit.
 
 ## Phase 15 — P2: breadth
 
 - Hindi and regional language UI. The strings are already centralised enough to extract; the
   layout needs to survive longer words.
 - Multiplayer Co-Lab over Yjs.
-- VS Code extension and MCP server, so a project can be driven from an agent. (The CLI and the
-  GitHub Action exist; the MCP server would wrap the same `runScenario` / `SimEngine` surface.)
-- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
-  They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
-  pattern assertions against the new bounded capture respectively.
-- PWA install, accessibility audit, performance budget, pricing and school/org billing.
+- VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
+  `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
+  `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
+  same headless surface as the CLI. The **hosted transport shipped** too: `POST /api/mcp` speaks
+  the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN` (disabled without it) and confined to
+  `SPARKLAB_MCP_ROOT`.)
+- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`. They need a
+  renderer, a touchscreen part and an MQTT broker respectively. (`assert-vcd-pattern` **shipped**:
+  a level-segment pattern language — `H 1ms; L 500us; H *` — matched with a duration tolerance
+  against the live logic-analyzer capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
+- PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
+  hand-authored SVG icon; the service worker itself is the existing generated precache.
+- Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
+  (`/`, `/builder`, `/missions`, `/docs`, `/accessibility`) in the CI browser job. **Critical**
+  violations fail the route; serious/moderate ones are printed with selectors to drive them to
+  zero, and the gate tightens to them when the lists are empty.
+- Performance budget — **shipped as a hard gate:** `npm run budget` (also chained into postbuild)
+  gzips the real first-load JS from `app-build-manifest.json` for `/`, `/builder`, `/missions` and
+  fails the build over 250 kB. Current: builder 102 kB, landing 120 kB, missions 173 kB.
+- Pricing and school/org billing: still open (needs the hosted tier decision).
 
 ---
 
@@ -370,3 +415,192 @@ passed **10/10**; `npm run build` compiled successfully and generated **215 stat
 
 Next: proceed to typed-tool AI mentor ("Saksham-class"), generated Chaos Lab exercises, custom chip authoring,
 and later roadmap phases in the order specified in the PDF.
+
+
+---
+
+## Phase 13 checkpoint — AI mentor core + UI, seeded Chaos generator — 25 September 2026
+
+- **Typed AI tool contract (`src/lib/ai/tools.ts`):** `placePart`, `removePart`, `wire`, `unwire`,
+  `setAttr`, `setInput`, `writeSketch` (replace/patch/append), `explainSketch`, `runSimulation`,
+  `readSerial`, `readDiagnostics`, `diffAgainstReference`, `applyReferenceStep`,
+  `recommendNextMission`, `explainTopic`. Mutations return `Command[]` applied through the store's
+  Immer `applyAll` — every AI edit is undoable (Ctrl+Z) and labelled `AI: …` in history. Destructive
+  tools (`removePart`, `unwire`, `writeSketch:replace`) require explicit confirmation; the session
+  parks the call until confirmed or cancelled.
+- **Deterministic offline planner (`planner.ts`):** recipe-based EN/HI intent matching → plan line,
+  reply, tool calls. Byte-identical on repeat input. Gateway (`client.ts` → `POST /api/mentor` →
+  `server/mentor/gateway.ts`) is opt-in via `NEXT_PUBLIC_FEATURE_MENTOR=true` + `OPENAI_API_KEY`;
+  the server zod-validates bodies (≤32 KB) and responses (calls ≤8, invalid calls dropped),
+  rate-limits per IP (`MENTOR_RATE_LIMIT_PER_HOUR`, default 60) and never persists prompts.
+- **Guardrails (`guardrails.ts`, `redact.ts`):** locked-mission refusal at 0.85 identifier/number
+  Jaccard vs `referenceSketch` (smallest-next-hint instead), injection-pattern filtering, email/
+  phone/Aadhaar redaction before egress, audit log of hashes only.
+- **Trace inspector (`trace-inspector.ts`):** post-run findings over snapshot + ERC — floating
+  channels, ungrounded analyzer refs, dead pins, relay chatter, servo refresh-window violations,
+  PWM duty mismatch vs expectation, scope flatline, missing/gappy serial — each with confidence,
+  severity, plain-language fix ("explain simply" = ELI13 phrasing) and a jump link that opens the
+  right dock and sets the scope timebase. Honest boundary: baud-mismatch, I2C-NACK and slow-rise
+  findings are **not** emitted because neither engine models those physics yet.
+- **Seeded Chaos generator (`chaos/generator.ts`):** five fault families over any ERC-clean project
+  (missing return path d1; reversed part, shorted output pin, missing pull-up d2; wrong pin d3),
+  mulberry32-seeded; a candidate is accepted only if the broken copy raises a new error ERC or
+  changes the behaviour fingerprint and the computed inverse restores both. Session registry
+  (cap 20) keeps seed + inverse; expired slugs fail loudly. UI: "Break this project" card under
+  the inspector; repaired challenges resolve through the existing Chaos rail with hints.
+- **UI:** mentor right-rail tab (Sparkles icon, also in the toolbar) with chat, per-turn plan line,
+  tool cards with JSON details, confirm/cancel dialog, findings with jump, thumbs-down feedback,
+  inspect-last-run. EN + HI strings throughout (23 `mentor*` + 4 `chaosGenerate*` keys).
+
+### Mystery-hardware fault schedule — 25 September 2026 (Phase 13 follow-up)
+
+- **`src/lib/sim/faults.ts`:** `FaultSchedule` = session-local list of `sensor-drift`
+  (linear drift from `afterMs`) and `sensor-fails` (reads return NaN or a stuck value) events,
+  keyed by part id. Applied in the interpreter's sensor-read funnel (`inputValue`, gated to
+  `adapter === 'sensor-value'`), so `analogRead`, the DHT library reads, the scope probe and the
+  behaviour fingerprint all see the same lying sensor.
+- **Plumbing:** the schedule rides the sim `load` message (engine → worker → Circuit), survives
+  reset, and is re-attached on every load. It is never stored in a `ProjectDoc`, exported, or
+  persisted. The avr8js firmware path does not apply mystery faults — its sensor pipeline does not
+  model the failure physics — so a mystery challenge's check always runs on the functional engine.
+- **Chaos integration:** challenges may carry `mystery: { schedule, runMs }` instead of a structural
+  `fault`; `brokenProject` then ships the healthy base unchanged. `checkRepair` compares the
+  student's doc (run *with* the schedule) against the base's *healthy* fingerprint (authored
+  challenges derive it from the named base; generated ones store it at generation time). The
+  generator's two new families ship a candidate only if the fault is observable in the fingerprint
+  and a fresh same-type part on the same pins provably repairs it — a `sensor-fails` on a sketch
+  whose LCD `print()` swallows NaN is correctly rejected as unobservable.
+- **Authored challenge:** "the lying sensor" (streetlight, LDR drifts +140/s from 2 s, relay drops
+  out) — the ninth Chaos challenge.
+
+Local verification for this checkpoint: `npm run typecheck` passed; `npm test` passed
+**826 tests in 75 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully.
+
+### Chip Studio (authoring flow) — 25 September 2026 (Phase 13 complete)
+
+- **`src/lib/chips/compose.ts`:** `ChipSpec` → `composeChip(spec, takenIds)` — pure validation
+  (name, description, pin names `[A-Z][A-Z0-9]{0,7}`, VCC/GND reserved, thresholds/rate/duty
+  ranges) and chip construction: id `user-chip-<slug>` (uniqueness-minted), compact pin spec with
+  fixed VCC/GND, controls (`thrLow`/`thrHigh` or `pulseBpm`), declarative `ChipLogic`, wiring
+  lines, an example sketch and the reference C source — all adapted to the authored pin names.
+- **Registration:** `lib/chips/registry.ts` (kept separate from `chips.ts` so the data module and
+  the part catalogue never import each other) pushes the chip into the same registries the shipped
+  parts use — palette, search, aliases, ERC, `chipById`. Authored ids must start with `user-chip-`,
+  so they can never shadow a shipped part.
+- **Project integration:** `ProjectDoc.chips?: ChipDef[]`; `addChip`/`removeChip` commands (undoable;
+  removal refused while instances are on the canvas); `loadDoc` re-registers embedded chips so a
+  reloaded or shared project keeps working. The Wokwi zip gains `<name>.chip.json` and `<name>.c`
+  and `wokwiTypeFor` maps authored chips to Wokwi's `chip-<name>` custom-chip convention.
+- **UI:** a "New chip" button in the palette opens the studio dialog: behaviour picker, name/
+  author/description, pin-name and parameter fields with field-level errors, and a live
+  `chip.json` + C preview. Adding registers the chip, places a part on the canvas, and embeds it
+  in the project. EN + HI strings throughout.
+- **Verified end to end in tests:** a composed chip wired to a board runs ERC-clean in a live
+  `SimEngine` and its output inverts a sketch-driven pin; reload and Wokwi-export round trips are
+  covered. A Playwright spec (`e2e/chip-studio.spec.ts`) runs the browser flow in CI.
+
+Local verification for this checkpoint: `npm run typecheck` passed; `npm test` passed
+**840 tests in 76 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully.
+
+### MCP server (`sparklab-cli mcp`) — 25 September 2026
+
+- **`src/lib/cli/mcp.ts`:** a newline-delimited JSON-RPC 2.0 handler (`handleMcpLine`) plus a
+  stdio loop (`runMcpServer`), matching the MCP stdio transport: `initialize` (protocol
+  `2024-11-05`, `serverInfo sparklab-cli`), `notifications/initialized`, `ping`, `tools/list`,
+  `tools/call`. Tool failures come back as `isError` tool results, never as protocol errors;
+  unknown notifications stay silent; parse errors answer `-32700`.
+- **Four tools over the same headless surface as the CLI:** `list_projects` (bounded-depth scan
+  for `*.sparklab.json` / `project.json` / `diagram.json`), `load_project` (board, parts, wiring,
+  warnings, ERC summary), `run_simulation` (free-run 50–30 000 ms → serial tail + final part
+  states, or an inline scenario YAML → verdict via `runScenario`), `export_diagram` (Wokwi
+  files / KiCad netlist / BOM CSV).
+- **Wiring:** `runCli(['mcp'], io)` requires `io.input` (an `AsyncIterable<string>`; the bin script
+  attaches readline over stdin). A local stdio server needs no token — the client host spawned it —
+  so the zero-config rule holds; remote transports will gate on `SPARKLAB_CLI_TOKEN` later.
+- **Tests:** 13 covering protocol semantics (handshake, silence rules, error frames) and every tool
+  against a real project on disk, plus an end-to-end `runCli(['mcp'])` run asserting exactly one
+  response per request.
+
+### Phase 14 slice — 3D workbench + photo trace — 25 September 2026
+
+- **`lib/canvas/workbench3d.ts`:** pure scene builder — sheet coordinates mapped to the bench plane
+  (x → x, y → depth, ×0.06), category-coloured blocks with per-category heights, wires lifted above
+  the taller end block, bench extents grown from part bounds (with an empty-scene fallback).
+  Deterministic; 5 unit tests incl. the missing-part wire skip.
+- **`Workbench3D.tsx`:** r3f Canvas + OrbitControls in a dialog; click selects through the same
+  store the schematic uses; category legend and the viewing-aid honesty note ride along. Loaded via
+  `next/dynamic` (`ssr: false`) from the toolbar "3D" button — the three/drei chunks never appear
+  in the builder's first-load manifest (verified against `app-build-manifest.json`).
+- **Photo trace:** `SchematicCanvas` gains a session-only underlay (object-URL image behind the
+  SVG, opacity 10–90 %, remove). Nothing is persisted, exported, or recognized; the object URL is
+  revoked on replace/close. This is the honest version of photo-to-circuit for an offline lab.
+- **e2e (`workbench.spec.ts`, CI browser job):** dialog opens with a canvas, honesty note visible,
+  closes cleanly; photo underlay applies and removes.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **858 tests in 79 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` compiled with
+`/builder` First Load JS at **105 kB** (budget <250 kB) and three.js confined to lazy chunks.
+
+### Quality gates — performance budget, PWA install, axe audit — 25 September 2026
+
+- **Performance budgets are enforced against the real build, not estimates.** `src/lib/ci/budget.ts`
+  (pure, injectable fs/compress; 5 tests) + `scripts/budget.ts` gzip every first-load JS chunk of
+  `/`, `/builder`, `/missions` from `app-build-manifest.json` and fail when over 250 kB. Chained
+  into postbuild (so `npm run build` fails) with an explicit CI step for visibility. A missing route
+  in the manifest is a failure, not a pass — a budget you can silently skip is not a budget.
+- **PWA install:** `app/manifest.ts` (standalone, `#0b0e11`/`#00b4d8`, start `/builder`) and a
+  hand-authored SVG icon (both `any` and `maskable` purposes); the generated service worker from
+  `prepare-offline.mjs` remains the offline engine. The e2e suite fetches the manifest and its icon.
+- **Axe per route, staged honestly:** the CI browser job audits five routes; critical violations
+  gate, everything else is printed with selectors. The policy is written in the spec header: the
+  non-critical lists exist to be driven to zero, then the gate tightens.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **863 tests in 80 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` passed with
+the budget gate green (builder **102.3 kB**, landing **119.8 kB**, missions **172.9 kB** gzipped).
+
+### Hosted MCP transport — 25 September 2026
+
+- **`POST /api/mcp`:** the stdio protocol over HTTP, one JSON-RPC message per POST (MCP
+  streamable-HTTP "single JSON response" mode). Notifications answer `202` with an empty body —
+  the HTTP spelling of stdio's silence. `handleMcpMessage` was extracted from the line handler so
+  both transports share one dispatch; the stdio behaviour is byte-identical (its 13 tests are
+  untouched and green).
+- **Auth:** without `SPARKLAB_CLI_TOKEN` the endpoint answers `503 mcp-not-configured` and points
+  local users at stdio; with it configured, every request must present `Authorization: Bearer`,
+  wrong/missing → `401` with `WWW-Authenticate: Bearer`. Bodies over 64 KB → `413`; malformed
+  JSON → `400` with the `-32700` frame.
+- **Sandbox:** every `path`/`root` argument resolves inside `SPARKLAB_MCP_ROOT` (default: the
+  server cwd) before any tool runs — enforced centrally in the `tools/call` dispatch, so future
+  tools inherit it. An escape is an `isError` tool result, not a traversal.
+- **Tests:** 7 hosted-transport tests (auth matrix, transport semantics, size guard, sandbox
+  containment with real temp dirs) on top of the 13 stdio tests.
+
+Local verification: `npm run typecheck` passed; full suite green (see commit message for counts);
+build + budget gate green.
+
+### `assert-vcd-pattern` — waveform assertions in scenarios — 25 September 2026
+
+- **`lib/scenarios/vcd-pattern.ts`:** a pure pattern contract — level segments (`H`/`L`/`X` with
+  optional durations in ns/us/ms/s and a trailing `*` for "anything after"), an interval collapser
+  over the bounded logic capture (initial state + edges → maximal runs), and a tolerance matcher
+  (default ±25 %; a window-cut final segment is matched as *at least*, and reported as such).
+  Levels never tolerate; only durations do.
+- **VCD reader:** parses the analyzer's own export format (`$var` scalars, `#timestamps`,
+  `value id` changes, `$dumpvars` initial values) so a scenario can assert against a recorded dump
+  inline (`vcd:`) as well as against the live capture (`part-id` of an `emu-logic-analyzer`).
+- **Wiring:** `assert-vcd-pattern` joins the scenario step vocabulary (types, parser with
+  pattern/tolerance validation, YAML round-trip, runner dispatch). Failures name the segment, the
+  observed run and the tolerance ("segment 1 lasted 50ms, expected 100ms ±25%").
+- **Tests:** 16 — parser, interval collapsing, tolerance/wildcard/window-cut semantics, VCD
+  round-trip through `toVcd`, and four end-to-end `runScenario` cases including a live blink
+  waveform on a wired analyzer and an inline recorded dump.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **886 tests in 82 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green.
+
+Next: multiplayer Co-Lab, pricing/billing decision, VS Code extension shell, then the remaining
+polish in Phase 15.

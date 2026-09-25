@@ -133,6 +133,9 @@ export function fromWokwiPin(type: string, pin: string): string {
 
 /** The Wokwi part type for a SparkLab part, or null when Wokwi has no equivalent. */
 export function wokwiTypeFor(type: string): string | null {
+  // Authored chips export as Wokwi custom chips: type `chip-<name>` plus the
+  // `<name>.chip.json` and `<name>.c` files wokwiZip attaches.
+  if (type.startsWith('user-chip-')) return `chip-${type.slice('user-chip-'.length)}`;
   return MAPPINGS[type]?.type ?? getPart(type)?.wokwi ?? null;
 }
 
