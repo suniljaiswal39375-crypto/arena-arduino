@@ -6,10 +6,12 @@ import { useI18n } from '@/lib/i18n/client';
 import { useLab } from '@/store/lab';
 import {
   collabState,
+  collabWsUrl,
   startCollab,
   stopCollab,
   subscribeCollab,
   type CollabBridgeState,
+  type CollabMode,
 } from '@/store/collab';
 import { cn } from '@/lib/cn';
 
@@ -29,6 +31,8 @@ export default function CoLabPanel() {
   const [bridge, setBridge] = useState<CollabBridgeState>(() => collabState());
   const [name, setName] = useState('');
   const [room, setRoom] = useState('');
+  const [mode, setMode] = useState<CollabMode>('local');
+  const serverUrl = collabWsUrl();
 
   useEffect(() => subscribeCollab(setBridge), []);
   // Default the room to the project id every time the panel re-mounts, but
@@ -42,8 +46,11 @@ export default function CoLabPanel() {
   const join = useCallback(() => {
     const trimmedRoom = room.trim() || doc.id;
     const trimmedName = name.trim() || t('colabNamePlaceholder');
-    void startCollab({ room: trimmedRoom, name: trimmedName });
-  }, [room, name, doc.id, t]);
+    // Server mode only makes sense with a relay configured; otherwise fall
+    // back to the zero-config same-browser transport.
+    const effectiveMode: CollabMode = mode === 'server' && serverUrl ? 'server' : 'local';
+    void startCollab({ room: trimmedRoom, name: trimmedName, mode: effectiveMode });
+  }, [room, name, doc.id, t, mode, serverUrl]);
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-sm">
@@ -61,6 +68,34 @@ export default function CoLabPanel() {
 
       {!active && bridge.status !== 'unsupported' && (
         <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1 text-[13px]">
+            <span>{t('colabMode')}</span>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="colab-mode"
+                  checked={mode === 'local'}
+                  onChange={() => setMode('local')}
+                />
+                {t('colabModeLocal')}
+              </label>
+              {serverUrl ? (
+                <label className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    name="colab-mode"
+                    checked={mode === 'server'}
+                    onChange={() => setMode('server')}
+                  />
+                  {t('colabModeServer')}
+                </label>
+              ) : null}
+            </div>
+            {mode === 'server' && serverUrl ? (
+              <p className="text-[12px] text-[var(--color-muted)]">{t('colabModeServerHint')}</p>
+            ) : null}
+          </div>
           <label className="flex flex-col gap-1 text-[13px]">
             <span>{t('colabName')}</span>
             <input
@@ -100,6 +135,11 @@ export default function CoLabPanel() {
           {bridge.status === 'connecting' && (
             <p role="status" className="text-[13px] text-[var(--color-muted)]">
               {t('colabConnecting')}
+            </p>
+          )}
+          {bridge.mode === 'server' && bridge.link && bridge.link !== 'open' && (
+            <p role="status" className="text-[13px] text-[var(--color-warn)]">
+              {t('colabRelayStatus')}: {bridge.link}
             </p>
           )}
 

@@ -697,3 +697,49 @@ verify end-to-end from the sandbox.
   adversarial delivery tests a hosted-like environment without any network.
 - **Budget discipline:** yjs loads only as a lazy chunk opened with the Co-Lab rail tab; the
   builder's first-load JS is unchanged (102.4 kB gzipped, gate 250 kB).
+
+## Co-Lab relay: the server keeps the merged room, so joins stop guessing — 25 September 2026
+
+The foundation slice joined rooms by *guessing* (hello → grace → adopt or found). That is
+correct on a reliable local channel, but over a real network a lost hello forks a room. The
+hosted slice therefore does not extend the guess — it replaces it with an answer.
+
+- **The relay is not a dumb pipe: it keeps the merged Yjs state of every room.** Every
+  `update` is applied to a per-room server Y.Doc, so the relay can answer "does this room have
+  history, and what is it?" authoritatively. Consequences, each one a test: a joiner adopts the
+  server state without any hello exchange (no network founder race); a late joiner converges
+  from the relay alone after every original peer left; a reconnecting client heals everything
+  it missed during an outage. A dumb relay would have needed a designated "state holder" peer
+  and reintroduced the races this design deletes.
+- **`requestSync` is an optional capability on `CollabTransport`; the session never loses its
+  fallback.** Hosted transports answer the join with state-or-null; peer-to-peer transports keep
+  hello/grace untouched. If the sync rejects, the session falls back to hello/grace; if it hangs
+  past `syncTimeoutMs`, the session founds locally — offline edits stay possible against a dead
+  relay and merge when the link returns. Capability over configuration: nothing about the
+  BroadcastChannel path changed.
+- **JSON frames with base64 updates.** Base64 costs ~33 % on update payloads in exchange for a
+  plain-JSON protocol that is trivially inspectable and strictly decodable (malformed frames get
+  an error frame, never a crash). At classroom-circuit scale this is the right trade; binary
+  framing is the documented optimisation if relay traffic ever matters.
+- **Memory-only honesty, enforced by design:** no accounts, no persistence, no end-to-end
+  encryption, presence names visible to room peers; restarting the relay clears every room.
+  Rooms also face a cap with idle-first eviction and a TTL, and oversized or malformed frames
+  are rejected. The UI says this when the server mode is chosen; persistent rooms belong to the
+  future hosted tier, which is exactly what this relay deliberately does not fake.
+- **Reconnect healing rides on Yjs idempotence.** On every (re)join the relay's current state is
+  merged back as an update from a synthetic `@relay` sender, then the bounded outbox (2 000
+  messages, oldest dropped) flushes. Updates are order-independent and the state is refetched on
+  rejoin, so overflow cannot corrupt a room — only delay it.
+- **A latent empty-doc bug, found by this slice:** `Y.encodeStateVector` of a brand-new doc is
+  one byte (`[0]`), so "state-vector length > 0" reports content where there is none. In the
+  foundation slice this was harmless (grace-expiry seeding is unconditional), but it would have
+  made the relay tell every new room it already had history — silently un-founding them. The
+  check now walks the decoded vector for any client clock > 0, in the session and the relay.
+- **Residual ambiguity, narrowed and stated:** two clients founding the same *truly empty*
+  hosted room simultaneously both seed; identical starters merge invisibly, divergent first
+  edits fork. The relay's authoritative answer shrinks this window to a same-tick race, and
+  server-side room persistence will close it.
+- **Bundle discipline:** `relay.ts` (the only file importing `ws`) is server-only and never
+  imported by app code — verified: zero `ws`/relay markers in any client chunk. The client
+  transport uses the platform WebSocket global, so the builder's first-load JS is unchanged
+  (102.4 kB gzipped, gate 250 kB) and yjs remains a lazy chunk.

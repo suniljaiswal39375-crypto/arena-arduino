@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CollabSession, peerColor } from './session';
+import { CollabSession, peerColor, type CollabTransport, type CollabWireMessage } from './session';
 import { MemoryHub } from './transports';
 import { projectYDoc } from './mapping';
 import { makePart, makeWire, createProject } from '@/lib/doc/factory';
@@ -446,5 +446,114 @@ describe('CollabSession: state snapshots', () => {
     const replayed = new Y.Doc();
     Y.applyUpdate(replayed, a.session.stateSnapshot());
     expect(JSON.stringify(projectYDoc(replayed))).toBe(JSON.stringify(a.session.projection()));
+  });
+});
+
+/**
+ * Authoritative sync (hosted transports): the relay knows the room state, so
+ * joining adopts it directly instead of guessing through hello/grace.
+ */
+class SyncOnlyTransport implements CollabTransport {
+  sent: CollabWireMessage[] = [];
+  constructor(private readonly sync: () => Promise<Uint8Array | null>) {}
+  send(msg: CollabWireMessage): void {
+    this.sent.push(msg);
+  }
+  onMessage(): () => void {
+    return () => undefined;
+  }
+  close(): void {
+    // Nothing to release.
+  }
+  requestSync(): Promise<Uint8Array | null> {
+    return this.sync();
+  }
+}
+
+async function until(cond: () => boolean, ms = 2000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error('timeout waiting for condition');
+    await sleep(10);
+  }
+}
+
+describe('CollabSession: authoritative sync (hosted join)', () => {
+  it('adopts non-empty sync state immediately, without waiting out the grace', async () => {
+    // A real founder builds room history over a hub.
+    const hub = new MemoryHub();
+    const founder = makeEditor(hub, 'founder', baseDoc());
+    await settle();
+    edit(founder, [{ t: 'rename', name: 'Room history' }]);
+    const roomState = founder.session.stateSnapshot();
+
+    // B joins via a sync-only transport with a LONG grace: adopting fast can
+    // only mean the sync answer was used.
+    const transport = new SyncOnlyTransport(() => Promise.resolve(roomState));
+    const remoteSeen: string[] = [];
+    const b = new CollabSession({
+      room: 'test', name: 'b', doc: baseDoc(), transport,
+      joinGraceMs: 60_000, syncTimeoutMs: 2000, heartbeatMs: 60_000,
+      onRemote: (projected) => remoteSeen.push(projected.name),
+    });
+    disposeAll.push(() => b.dispose());
+    b.connect();
+    await until(() => b.synchronized(), 500);
+    expect(b.projection().name).toBe('Room history');
+    // The adoption is a remote change: the bridge must be told exactly once.
+    expect(remoteSeen).toEqual(['Room history']);
+  });
+
+  it('founds the room at once when the sync answer says it is empty', async () => {
+    const transport = new SyncOnlyTransport(() => Promise.resolve(null));
+    const doc = baseDoc();
+    const a = new CollabSession({
+      room: 'test', name: 'a', doc, transport,
+      joinGraceMs: 60_000, syncTimeoutMs: 2000, heartbeatMs: 60_000,
+    });
+    disposeAll.push(() => a.dispose());
+    a.connect();
+    await until(() => a.synchronized(), 500);
+    expect(a.projection().diagram.parts.length).toBe(doc.diagram.parts.length);
+    // Founding broadcasts the seeded full state to the (empty) room.
+    expect(transport.sent.some((m) => m.kind === 'update')).toBe(true);
+  });
+
+  it('falls back to the hello/grace handshake when sync rejects', async () => {
+    const hub = new MemoryHub();
+    const founder = makeEditor(hub, 'founder', baseDoc());
+    await settle();
+    edit(founder, [{ t: 'rename', name: 'Via hello' }]);
+
+    const inner = hub.connect('late');
+    const transport: CollabTransport = {
+      send: (msg) => inner.send(msg),
+      onMessage: (cb) => inner.onMessage(cb),
+      close: () => inner.close(),
+      requestSync: () => Promise.reject(new Error('relay unreachable')),
+    };
+    const b = new CollabSession({
+      room: 'test', name: 'b', doc: baseDoc(), transport,
+      joinGraceMs: 300, syncTimeoutMs: 2000, heartbeatMs: 60_000,
+    });
+    disposeAll.push(() => b.dispose());
+    b.connect();
+    await until(() => b.synchronized(), 1000);
+    expect(b.projection().name).toBe('Via hello');
+  });
+
+  it('founds locally when the sync answer hangs past syncTimeoutMs', async () => {
+    const transport = new SyncOnlyTransport(() => new Promise<Uint8Array | null>(() => {}));
+    const doc = baseDoc();
+    const a = new CollabSession({
+      room: 'test', name: 'a', doc, transport,
+      joinGraceMs: 60_000, syncTimeoutMs: 40, heartbeatMs: 60_000,
+    });
+    disposeAll.push(() => a.dispose());
+    const started = Date.now();
+    a.connect();
+    await until(() => a.synchronized(), 1000);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+    expect(a.projection().diagram.parts.length).toBe(doc.diagram.parts.length);
   });
 });

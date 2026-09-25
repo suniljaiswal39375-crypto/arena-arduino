@@ -652,3 +652,44 @@ gate green (builder first load 102.4 kB / 250 kB; yjs confined to a lazy chunk).
 
 Next: hosted Co-Lab transport (cross-device), per-file → `Y.Text` merging, pricing/billing
 decision, VS Code extension shell, then the remaining polish in Phase 15.
+
+### Checkpoint — Co-Lab hosted relay (cross-device rooms), 2026-09-25 (local)
+
+The multiplayer foundation now spans devices. Shipped behind the same
+`NEXT_PUBLIC_FEATURE_MULTIPLAYER` flag:
+
+- **`src/lib/collab/relay.ts` — the room relay** (`npm run collab:relay`,
+  `scripts/collab-relay.ts`): a small `ws` server that routes session frames per room AND
+  applies every update to a per-room Y.Doc. The merged server copy makes joins authoritative
+  (`joined { state | null }`), serves late joiners after the founder left, heals reconnects,
+  and removes the network founder race. Room caps with idle eviction, payload limits, ping/pong
+  liveness, presence-null on disconnect, and error frames for protocol abuse.
+- **`src/lib/collab/ws.ts` — `WebSocketTransport`:** browser-native WebSocket (no library in
+  the bundle), implements the transport interface plus `requestSync`, bounded outbox while
+  disconnected, backoff reconnect that re-joins and merges the relay's state.
+- **`src/lib/collab/wire.ts`:** the JSON frame protocol (base64 updates) shared by client and
+  relay, with strict decoders.
+- **Session join upgrade:** `CollabTransport.requestSync` (optional) — hosted joins adopt the
+  relay's answer or found on `null`; hello/grace stays the fallback on reject/timeout
+  (`syncTimeoutMs`). Also fixed a latent empty-doc detector bug: a fresh Y.Doc encodes a
+  1-byte state vector, so `docHasContent` now walks the decoded vector (`clock > 0`).
+- **Store/UI:** `startCollab({ mode: 'local' | 'server' })`; the panel offers a room-type
+  choice when `NEXT_PUBLIC_COLLAB_WS_URL` is set, with relay-link status; EN+HI keys;
+  `.env.example` documents the relay variables.
+- **Tests:** 17 new — wire round trips + malformed-frame rejection; relay integration over
+  real sockets (authoritative join/found, late joiner from server state, room isolation,
+  presence lifecycle, interleaved-edit convergence, reconnect healing, abuse handling, room
+  cap); session-level sync adopt/found/fallback/timeout.
+
+Honest limits (full text in `DECISIONS.md`): relay rooms are memory-only — no accounts, no
+persistence, no E2E encryption; restart clears them; presence names visible to peers. Two
+simultaneous founders of a truly empty room still both seed (tiny window; gone once rooms
+persist).
+
+Local verification: `npm run typecheck` passed; `npm test` passed **935 tests in 88 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green (builder first load 102.4 kB / 250 kB; `ws`/relay confined to the server, yjs still
+a lazy chunk); live relay smoke test answered `joined { state: null }` on a fresh room.
+
+Next: VS Code extension shell, AI-mentor hosted slice, pricing/billing decision, per-file →
+`Y.Text` merging, then the remaining polish in Phase 15.

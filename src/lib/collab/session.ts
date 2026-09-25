@@ -54,6 +54,14 @@ export interface CollabTransport {
   /** Returns an unsubscribe function. */
   onMessage(cb: (msg: CollabWireMessage) => void): () => void;
   close(): void;
+  /**
+   * Optional authoritative room-state lookup, provided by hosted transports.
+   * Resolves with the room's merged Yjs state, or null when the room has no
+   * history yet. When present it replaces the hello/grace guess on join:
+   * non-empty state is adopted, empty state means "found the room". The
+   * hello/grace handshake remains the fallback when the request fails.
+   */
+  requestSync?: () => Promise<Uint8Array | null>;
 }
 
 export interface CollabSessionOptions {
@@ -67,6 +75,11 @@ export interface CollabSessionOptions {
   heartbeatMs?: number;
   /** Drop peers silent for longer than this. Default 15000 ms. */
   peerTimeoutMs?: number;
+  /**
+   * How long to wait for an authoritative transport `requestSync` answer
+   * before falling back to the hello/grace handshake. Default 4000 ms.
+   */
+  syncTimeoutMs?: number;
   /** Called with the projected doc whenever a REMOTE change lands. */
   onRemote?: (doc: ProjectDoc) => void;
   /** Called whenever the visible peer set changes. */
@@ -86,8 +99,14 @@ export function peerColor(clientId: string): string {
   return PEER_COLORS[hash % PEER_COLORS.length] ?? '#00b4d8';
 }
 
-function docHasContent(doc: Y.Doc): boolean {
-  return Y.encodeStateVector(doc).length > 0;
+/**
+ * True once the doc holds any real shared history. NB: `encodeStateVector`
+ * of a brand-new doc is one byte ([0]) - length checks lie; the decoded
+ * vector is empty until the first item exists, and stays correct after
+ * merging an "empty" update from a peer.
+ */
+export function docHasContent(doc: Y.Doc): boolean {
+  return Y.decodeStateVector(Y.encodeStateVector(doc)).size > 0;
 }
 
 export class CollabSession {
@@ -136,16 +155,67 @@ export class CollabSession {
   }
 
   /**
-   * Join the room: say hello, and found the room from the local document if
-   * nobody answers with content inside the grace window.
+   * Join the room. Hosted transports expose an authoritative `requestSync`
+   * (the relay keeps the merged room state), so we ask for the history and
+   * adopt it - or found the room when it is empty. Peer-to-peer transports
+   * use the hello/grace handshake instead: say hello, and found the room
+   * from the local document if nobody answers with content in the window.
    */
   connect(): void {
     this.sendPresence();
+    const transport = this.transport;
+    if (!transport.requestSync) {
+      this.beginGraceJoin();
+      return;
+    }
+    this.joinTimer = setTimeout(() => {
+      this.joinTimer = null;
+      if (!this.disposed && !this.adopted) this.found('grace-expired');
+    }, this.opts.syncTimeoutMs ?? 4000);
+    // Called as a method so transports keep their `this` binding.
+    transport
+      .requestSync()
+      .then((state) => this.onSyncResolved(state))
+      .catch(() => {
+        if (this.disposed || this.adopted) return;
+        if (this.joinTimer) {
+          clearTimeout(this.joinTimer);
+          this.joinTimer = null;
+        }
+        this.beginGraceJoin();
+      });
+  }
+
+  private beginGraceJoin(): void {
     this.transport.send({ kind: 'hello', from: this.clientId });
     this.joinTimer = setTimeout(() => {
       this.joinTimer = null;
       if (!this.disposed && !this.adopted) this.found('grace-expired');
     }, this.opts.joinGraceMs ?? 400);
+  }
+
+  private onSyncResolved(state: Uint8Array | null): void {
+    if (this.disposed) return;
+    if (state && state.length > 0) {
+      if (this.joinTimer) {
+        clearTimeout(this.joinTimer);
+        this.joinTimer = null;
+      }
+      this.adopted = true;
+      Y.applyUpdate(this.ydoc, state, REMOTE_ORIGIN);
+      // Echo the merged state so peers (and the relay) heal anything we
+      // already held, e.g. edits authored while the link was down.
+      this.broadcastFullState();
+      this.sendPresence();
+      return;
+    }
+    if (!this.adopted) {
+      if (this.joinTimer) {
+        clearTimeout(this.joinTimer);
+        this.joinTimer = null;
+      }
+      this.found('grace-expired');
+    }
   }
 
   /** The shared document as a plain ProjectDoc (empty until adopted/founded). */

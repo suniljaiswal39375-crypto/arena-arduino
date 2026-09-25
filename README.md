@@ -73,8 +73,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
 | 3D workbench: an orbitable viewing aid over the current sheet (lazy chunk; positions mirror the schematic) and a session-only photo-trace underlay | ✅ viewing aid |
-| Co-Lab foundation (multiplayer): Yjs CRDT document, strong convergence under concurrent edits, collaboration-safe undo, session-only presence — rooms over BroadcastChannel (same browser, zero-config) | ✅ foundation slice · flag-gated (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`) |
-| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, cross-device multiplayer (hosted transport), photo-to-circuit recognition | ⏳ see ROADMAP |
+| Co-Lab (multiplayer): Yjs CRDT document, strong convergence under concurrent edits, collaboration-safe undo, session-only presence — zero-config BroadcastChannel rooms **and** cross-device rooms over a WebSocket relay that keeps the merged room state (`npm run collab:relay`) | ✅ flag-gated (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`) · relay rooms memory-only |
+| Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, persistent multiplayer rooms (accounts/storage), photo-to-circuit recognition | ⏳ see ROADMAP |
 
 ---
 
@@ -109,8 +109,9 @@ src/
     chaos/                 the 8 Chaos Lab challenges and the repair check
     showcase/              the 20 showcase projects and their behaviour probes
     chips/                 3 custom chips: logic, chip.json, Wokwi Chips API C source
-    collab/                Co-Lab foundation: Yjs doc model, join/founder protocol,
-                           state-diff bridge, presence, BroadcastChannel + memory transports
+    collab/                Co-Lab: Yjs doc model, join/founder protocol, state-diff
+                           bridge, presence; BroadcastChannel + memory + WebSocket
+                           transports, and a Node room relay (merged server state)
     interop/               Wokwi diagram.json + zip, KiCad netlist, BOM CSV
     cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point)
     canvas/                grid and pin geometry, wire routing
@@ -280,10 +281,11 @@ npm run test:e2e             # starts a production server if needed
 
 Still unfinished: remaining Hindi catalogue/diagnostics/specialist content, full offline
 installation/update UX, live OAuth/hosted database validation, a hardened container build farm
-with SSE logs, non-AVR firmware, AI services, 3D/scan, and the hosted (cross-device) Co-Lab
-transport. The Co-Lab *foundation* — converged co-editing in same-browser rooms — is shipped
-behind `NEXT_PUBLIC_FEATURE_MULTIPLAYER`, with its limits in `DECISIONS.md`. AVR firmware
-execution and the optional classroom foundation **are** shipped, with the limits above.
+with SSE logs, non-AVR firmware, AI services, 3D/scan, and *persistent* multiplayer rooms
+(accounts/storage behind the relay). Co-Lab itself is shipped behind
+`NEXT_PUBLIC_FEATURE_MULTIPLAYER` — converged co-editing in zero-config same-browser rooms and,
+with `npm run collab:relay`, cross-device rooms — with its limits in `DECISIONS.md`. AVR
+firmware execution and the optional classroom foundation **are** shipped, with the limits above.
 See `ROADMAP.md`.
 
 
@@ -338,6 +340,27 @@ packages on demand. Each build has bounded concurrency, runtime, logs, HEX
 size, CPU/memory/PIDs, no network and an ephemeral writable mount. This is
 **not** a general arbitrary-architecture Arduino cloud service; front the
 compile route with deployment-level abuse controls before public use.
+
+### Optional Co-Lab relay (cross-device multiplayer rooms)
+
+The local lab's Co-Lab rooms work with zero config over `BroadcastChannel`
+(other tabs/windows of the same browser). To let **different devices** share a
+room, run the tiny WebSocket relay and point the builder at it:
+
+```bash
+npm run collab:relay                       # listens on 0.0.0.0:8787 by default
+# then set for the builder:
+#   NEXT_PUBLIC_COLLAB_WS_URL=ws://your-host:8787
+#   NEXT_PUBLIC_FEATURE_MULTIPLAYER=true
+```
+
+The relay keeps the merged Yjs state of every room in memory, so joins are
+authoritative (no founder race), a late joiner converges even after the
+founder leaves, and reconnects heal missed edits. It is deliberately minimal:
+**no accounts, no persistence, no end-to-end encryption** — restarting it
+clears every room, and presence names are visible to room peers. Room caps,
+idle eviction, payload limits and protocol-abuse rejection are built in. See
+`src/lib/collab/README.md` and `DECISIONS.md` for the honest limits.
 
 ### Optional online classrooms
 

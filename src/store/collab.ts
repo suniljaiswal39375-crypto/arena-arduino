@@ -20,19 +20,30 @@
 
 import { useLab } from './lab';
 import type { ProjectDoc } from '@/lib/doc/types';
-import type { CollabSession, PeerInfo } from '@/lib/collab/session';
+import type { CollabSession, CollabTransport, PeerInfo } from '@/lib/collab/session';
+import type { WsLinkStatus } from '@/lib/collab/ws';
 
 export type CollabStatus = 'idle' | 'connecting' | 'active' | 'unsupported';
+export type CollabMode = 'local' | 'server';
 
 export interface CollabBridgeState {
   status: CollabStatus;
   room: string | null;
   name: string;
   peers: PeerInfo[];
+  mode: CollabMode | null;
+  /** Live status of the relay link (server mode only). */
+  link: WsLinkStatus | null;
 }
 
 export function collabEnabled(): boolean {
   return process.env.NEXT_PUBLIC_FEATURE_MULTIPLAYER === 'true';
+}
+
+/** The relay URL for cross-device rooms, when one is configured. */
+export function collabWsUrl(): string | null {
+  const url = process.env.NEXT_PUBLIC_COLLAB_WS_URL;
+  return typeof url === 'string' && url.trim() !== '' ? url.trim() : null;
 }
 
 let session: CollabSession | null = null;
@@ -43,7 +54,14 @@ let baseDoc: ProjectDoc | null = null;
 /** Identity of a store doc produced by our own remote apply, to skip echoes. */
 let expectedStoreDoc: ProjectDoc | null = null;
 let unsubscribeStore: (() => void) | null = null;
-let state: CollabBridgeState = { status: 'idle', room: null, name: 'Maker', peers: [] };
+let state: CollabBridgeState = {
+  status: 'idle',
+  room: null,
+  name: 'Maker',
+  peers: [],
+  mode: null,
+  link: null,
+};
 const listeners = new Set<(s: CollabBridgeState) => void>();
 
 function setState(patch: Partial<CollabBridgeState>): void {
@@ -66,16 +84,37 @@ export function collabActive(): boolean {
   return session !== null;
 }
 
-export async function startCollab(opts: { room: string; name: string }): Promise<void> {
+export async function startCollab(opts: {
+  room: string;
+  name: string;
+  mode?: CollabMode;
+}): Promise<void> {
   if (session) stopCollab();
-  setState({ status: 'connecting', room: opts.room, name: opts.name, peers: [] });
+  const mode: CollabMode = opts.mode ?? 'local';
+  setState({ status: 'connecting', room: opts.room, name: opts.name, peers: [], mode, link: null });
 
   const [{ CollabSession }, { BroadcastChannelTransport, broadcastChannelSupported }] =
     await Promise.all([import('@/lib/collab/session'), import('@/lib/collab/transports')]);
 
-  if (!broadcastChannelSupported()) {
-    setState({ status: 'unsupported', room: null, peers: [] });
-    return;
+  let transport: CollabTransport;
+  if (mode === 'server') {
+    const wsUrl = collabWsUrl();
+    if (!wsUrl || typeof WebSocket === 'undefined') {
+      setState({ status: 'unsupported', room: null, peers: [], mode: null, link: null });
+      return;
+    }
+    const { WebSocketTransport } = await import('@/lib/collab/ws');
+    transport = new WebSocketTransport({
+      url: wsUrl,
+      room: opts.room,
+      onStatus: (link) => setState({ link }),
+    });
+  } else {
+    if (!broadcastChannelSupported()) {
+      setState({ status: 'unsupported', room: null, peers: [], mode: null, link: null });
+      return;
+    }
+    transport = new BroadcastChannelTransport(opts.room);
   }
 
   const store = useLab.getState();
@@ -84,7 +123,6 @@ export async function startCollab(opts: { room: string; name: string }): Promise
   baseDoc = doc;
   expectedStoreDoc = null;
 
-  const transport = new BroadcastChannelTransport(opts.room);
   const created = new CollabSession({
     room: opts.room,
     name: opts.name,
@@ -159,5 +197,5 @@ export function stopCollab(): void {
   expectedStoreDoc = null;
   originDocId = null;
   applyingRemote = false;
-  setState({ status: 'idle', room: null, peers: [] });
+  setState({ status: 'idle', room: null, peers: [], mode: null, link: null });
 }
