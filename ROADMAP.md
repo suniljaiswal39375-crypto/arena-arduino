@@ -177,7 +177,16 @@ This is what makes it a lab rather than a simulator.
 
 - Hindi and regional language UI. The strings are already centralised enough to extract; the
   layout needs to survive longer words.
-- Multiplayer Co-Lab over Yjs.
+- Multiplayer Co-Lab over Yjs — **foundation shipped** (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`, off by
+  default): `src/lib/collab/` models the whole `ProjectDoc` as a Yjs document with a deterministic
+  projection; `CollabSession` runs a hello/grace join protocol (one seeded history per room —
+  first editor founds, everyone else adopts), carries collaboration-safe undo and session-only
+  presence; the store bridge mirrors local commands as minimal Yjs diffs and applies remote
+  projections via `applyRemoteDoc`. Transport: BroadcastChannel (same browser, zero-config) plus a
+  memory hub for adversarial tests. Verified: round trips of all seeds, command parity, 10 seeded
+  randomised-concurrency runs, shuffled/late-joiner convergence, stale-base regression, undo
+  isolation. Remaining: hosted WebSocket transport (cross-device), per-file → `Y.Text` merging,
+  comment threads, remote cursors/selection ghosts, roles, session replay.
 - VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
   `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
   `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
@@ -604,3 +613,42 @@ gate green.
 
 Next: multiplayer Co-Lab, pricing/billing decision, VS Code extension shell, then the remaining
 polish in Phase 15.
+
+### Checkpoint — Co-Lab foundation (Yjs), 2026-09-25 (local)
+
+Shipped the multiplayer foundation slice behind `NEXT_PUBLIC_FEATURE_MULTIPLAYER` (off by
+default, documented in `.env.example`). Spec §15, scoped to what is provably correct without a
+server:
+
+- **`src/lib/collab/mapping.ts`:** the whole `ProjectDoc` (meta, diagram, files, sim prefs,
+  chips) as Y.Maps in one Y.Doc; deterministic canonical projection with derived fidelity
+  recomputation; `diffAndApply` as the minimal-op write path. Maps are attached to their parent
+  before population (detached Y.Map writes are rejected by Yjs).
+- **`src/lib/collab/session.ts` — `CollabSession`:** hello/grace join protocol so every room has
+  exactly one seeded history (first editor founds from its local doc; joiners adopt via full
+  state; a local edit before adoption founds immediately), incremental updates, origin-scoped
+  `Y.UndoManager` (local undo never reverts remote work), presence with heartbeat + expiry,
+  `stateSnapshot()` for replay/inspect.
+- **`src/lib/collab/transports.ts`:** `BroadcastChannelTransport` (zero-config, same browser)
+  and `MemoryHub` with manual `flush`/`flushShuffled` for adversarial ordering.
+- **`src/store/collab.ts`:** the bridge — mirrors local command results as Yjs diffs, applies
+  remote projections through `useLab.applyRemoteDoc` (which keeps the Immer stack local-only),
+  mirrors selection into presence, leaves on project switch.
+- **UI:** Co-Lab rail panel (collaborator name, room, join/leave, peer list) behind the flag,
+  with an honesty note about same-browser scope; EN + HI keys; builder First Load unchanged
+  (yjs loads only as a lazy chunk when the tab is opened).
+- **Tests:** 32 new (28 collab + 4 store) — round trips of all seeds, per-command parity, 10
+  seeded randomised-concurrency runs, shuffled/late-joiner convergence, duplicate updates,
+  stale-base regression, undo isolation, presence isolation, BroadcastChannel end-to-end,
+  `applyRemoteDoc` history/selection/chip behaviour.
+
+Known limits (full honesty in `DECISIONS.md`): same-browser rooms only until a hosted transport;
+per-file last-writer-wins for code files; nested scope/multimeter prefs are JSON-LWW per key;
+the double-founder grace-window edge case.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **918 tests in 86 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green (builder first load 102.4 kB / 250 kB; yjs confined to a lazy chunk).
+
+Next: hosted Co-Lab transport (cross-device), per-file → `Y.Text` merging, pricing/billing
+decision, VS Code extension shell, then the remaining polish in Phase 15.

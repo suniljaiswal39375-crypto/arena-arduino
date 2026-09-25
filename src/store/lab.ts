@@ -72,6 +72,12 @@ interface LabState {
   removeChip: (id: string) => boolean;
 
   loadDoc: (doc: ProjectDoc) => void;
+  /**
+   * Apply a document projected from a Co-Lab session (a remote editor's
+   * change). Unlike `loadDoc` it never resets the local undo history and it
+   * never flushes a project switch: remote edits are not local history.
+   */
+  applyRemoteDoc: (doc: ProjectDoc) => void;
   newProject: () => void;
   hydrate: () => void;
   clearCanvas: () => void;
@@ -282,6 +288,28 @@ export const useLab = create<LabState>((set, get) => ({
       hasSaved: false,
     });
     get().flushSave();
+  },
+
+  applyRemoteDoc: (doc) => {
+    // Authored chips travel inside the project; keep the registries warm so
+    // the palette, ERC and simulator resolve their part types after a remote
+    // chip lands.
+    for (const chip of doc.chips ?? []) registerUserChip(chip);
+    const next = refresh(doc);
+    const selection = get().selection;
+    const selectedWire = get().selectedWire;
+    set({
+      doc: next,
+      missionSlug: next.provenance.mission ?? null,
+      diagnostics: withDiagnostics(next),
+      selection: selection && next.diagram.parts.some((p) => p.id === selection) ? selection : null,
+      selectedWire:
+        selectedWire && next.diagram.connections.some((w) => w.id === selectedWire)
+          ? selectedWire
+          : null,
+      dirty: true,
+    });
+    get().save();
   },
 
   newProject: () => {

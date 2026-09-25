@@ -73,6 +73,16 @@ export const en = {
   workbenchHint: 'A viewing aid: positions mirror your sheet and wires are straight lines, not physical routing. Drag to orbit, scroll to zoom.',
   photoTrace: 'Photo trace', photoTraceHint: 'A reference underlay only — nothing is recognized or auto-placed. The photo stays in this tab and disappears when you leave.',
   photoOpacity: 'Photo opacity', photoRemove: 'Remove photo',
+  colabTab: 'Co-Lab', colabTitle: 'Co-Lab (multiplayer)',
+  colabIntro: 'Edit this circuit together with other tabs or windows of this browser. No server and no account: a room only reaches this browser profile.',
+  colabName: 'Your name', colabNamePlaceholder: 'Maker',
+  colabRoom: 'Room', colabJoin: 'Join room', colabLeave: 'Leave room',
+  colabConnecting: 'Joining…',
+  colabPeers: 'Editing now',
+  colabPeersNone: 'No one else is in this room yet. Open the builder in another tab or window and join with the same room name.',
+  colabYou: 'you',
+  colabUnsupported: 'This browser does not support the local room channel (BroadcastChannel), so Co-Lab cannot start here.',
+  colabNote: 'Undo always takes back your own changes first; other editors’ work stays put. Switching to another project leaves the room.',
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
@@ -146,6 +156,16 @@ export const hi: Record<MessageKey, string> = {
   workbenchHint: 'यह केवल देखने का साधन है: स्थिति आपकी शीट जैसी हैं और तार सीधी रेखाएँ हैं, असली रूटिंग नहीं। घुमाने के लिए खींचें, ज़ूम के लिए स्क्रॉल करें।',
   photoTrace: 'फ़ोटो ट्रेस', photoTraceHint: 'यह केवल संदर्भ तस्वीर है — कुछ भी पहचाना या अपने आप नहीं रखा जाता। फ़ोटो इसी टैब में रहती है और जाते ही मिट जाती है।',
   photoOpacity: 'तस्वीर की पारदर्शिता', photoRemove: 'तस्वीर हटाएँ',
+  colabTab: 'को-लैब', colabTitle: 'को-लैब (मल्टीप्लेयर)',
+  colabIntro: 'इस ब्राउज़र के दूसरे टैब या विंडो के साथ मिलकर यह सर्किट संपादित करें। कोई सर्वर या खाता नहीं: कमरा सिर्फ़ इसी ब्राउज़र प्रोफ़ाइल तक पहुँचता है।',
+  colabName: 'आपका नाम', colabNamePlaceholder: 'निर्माता',
+  colabRoom: 'कमरा', colabJoin: 'कमरे से जुड़ें', colabLeave: 'कमरा छोड़ें',
+  colabConnecting: 'जुड़ रहे हैं…',
+  colabPeers: 'अभी संपादन कर रहे हैं',
+  colabPeersNone: 'इस कमरे में अभी कोई और नहीं है। बिल्डर को दूसरे टैब या विंडो में खोलें और इसी कमरे के नाम से जुड़ें।',
+  colabYou: 'आप',
+  colabUnsupported: 'यह ब्राउज़र स्थानीय कमरा चैनल (BroadcastChannel) समर्थित नहीं करता, इसलिए को-लैब यहाँ शुरू नहीं हो सकता।',
+  colabNote: 'Undo सबसे पहले आपके अपने बदलाव वापस लेता है; दूसरों का काम वैसा ही रहता है। दूसरी परियोजना पर जाने पर आप कमरे से बाहर हो जाते हैं।',
 };
 
 /** Text interpolation only. React escapes values; no HTML or eval is used. */

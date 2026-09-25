@@ -643,3 +643,57 @@ has been performed.
 - **Unexpected activity is a failure unless the pattern ends in `*`.** A pattern that names three
   segments against a capture with five runs has not been satisfied; silence after the pattern must
   be stated, not assumed.
+
+## Co-Lab foundation: one seeded history per room, proven before the network — 25 September 2026
+
+Spec §15 asks for multiplayer co-editing (shared circuit, presence, comments, roles). The slice
+shipped is the **converged-document foundation** behind `NEXT_PUBLIC_FEATURE_MULTIPLAYER` — the
+part that is pure, testable and transport-agnostic — rather than a networked demo we could not
+verify end-to-end from the sandbox.
+
+- **The whole `ProjectDoc` is one Yjs document.** `mapping.ts` lays meta, diagram, files, sim
+  prefs and chips into Y.Maps and projects back to a canonical `ProjectDoc` (parts/wires/files
+  sorted by id). Everything the document *contains* is shared; everything *derived* — the
+  per-part `fidelity` map — is recomputed on projection, never synced, so replicas can never
+  diverge on a computed field. `updatedAt` is local save metadata and stays out of the doc.
+- **Y.Maps must be attached before they are written.** Populating a detached Y.Map and then
+  attaching it throws in Yjs; the mapping layer always `parent.set(id, map)` first. This cost a
+  debugging session; the rule is encoded in tests.
+- **Join protocol: hello → grace → adopt or found.** Seeding the room document independently on
+  every peer is wrong: two seeds create two histories whose identical-looking keys carry equal
+  Yjs clocks, and last-writer-wins then resolves them by clientID tie-break — silently deleting
+  one peer's work. Instead, a new session announces `hello`, waits `joinGraceMs` (default
+  400 ms), and either adopts the existing history a peer sends back, or founds the room from its
+  local doc if nobody answers. A local edit before adoption founds immediately (the user has
+  already committed to their own copy). One room, one seeded history.
+- **The known edge, stated rather than hidden:** two editors opening the same *brand-new* room
+  within the grace window both found, and their identical starter content merges invisibly while
+  divergent first edits become a genuine fork. The hosted transport (authoritative server) is
+  what removes this class of ambiguity; until then the UI scopes rooms to one browser anyway.
+  Conversely, if a founder's state reply is delivered *after* a joiner's grace expired (possible
+  with slow transports), the joiner also founds — protocol-correct, so tests must drain the
+  transport before expecting adoption.
+- **The state-diff bridge invariant.** The store holds the merged truth: every remote projection
+  goes through `useLab.applyRemoteDoc` before the next local diff is computed, and `baseDoc`
+  advances past it. Breaking that order makes a diff against a stale local base express a peer's
+  additions as deletions — the classic bug, caught by a dedicated regression test that previously
+  passed vacuously.
+- **Undo stays local.** User-facing undo/redo remains the Zustand Immer stack; the store never
+  puts remote documents in history, so undo never resurrects a deleted part or rolls back a peer.
+  `CollabSession` additionally runs an origin-scoped `Y.UndoManager` (tracks only the session's
+  own origin; broadcasts the inverse) — verified isolated from remote work — as the documented
+  upgrade path for collaborative undo.
+- **Files and nested prefs are last-writer-wins per key.** Code files sync whole-file (the
+  editor emits files, not deltas); scope/multimeter pref maps and chip defs are JSON-encoded
+  values. `Y.Text` character merging arrives when the editor emits deltas; no command edits a
+  JSON key field-by-field today, so nothing is lost meanwhile — and the limit is said so.
+- **Presence is session-only and never in the document.** Heartbeat (1.5 s, spec), silence-based
+  expiry, and a strict rule: presence frames never touch the Y.Doc, so a state snapshot of a
+  room is exactly the project — verified by test.
+- **Zero-config honesty: BroadcastChannel only.** The shipped transport reaches other tabs of
+  the *same browser profile* and nothing else; the panel says so in the UI (EN + HI). A hosted
+  transport implements the same `CollabTransport` interface — the session layer is
+  transport-agnostic by construction, and `MemoryHub` with manual/shuffled flushes gives the
+  adversarial delivery tests a hosted-like environment without any network.
+- **Budget discipline:** yjs loads only as a lazy chunk opened with the Co-Lab rail tab; the
+  builder's first-load JS is unchanged (102.4 kB gzipped, gate 250 kB).
