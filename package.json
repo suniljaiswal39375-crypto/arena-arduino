@@ -38,6 +38,8 @@
     "avr8js": "^0.21.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "0.45.3",
+    "firebase": "^11.10.0",
+    "firebase-admin": "^12.7.0",
     "immer": "^10.1.1",
     "lucide-react": "^0.468.0",
     "monaco-editor": "^0.52.2",

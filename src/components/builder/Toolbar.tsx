@@ -11,6 +11,7 @@ import { MISSIONS } from '@/lib/missions/missions';
 import { Box, Eraser, Play, Redo2, RotateCcw, Sparkles, Square, Undo2 } from 'lucide-react';
 import type { SimSnapshot } from '@/lib/sim/engine';
 import { ProjectFiles } from './ProjectFiles';
+import { FirebaseSync } from './FirebaseSync';
 import { PRODUCT_NAME } from '@/lib/brand';
 
 export function Toolbar({
@@ -35,9 +36,9 @@ export function Toolbar({
   onWorkbench?: () => void;
 }) {
   const { t, locale } = useI18n();
-  const saveError = useLab(s => s.saveError);
-  const hasSaved = useLab(s => s.hasSaved);
-  const dirty = useLab(s => s.dirty);
+  const saveError = useLab((s) => s.saveError);
+  const hasSaved = useLab((s) => s.hasSaved);
+  const dirty = useLab((s) => s.dirty);
   const doc = useLab((s) => s.doc);
   const undo = useLab((s) => s.undo);
   const redo = useLab((s) => s.redo);
@@ -50,15 +51,20 @@ export function Toolbar({
   const clockSeconds = (snapshot?.clockUs ?? 0) / 1_000_000;
 
   return (
-    <div role="region" aria-label={t('labControls')} lang={locale} className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+    <div
+      role="region"
+      aria-label={t('labControls')}
+      lang={locale}
+      className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2"
+    >
       <span className="mr-1 text-[13px] font-semibold tracking-tight">
         {PRODUCT_NAME}
-        <span className="ml-1.5 text-[10.5px] font-normal text-[var(--color-text-faint)]">
-          {t('builder')}
-        </span>
+        <span className="ml-1.5 text-[10.5px] font-normal text-[var(--color-text-faint)]">{t('builder')}</span>
       </span>
 
-      <span role="status" className="text-xs text-[var(--color-text-dim)]">{saveError ? t('saveError') : t(dirty || !hasSaved ? 'saving' : 'saved')}</span>
+      <span role="status" className="text-xs text-[var(--color-text-dim)]">
+        {saveError ? t('saveError') : t(dirty || !hasSaved ? 'saving' : 'saved')}
+      </span>
       <input
         className="input max-w-[220px] flex-1"
         style={{ minWidth: 140, flexBasis: 160 }}
@@ -67,11 +73,7 @@ export function Toolbar({
         aria-label={t('projectName')}
       />
 
-      <button
-        type="button"
-        onClick={running ? onStop : onRun}
-        className={running ? 'btn btn-danger' : 'btn btn-primary'}
-      >
+      <button type="button" onClick={running ? onStop : onRun} className={running ? 'btn btn-danger' : 'btn btn-primary'}>
         {running ? <Square size={13} /> : <Play size={13} />}
         {t(running ? 'stop' : 'run')}
       </button>
@@ -92,7 +94,8 @@ export function Toolbar({
       <label className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-dim)]">
         {t('speed')}
         <select
-          className="input" style={{ width: 76 }}
+          className="input"
+          style={{ width: 76 }}
           value={speed}
           onChange={(e) => onSpeed(Number(e.target.value))}
           aria-label={t('simulationSpeed')}
@@ -107,7 +110,8 @@ export function Toolbar({
       <label className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-text-dim)]">
         {t('engine')}
         <select
-          className="input" style={{ width: 110 }}
+          className="input"
+          style={{ width: 110 }}
           value={doc.engine}
           onChange={(e) => useLab.getState().setEngine(e.target.value as 'auto' | 'functional' | 'firmware')}
           aria-label={t('simulationEngine')}
@@ -121,6 +125,8 @@ export function Toolbar({
       <span className="mono rounded bg-[var(--color-surface-2)] px-2 py-1 text-[11px] text-[var(--color-text-dim)]">
         t={clockSeconds.toFixed(2)}s
       </span>
+
+      <FirebaseSync />
 
       <Menu
         label={t('templates')}
@@ -174,7 +180,9 @@ export function Toolbar({
           <Redo2 size={14} />
         </button>
         <LanguageSwitch />
-        <div lang="en"><ProjectFiles /></div>
+        <div lang="en">
+          <ProjectFiles />
+        </div>
         <button type="button" className="btn btn-sm btn-danger" onClick={clearCanvas}>
           <Eraser size={13} /> {t('clear')}
         </button>

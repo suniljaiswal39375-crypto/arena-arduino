@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Users can manage their own files
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Submissions — student can write own, teacher can read
+    match /submissions/{assignmentId}/{userId}/{fileName} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId ||
+        request.auth.token.role == 'teacher' ||
+        request.auth.token.role == 'admin'
+      );
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Public assets — anyone can read, only authenticated can write
+    match /public/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Avatars — user can manage own avatar
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

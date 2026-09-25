@@ -32,6 +32,24 @@ npm run scenarios    # run the 10 example automation scenarios through the CLI
 npm run cli -- --help
 ```
 
+### Vercel + Firebase deployment
+
+SparkLab now supports **Vercel hosting with Firebase Auth + Storage** (zero-config local lab still works without any keys).
+
+```bash
+# 1. Firebase: create project, enable Auth (Google + Email), Firestore, Storage
+# 2. Vercel: import repo, set env vars from .env.example (NEXT_PUBLIC_FIREBASE_* + FIREBASE_ADMIN_*)
+# 3. Deploy Firestore rules: firebase deploy --only firestore:rules,storage
+```
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for full steps — env vars, Firestore/Storage rules, custom domains, emulator setup, and cost estimates. Quick check:
+
+- `/api/firebase/auth` returns `{ configured: true }` when Firebase env vars are set
+- `/auth` shows Firebase sign-in UI (Google + email/password) when configured
+- Builder shows cloud sync button when signed in
+- `/classrooms` uses Firestore classrooms when Firebase is configured, Postgres otherwise
+- Offline PWA still works; Firebase routes are excluded from service-worker cache
+
 ---
 
 ## The idea in one sentence

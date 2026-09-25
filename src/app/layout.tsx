@@ -4,6 +4,7 @@ import '@fontsource/noto-sans-devanagari/devanagari-500.css';
 import '@fontsource/noto-sans-devanagari/devanagari-600.css';
 import './globals.css';
 import { LanguageProvider } from '@/lib/i18n/client';
+import { FirebaseAuthProvider } from '@/lib/firebase/auth-context';
 import { OfflineStatus } from '@/components/offline/OfflineStatus';
 import { PRODUCT_NAME, PRODUCT_TAGLINE } from '@/lib/brand';
 
@@ -33,8 +34,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
         <LanguageProvider>
-          {children}
-          <OfflineStatus />
+          <FirebaseAuthProvider>
+            {children}
+            <OfflineStatus />
+          </FirebaseAuthProvider>
         </LanguageProvider>
       </body>
     </html>
