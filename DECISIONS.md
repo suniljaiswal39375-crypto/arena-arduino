@@ -1050,3 +1050,15 @@ security: a BroadcastChannel or relay room has no authority, and a modified clie
 the convention. We state that in the README/ROADMAP instead of implying protection. The
 complementary guarantee is the useful one: a viewer can never lose work, because nothing they
 do locally is ever merged over someone else's edit.
+
+## Session replay is local, bounded, and replays real merges — 25 September 2026
+
+The replay history records raw Yjs updates, not a re-interpretation of them: `docAt(t)` feeds
+the recorded updates (offset ≤ t) through `Y.applyUpdate`, which is precisely the merge path the
+live room used, so the replay cannot disagree with what participants saw. It is deliberately
+small and private — 2000 events per session, an explicit dropped counter instead of silent
+truncation, held in memory on the recording device, never transmitted and never persisted
+(matching the privacy stance for traces). The UI shows a document-level summary (parts, wires,
+open comments, name) rather than a second live canvas: rebuilding a full interactive canvas per
+scrub tick would be work pretending to be cheap, and the summary states exactly what the room
+held at each moment.

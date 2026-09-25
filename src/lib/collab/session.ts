@@ -33,6 +33,7 @@ import { nanoid } from 'nanoid';
 import type { ProjectDoc } from '@/lib/doc/types';
 import { WIRE_COLOR_HEX } from '@/lib/doc/types';
 import { diffAndApply, projectYDoc, readComments, seedYDoc, sharedComments, sharedTypes, type RoomComment } from './mapping';
+import { RoomHistory } from './history';
 
 /**
  * A session's role. Roles are a presence convention the UI and the bridge
@@ -128,6 +129,8 @@ export class CollabSession {
   readonly room: string;
 
   private readonly ydoc = new Y.Doc();
+  /** Bounded, session-only record of every update for session replay. */
+  readonly history = new RoomHistory();
   private readonly undoManager: Y.UndoManager;
   private readonly localOrigin: symbol;
   private readonly opts: CollabSessionOptions;
@@ -400,7 +403,9 @@ export class CollabSession {
     // Local edits (the local origin) and this session's own undo/redo (whose
     // origin is the undo manager itself) both belong to this editor and must
     // be broadcast. Everything else arrived from the network.
-    if (origin === this.localOrigin || origin === this.undoManager) {
+    const local = origin === this.localOrigin || origin === this.undoManager;
+    this.history.record(local ? this.clientId : 'remote', update);
+    if (local) {
       this.transport.send({ kind: 'update', from: this.clientId, data: update });
       return;
     }

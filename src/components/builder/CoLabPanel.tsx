@@ -199,6 +199,9 @@ export default function CoLabPanel() {
 
           <h3 className="mt-1 text-[13px] font-semibold">{t('colabComments')}</h3>
           <CommentsForSelection />
+
+          <h3 className="mt-1 text-[13px] font-semibold">{t('colabReplay')}</h3>
+          <SessionReplay />
         </div>
       )}
 
@@ -272,6 +275,79 @@ function CommentsForSelection() {
           {t('colabCommentAdd')}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Session replay: scrub the room's recorded update history and read the
+ * document as it stood at any offset. Purely local — the history lives on
+ * this device for this session only and never affects the live room.
+ */
+function SessionReplay() {
+  const { t } = useI18n();
+  const [offset, setOffset] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [, bump] = useState(0);
+
+  const history = collabSession()?.history ?? null;
+
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      const h = collabSession()?.history;
+      if (!h) return;
+      setOffset((o) => Math.min(h.spanMs(), o + 100));
+      bump((x) => x + 1);
+    }, 60);
+    return () => clearInterval(id);
+  }, [playing]);
+
+  if (!history || history.length === 0) {
+    return <p className="text-[13px] text-[var(--color-muted)]">{t('colabReplayEmpty')}</p>;
+  }
+
+  const span = history.spanMs();
+  const summary = history.summaryAt(offset);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <button type="button" className="btn btn-sm" onClick={() => setPlaying((p) => !p)} disabled={offset >= span && !playing}>
+          {playing ? t('colabReplayPause') : t('colabReplayPlay')}
+        </button>
+        <input
+          type="range"
+          className="min-w-0 flex-1 accent-[var(--color-accent)]"
+          min={0}
+          max={span}
+          step={50}
+          value={offset}
+          aria-label={t('colabReplayAt', { ms: offset })}
+          onChange={(e) => {
+            setPlaying(false);
+            setOffset(Number(e.target.value));
+            bump((x) => x + 1);
+          }}
+        />
+      </div>
+      <p className="font-mono text-[11.5px] text-[var(--color-muted)]">
+        {t('colabReplayAt', { ms: offset })}
+      </p>
+      <p className="text-[12.5px]">
+        {t('colabReplaySummary', {
+          parts: summary.parts,
+          wires: summary.wires,
+          comments: summary.comments,
+          name: summary.name,
+        })}
+      </p>
+      {history.dropped > 0 && (
+        <p role="status" className="text-[11.5px] text-[var(--color-warn)]">
+          {t('colabReplayDropped', { count: history.dropped })}
+        </p>
+      )}
+      <p className="text-[11.5px] text-[var(--color-muted)]">{t('colabReplayNote')}</p>
     </div>
   );
 }

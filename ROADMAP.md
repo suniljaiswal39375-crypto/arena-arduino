@@ -198,8 +198,10 @@ This is what makes it a lab rather than a simulator.
   view-only; viewers receive everything but `applyDiff` refuses their pushes,
   presence carries the role (peer list says "viewing"), a mid-room switch
   re-announces, and the panel shows a plain-language view-only notice. Roles
-  are a cooperation convention, not security — documented. Remaining: remote
-  code cursors, session replay.
+  are a cooperation convention, not security — documented. **Session replay shipped:** every update a session sees is
+  recorded with a timestamp into a bounded, session-only `RoomHistory`; the
+  Co-Lab panel scrubs or plays the timeline and reads the room document as of
+  any offset (rebuilt through real Yjs merges). Remaining: remote code cursors.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
@@ -992,3 +994,16 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; **1037 tests / 101 files** (2 new: viewer push-refusal +
   mid-room unlock, role propagation over presence); scenarios 10/10; default and flagged builds
   and budgets green.
+
+### Checkpoint — Co-Lab session replay, 2026-09-25 (local)
+
+- `RoomHistory` (lib/collab/history.ts) records every Yjs update a session observes (own and
+  remote) with an offset, bounded at 2000 events with an honest `dropped` counter; `docAt`
+  rebuilds the room through `Y.applyUpdate`, so a replay reproduces exactly the merges the live
+  room performed. The session records automatically; the Co-Lab panel gains a replay section:
+  play/pause + scrub slider + a document summary at the offset (parts/wires/open comments/name),
+  EN + HI, with the privacy note that the history never leaves the device and dies with the
+  room.
+- Verification: strict typecheck; **1040 tests / 102 files** (3 new: exact rebuild per offset
+  against a live-applied doc, span/windows, bound + drop count); scenarios 10/10; default and
+  flagged builds and budgets green.
