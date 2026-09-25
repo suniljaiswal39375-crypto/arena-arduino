@@ -598,3 +598,19 @@ has been performed.
   recognized or auto-placed. Auto photo-to-circuit needs a hosted vision model; when one exists it
   must emit an editable, obviously uncertain starting point — the confidently wrong part list is
   the failure mode this rule exists to prevent.
+
+## Quality gates measure reality, and honest gates fail loudly — 25 September 2026
+
+- **The performance budget is computed from the built output, gzipped, per route** — never from
+  source sizes, estimates, or bundle-analyzer screenshots. It runs in postbuild, so `npm run build`
+  itself fails on a breach. When a budget is breached you ship less JavaScript or split a chunk;
+  raising the limit is not an option the tooling offers. A route missing from the manifest is a
+  failure too: a gate with a silent skip path is theatre.
+- **The axe audit gates critical violations only, and says so out loud.** Serious and moderate
+  findings are printed with selectors on every CI run so they are countable and cannot rot
+  unnoticed; the gate tightens to them once the lists are empty. Claiming full WCAG 2.2 AA with a
+  red log would violate the honesty rule; gating nothing would too. This is the staged path
+  between them.
+- **The PWA manifest declares what is real.** Standalone display, brand colours, an SVG icon
+  authored in-repo (no binary assets, no build step). Offline capability remains the generated
+  service worker's job; the manifest only makes the install prompt truthful.

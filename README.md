@@ -61,7 +61,8 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock | ✅ |
 | 16 guided missions, each step checked against the live circuit; hints, stuck detection, locked reference sketch | ✅ |
 | 26-skill taxonomy with Bayesian Knowledge Tracing (pTransit 0.2, pGuess 0.35, pSlip 0.1) and 11 effort-based badges | ✅ |
-| Public site: landing, component library with per-part pages, mission pages, mastery map, docs | ✅ |
+| Public site: landing, component library with per-part pages, mission pages, mastery map, docs; PWA-installable (manifest + generated service worker) | ✅ |
+| Quality gates: post-build performance budget on real gzipped output (fail the build, never raise the limit) and an axe audit per route in the CI browser job | ✅ critical-violations gate · non-critical reported |
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
 | Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (`sparklab-cli mcp`) | ✅ |

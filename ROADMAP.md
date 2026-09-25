@@ -186,7 +186,16 @@ This is what makes it a lab rather than a simulator.
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
   They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
   pattern assertions against the new bounded capture respectively.
-- PWA install, accessibility audit, performance budget, pricing and school/org billing.
+- PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
+  hand-authored SVG icon; the service worker itself is the existing generated precache.
+- Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
+  (`/`, `/builder`, `/missions`, `/docs`, `/accessibility`) in the CI browser job. **Critical**
+  violations fail the route; serious/moderate ones are printed with selectors to drive them to
+  zero, and the gate tightens to them when the lists are empty.
+- Performance budget — **shipped as a hard gate:** `npm run budget` (also chained into postbuild)
+  gzips the real first-load JS from `app-build-manifest.json` for `/`, `/builder`, `/missions` and
+  fails the build over 250 kB. Current: builder 102 kB, landing 120 kB, missions 173 kB.
+- Pricing and school/org billing: still open (needs the hosted tier decision).
 
 ---
 
@@ -532,5 +541,23 @@ Local verification: `npm run typecheck` passed; `npm test` passed **858 tests in
 (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` compiled with
 `/builder` First Load JS at **105 kB** (budget <250 kB) and three.js confined to lazy chunks.
 
-Next: remaining Phase 15 breadth (PWA install, accessibility audit, performance budget enforcement,
-pricing, multiplayer, hosted MCP transport).
+### Quality gates — performance budget, PWA install, axe audit — 25 September 2026
+
+- **Performance budgets are enforced against the real build, not estimates.** `src/lib/ci/budget.ts`
+  (pure, injectable fs/compress; 5 tests) + `scripts/budget.ts` gzip every first-load JS chunk of
+  `/`, `/builder`, `/missions` from `app-build-manifest.json` and fail when over 250 kB. Chained
+  into postbuild (so `npm run build` fails) with an explicit CI step for visibility. A missing route
+  in the manifest is a failure, not a pass — a budget you can silently skip is not a budget.
+- **PWA install:** `app/manifest.ts` (standalone, `#0b0e11`/`#00b4d8`, start `/builder`) and a
+  hand-authored SVG icon (both `any` and `maskable` purposes); the generated service worker from
+  `prepare-offline.mjs` remains the offline engine. The e2e suite fetches the manifest and its icon.
+- **Axe per route, staged honestly:** the CI browser job audits five routes; critical violations
+  gate, everything else is printed with selectors. The policy is written in the spec header: the
+  non-critical lists exist to be driven to zero, then the gate tightens.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **863 tests in 80 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` passed with
+the budget gate green (builder **102.3 kB**, landing **119.8 kB**, missions **172.9 kB** gzipped).
+
+Next: pricing/billing decision, multiplayer Co-Lab, hosted MCP transport, then the remaining
+polish in Phase 15.
