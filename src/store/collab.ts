@@ -20,7 +20,7 @@
 
 import { useLab } from './lab';
 import type { ProjectDoc } from '@/lib/doc/types';
-import type { CollabSession, CollabTransport, PeerInfo, RoomComment } from '@/lib/collab/session';
+import type { CollabRole, CollabSession, CollabTransport, PeerInfo, RoomComment } from '@/lib/collab/session';
 import type { WsLinkStatus } from '@/lib/collab/ws';
 
 export type CollabStatus = 'idle' | 'connecting' | 'active' | 'unsupported';
@@ -36,6 +36,8 @@ export interface CollabBridgeState {
   link: WsLinkStatus | null;
   /** Room comment threads keyed by part id (session-only room state). */
   comments: Record<string, RoomComment[]>;
+  /** This editor's role in the room. */
+  role: CollabRole;
 }
 
 export function collabEnabled(): boolean {
@@ -64,6 +66,7 @@ let state: CollabBridgeState = {
   mode: null,
   link: null,
   comments: {},
+  role: 'editor',
 };
 const listeners = new Set<(s: CollabBridgeState) => void>();
 
@@ -92,14 +95,22 @@ export function collabSession(): CollabSession | null {
   return session;
 }
 
+/** Switch this editor's role mid-room and announce it. */
+export function setCollabRole(role: CollabRole): void {
+  if (!session) return;
+  session.setPresence({ role });
+  setState({ role });
+}
+
 export async function startCollab(opts: {
   room: string;
   name: string;
   mode?: CollabMode;
+  role?: CollabRole;
 }): Promise<void> {
   if (session) stopCollab();
   const mode: CollabMode = opts.mode ?? 'local';
-  setState({ status: 'connecting', room: opts.room, name: opts.name, peers: [], mode, link: null });
+  setState({ status: 'connecting', room: opts.room, name: opts.name, peers: [], mode, link: null, role: opts.role ?? 'editor' });
 
   const [{ CollabSession }, { BroadcastChannelTransport, broadcastChannelSupported }] =
     await Promise.all([import('@/lib/collab/session'), import('@/lib/collab/transports')]);
@@ -136,6 +147,7 @@ export async function startCollab(opts: {
     name: opts.name,
     doc,
     transport,
+    role: opts.role ?? 'editor',
     onRemote: (remoteDoc) => {
       if (!session) return;
       applyingRemote = true;

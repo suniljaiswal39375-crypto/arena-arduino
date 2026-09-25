@@ -11,6 +11,7 @@ const peer = (over: Partial<PeerInfo>): PeerInfo => ({
   name: 'Asha',
   color: '#e63946',
   selectedPartId: null,
+  role: 'editor',
   updatedAt: 0,
   ...over,
 });

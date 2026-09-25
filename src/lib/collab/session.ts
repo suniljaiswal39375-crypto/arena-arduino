@@ -34,11 +34,19 @@ import type { ProjectDoc } from '@/lib/doc/types';
 import { WIRE_COLOR_HEX } from '@/lib/doc/types';
 import { diffAndApply, projectYDoc, readComments, seedYDoc, sharedComments, sharedTypes, type RoomComment } from './mapping';
 
+/**
+ * A session's role. Roles are a presence convention the UI and the bridge
+ * honour (viewers never push edits); a peer-to-peer room has no authority,
+ * so they are cooperation, not security — documented as such.
+ */
+export type CollabRole = 'editor' | 'viewer';
+
 export interface PresenceState {
   clientId: string;
   name: string;
   color: string;
   selectedPartId: string | null;
+  role: CollabRole;
   updatedAt: number;
 }
 
@@ -69,6 +77,8 @@ export interface CollabSessionOptions {
   name: string;
   doc: ProjectDoc;
   transport: CollabTransport;
+  /** Join as an editor (default) or a view-only participant. */
+  role?: CollabRole;
   /** How long to wait for room content before founding the room. Default 400 ms. */
   joinGraceMs?: number;
   /** Presence re-announcement interval. Default 5000 ms. */
@@ -144,6 +154,7 @@ export class CollabSession {
       name: opts.name,
       color: peerColor(this.clientId),
       selectedPartId: null,
+      role: opts.role ?? 'editor',
       updatedAt: Date.now(),
     };
 
@@ -250,10 +261,17 @@ export class CollabSession {
    */
   applyDiff(before: ProjectDoc, after: ProjectDoc): boolean {
     if (this.disposed) return false;
+    // View-only participants watch the room; their local edits never enter it.
+    if (this.selfPresence.role === 'viewer') return false;
     if (!this.adopted) this.found('local-edit');
     const changed = diffAndApply(this.ydoc, before, after, this.localOrigin);
     if (changed) this.lastProjectionJson = JSON.stringify(after);
     return changed;
+  }
+
+  /** This session's role; switching re-announces presence. */
+  selfRole(): CollabRole {
+    return this.selfPresence.role;
   }
 
   /** The room's comment threads, keyed by part id. */
@@ -326,8 +344,8 @@ export class CollabSession {
     this.undoManager.redo();
   }
 
-  /** Update our presence (display name / selected part) and announce it. */
-  setPresence(patch: Partial<Pick<PresenceState, 'name' | 'selectedPartId'>>): void {
+  /** Update our presence (name / selection / role) and announce it. */
+  setPresence(patch: Partial<Pick<PresenceState, 'name' | 'selectedPartId' | 'role'>>): void {
     this.selfPresence = { ...this.selfPresence, ...patch, updatedAt: Date.now() };
     this.sendPresence();
   }
@@ -437,11 +455,12 @@ export class CollabSession {
         name: typeof msg.state.name === 'string' ? msg.state.name.slice(0, 40) : 'Maker',
         color: typeof msg.state.color === 'string' ? msg.state.color : peerColor(msg.from),
         selectedPartId: msg.state.selectedPartId,
+        role: msg.state.role === 'viewer' ? 'viewer' : 'editor',
         updatedAt: Date.now(),
       };
       const before = this.peers.get(msg.from);
       this.peers.set(msg.from, state);
-      if (!before || before.name !== state.name || before.selectedPartId !== state.selectedPartId) {
+      if (!before || before.name !== state.name || before.selectedPartId !== state.selectedPartId || before.role !== state.role) {
         this.emitPeers();
       }
     }

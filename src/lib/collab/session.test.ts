@@ -580,6 +580,58 @@ describe('CollabSession: authoritative sync (hosted join)', () => {
   });
 });
 
+describe('CollabSession: roles', () => {
+  it('a viewer receives edits but never pushes its own', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const editor = makeEditor(hub, 'editor', start);
+    const viewer = new CollabSession({
+      room: 'test', name: 'viewer', doc: structuredClone(start), transport: hub.connect('viewer'),
+      role: 'viewer', joinGraceMs: GRACE, heartbeatMs: 60_000,
+    });
+    disposeAll.push(() => viewer.dispose());
+    viewer.connect();
+    await settle();
+
+    expect(viewer.selfRole()).toBe('viewer');
+    expect(editor.session.selfRole()).toBe('editor');
+
+    // The editor's change reaches the viewer...
+    edit(editor, [{ t: 'rename', name: 'Edited while watched' }]);
+    await until(() => viewer.projection().name === 'Edited while watched', 1000);
+
+    // ...but the viewer's local diff is refused and never reaches the editor.
+    const before = viewer.projection();
+    const pushed = viewer.applyDiff(before, { ...before, name: 'Viewer attempt' });
+    expect(pushed).toBe(false);
+    await sleep(30);
+    expect(editor.session.projection().name).toBe('Edited while watched');
+
+    // Switching to editor mid-room unlocks pushing, and presence follows.
+    viewer.setPresence({ role: 'editor' });
+    await until(() => editor.session.peerList().some((p) => p.clientId === viewer.clientId && p.role === 'editor'), 1000);
+    const now = viewer.projection();
+    expect(viewer.applyDiff(now, { ...now, name: 'Viewer became editor' })).toBe(true);
+    await until(() => editor.session.projection().name === 'Viewer became editor', 1000);
+  });
+
+  it('peers see a joiner\'s viewer role in presence', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const a = makeEditor(hub, 'a', start);
+    const v = new CollabSession({
+      room: 'test', name: 'Watcher', doc: structuredClone(start), transport: hub.connect('v'),
+      role: 'viewer', joinGraceMs: GRACE, heartbeatMs: 60_000,
+    });
+    disposeAll.push(() => v.dispose());
+    v.connect();
+    await until(() => a.session.peerList().some((p) => p.clientId === v.clientId), 1000);
+    const seen = a.session.peerList().find((p) => p.clientId === v.clientId)!;
+    expect(seen.role).toBe('viewer');
+    expect(seen.name).toBe('Watcher');
+  });
+});
+
 describe('CollabSession: room comments', () => {
   it('comments sync between editors, resolve, and never enter the projected doc', async () => {
     const hub = new MemoryHub();

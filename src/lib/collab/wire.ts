@@ -76,6 +76,7 @@ export function decodeWireFrame(frame: WireFrame): CollabWireMessage | null {
       name: typeof state.name === 'string' ? state.name.slice(0, MAX_NAME_LENGTH) : 'Maker',
       color: typeof state.color === 'string' ? state.color : '#888888',
       selectedPartId: typeof state.selectedPartId === 'string' ? state.selectedPartId : null,
+      role: state.role === 'viewer' ? 'viewer' : 'editor',
       updatedAt: typeof state.updatedAt === 'number' ? state.updatedAt : Date.now(),
     };
     return { kind: 'presence', from: frame.from, state: presence };

@@ -194,7 +194,12 @@ This is what makes it a lab rather than a simulator.
   room comments (Y.Map partId -> Y.Array) with post/resolve/reopen, open-count
   badges on the canvas and a thread UI in the Co-Lab panel; comments are room
   annotations only — never projected into the circuit doc, never persisted to
-  a saved project. Remaining: remote code cursors, roles, session replay.
+  a saved project. **Roles shipped:** a session joins as editor (default) or
+  view-only; viewers receive everything but `applyDiff` refuses their pushes,
+  presence carries the role (peer list says "viewing"), a mid-room switch
+  re-announces, and the panel shows a plain-language view-only notice. Roles
+  are a cooperation convention, not security — documented. Remaining: remote
+  code cursors, session replay.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
@@ -973,3 +978,17 @@ touchscreen part and an MQTT broker.
   convergence + resolve propagation + onComments feed, badge unit tests, canvas wiring, mapping
   non-projection); scenarios 10/10; default and flagged builds green; the collab e2e spec now
   also posts, badges, resolves and reopens a comment across two live editors.
+
+### Checkpoint — Co-Lab roles (editor / view-only), 2026-09-25 (local)
+
+- Presence now carries a `role`. A session can join view-only or switch mid-room;
+  `applyDiff` returns false for viewers so their local edits never enter the room (they still
+  receive every remote change), the peer list marks viewers "(viewing)", and the Co-Lab panel
+  shows a plain-language notice that a viewer's changes stay on their device. The relay's wire
+  parser validates the new field with editor as the safe default. EN + HI keys for the role
+  controls and notice.
+- Honesty (DECISIONS.md): peer-to-peer rooms have no authority, so roles are a convention the
+  shipped clients honour — cooperation, not access control.
+- Verification: strict typecheck; **1037 tests / 101 files** (2 new: viewer push-refusal +
+  mid-room unlock, role propagation over presence); scenarios 10/10; default and flagged builds
+  and budgets green.

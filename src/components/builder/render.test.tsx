@@ -62,7 +62,7 @@ describe('builder render smoke', () => {
 
   it('shows a remote peer\'s selection as a named halo on the canvas', () => {
     useLab.getState().loadDoc(templateDoc('uno-blink')!);
-    const peers = [{ clientId: 'p1', name: 'Asha', color: '#e63946', selectedPartId: 'led1', updatedAt: 0 }];
+    const peers = [{ clientId: 'p1', name: 'Asha', color: '#e63946', selectedPartId: 'led1', role: 'editor' as const, updatedAt: 0 }];
     const html = render(<SchematicCanvas states={{}} peers={peers} />);
     expect(html).toContain('Asha');
     expect(html).toContain('stroke="#e63946"');

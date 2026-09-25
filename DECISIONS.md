@@ -1038,3 +1038,15 @@ safe undo manager (which tracks every shared root) lets an editor take back thei
 post without touching anyone else's. `onComments` fires on every origin (local post, undo,
 remote merge) so badges and threads never disagree with the shared state; text is capped at 500
 characters and trimmed, and empty posts are refused before they reach the wire.
+
+## Co-Lab roles are cooperation, not access control — 25 September 2026
+
+View-only mode exists because a classroom wants watchers: a teacher projecting a fix, a
+student following along without risking the shared circuit. It is implemented where it can be
+honoured honestly — the viewer's own session refuses to push (`applyDiff` returns false, before
+any Yjs transaction), presence announces the role so editors see who is watching, and the wire
+parser defaults unknown roles to editor rather than inventing permissions. What it is *not* is
+security: a BroadcastChannel or relay room has no authority, and a modified client could ignore
+the convention. We state that in the README/ROADMAP instead of implying protection. The
+complementary guarantee is the useful one: a viewer can never lose work, because nothing they
+do locally is ever merged over someone else's edit.

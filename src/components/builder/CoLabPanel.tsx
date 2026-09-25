@@ -8,12 +8,14 @@ import {
   collabSession,
   collabState,
   collabWsUrl,
+  setCollabRole,
   startCollab,
   stopCollab,
   subscribeCollab,
   type CollabBridgeState,
   type CollabMode,
 } from '@/store/collab';
+import type { CollabRole } from '@/lib/collab/session';
 import { cn } from '@/lib/cn';
 
 /**
@@ -33,6 +35,7 @@ export default function CoLabPanel() {
   const [name, setName] = useState('');
   const [room, setRoom] = useState('');
   const [mode, setMode] = useState<CollabMode>('local');
+  const [role, setRole] = useState<CollabRole>('editor');
   const serverUrl = collabWsUrl();
 
   useEffect(() => subscribeCollab(setBridge), []);
@@ -50,8 +53,8 @@ export default function CoLabPanel() {
     // Server mode only makes sense with a relay configured; otherwise fall
     // back to the zero-config same-browser transport.
     const effectiveMode: CollabMode = mode === 'server' && serverUrl ? 'server' : 'local';
-    void startCollab({ room: trimmedRoom, name: trimmedName, mode: effectiveMode });
-  }, [room, name, doc.id, t, mode, serverUrl]);
+    void startCollab({ room: trimmedRoom, name: trimmedName, mode: effectiveMode, role });
+  }, [room, name, doc.id, t, mode, serverUrl, role]);
 
   return (
     <div className="flex h-full flex-col gap-3 p-3 text-sm">
@@ -97,6 +100,19 @@ export default function CoLabPanel() {
               <p className="text-[12px] text-[var(--color-muted)]">{t('colabModeServerHint')}</p>
             ) : null}
           </div>
+          <div className="flex flex-col gap-1 text-[13px]">
+            <span>{t('colabRole')}</span>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-1">
+                <input type="radio" name="colab-role" checked={role === 'editor'} onChange={() => setRole('editor')} />
+                {t('colabRoleEditor')}
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="colab-role" checked={role === 'viewer'} onChange={() => setRole('viewer')} />
+                {t('colabRoleViewer')}
+              </label>
+            </div>
+          </div>
           <label className="flex flex-col gap-1 text-[13px]">
             <span>{t('colabName')}</span>
             <input
@@ -133,6 +149,17 @@ export default function CoLabPanel() {
               {t('colabLeave')}
             </button>
           </div>
+          <div className="flex items-center gap-2 text-[12.5px]">
+            <span>{t('colabRole')}:</span>
+            <button type="button" className="btn btn-sm" onClick={() => setCollabRole(bridge.role === 'viewer' ? 'editor' : 'viewer')}>
+              {bridge.role === 'viewer' ? t('colabRoleViewer') : t('colabRoleEditor')}
+            </button>
+          </div>
+          {bridge.role === 'viewer' && (
+            <p role="status" className="rounded border border-[var(--color-warn)] p-2 text-[12.5px]">
+              {t('colabViewOnlyNote')}
+            </p>
+          )}
           {bridge.status === 'connecting' && (
             <p role="status" className="text-[13px] text-[var(--color-muted)]">
               {t('colabConnecting')}
@@ -158,6 +185,7 @@ export default function CoLabPanel() {
                   />
                   <span className={cn('truncate', peer.selectedPartId && 'font-medium')}>
                     {peer.name}
+                    {peer.role === 'viewer' ? ` (${t('colabViewing')})` : ''}
                   </span>
                   {peer.selectedPartId && (
                     <span className="font-mono text-[11px] text-[var(--color-muted)]">
