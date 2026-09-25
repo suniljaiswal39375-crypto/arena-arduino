@@ -24,7 +24,9 @@
     "db:migrate": "node scripts/classroom-admin.mjs migrate",
     "db:role": "node scripts/classroom-admin.mjs role",
     "firmware:farm": "vite-node --config vitest.config.ts scripts/firmware-build-farm.ts",
-    "collab:relay": "vite-node --config vitest.config.ts scripts/collab-relay.ts"
+    "collab:relay": "vite-node --config vitest.config.ts scripts/collab-relay.ts",
+    "ext:check": "tsc -p vscode-sparklab",
+    "ext:build": "node vscode-sparklab/esbuild.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",
@@ -62,6 +64,7 @@
     "@types/pg": "8.16.0",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@types/vscode": "^1.138.0",
     "@types/ws": "^8.18.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",

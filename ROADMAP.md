@@ -187,12 +187,16 @@ This is what makes it a lab rather than a simulator.
   randomised-concurrency runs, shuffled/late-joiner convergence, stale-base regression, undo
   isolation. Remaining: hosted WebSocket transport (cross-device), per-file → `Y.Text` merging,
   comment threads, remote cursors/selection ghosts, roles, session replay.
-- VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
-  `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
-  `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
-  same headless surface as the CLI. The **hosted transport shipped** too: `POST /api/mcp` speaks
-  the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN` (disabled without it) and confined to
-  `SPARKLAB_MCP_ROOT`.)
+- VS Code extension, so a project can be driven from an editor panel — **shell shipped**
+  (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
+  simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
+  stdio server by a headlessly unit-tested client (`src/lib/cli/mcp-client.ts`, 10 integration
+  tests against the real server). Open: marketplace packaging, richer in-editor rendering.
+  (The **MCP server shipped**: `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with
+  `list_projects`, `load_project`, `run_simulation` — free-run or scenario YAML — and
+  `export_diagram`, wrapping the same headless surface as the CLI. The **hosted transport
+  shipped** too: `POST /api/mcp` speaks the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN`
+  (disabled without it) and confined to `SPARKLAB_MCP_ROOT`.)
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`. They need a
   renderer, a touchscreen part and an MQTT broker respectively. (`assert-vcd-pattern` **shipped**:
   a level-segment pattern language — `H 1ms; L 500us; H *` — matched with a duration tolerance
@@ -693,3 +697,34 @@ a lazy chunk); live relay smoke test answered `joined { state: null }` on a fres
 
 Next: VS Code extension shell, AI-mentor hosted slice, pricing/billing decision, per-file →
 `Y.Text` merging, then the remaining polish in Phase 15.
+
+### Checkpoint — VS Code extension shell over the MCP server, 2026-09-25 (local)
+
+A project can now be driven from an editor panel without a second engine:
+
+- **`src/lib/cli/mcp-client.ts` — the engine of the slice:** a zero-dependency MCP stdio client
+  (spawn `sparklab-cli mcp`, newline-delimited JSON-RPC 2.0, handshake, timeouts, typed
+  conveniences). No `@/` imports, so the extension bundles it verbatim.
+- **`src/lib/cli/mcp-format.ts`:** pure renderers of tool results (load summary, run verdict with
+  serial/part states, export summary, escaped webview HTML) — unit-tested; the webview never
+  sees unescaped content.
+- **`vscode-sparklab/`:** the extension itself — projects tree view, Inspect (ERC findings),
+  Run free-run / Run scenario file with PASS/FAIL webviews, Export Wokwi/KiCad/BOM writing files
+  next to the project; settings for scan path, free-run length and server launch override;
+  sandboxed paths inherited from the MCP server. Its own tsconfig (`npm run ext:check`) and
+  esbuild bundle (`npm run ext:build`, 20 kB CJS with `vscode` external); the repo tsconfig
+  excludes it, the shared client/format modules stay in the main typecheck and suite.
+- **Tests:** 15 new — 10 integration tests driving the REAL spawned MCP server through every
+  tool (handshake identity, tools/list, list/load, free-run, scenario verdict, Wokwi export,
+  unknown-tool JSON-RPC error, sandbox escape refusal, close semantics) plus 5 formatter tests.
+
+Honest limits: VS Code itself cannot run in this sandbox, so per the repo convention the
+extension host wiring is verified by `tsc -p vscode-sparklab` + bundle + the headless engine
+tests; marketplace packaging and richer rendering are open. See `vscode-sparklab/README.md`.
+
+Local verification: `npm run typecheck` and `npm run ext:check` passed; `npm test` passed
+**950 tests in 90 files** (2 opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` + budget gate green (builder first load unchanged).
+
+Next: AI-mentor hosted slice, pricing/billing decision, per-file → `Y.Text` merging, then the
+remaining polish in Phase 15.

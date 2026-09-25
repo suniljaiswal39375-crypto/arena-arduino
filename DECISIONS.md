@@ -743,3 +743,31 @@ hosted slice therefore does not extend the guess — it replaces it with an answ
   imported by app code — verified: zero `ws`/relay markers in any client chunk. The client
   transport uses the platform WebSocket global, so the builder's first-load JS is unchanged
   (102.4 kB gzipped, gate 250 kB) and yjs remains a lazy chunk.
+
+## The VS Code extension is a shell over MCP, not a second engine — 25 September 2026
+
+Spec §15 asks for an editor-panel integration. The shipped MCP server (`sparklab-cli mcp`)
+already exposes the whole headless surface as tools, so the extension *consumes* it instead of
+re-implementing anything.
+
+- **One engine, zero drift.** Inspect/ERC, free-run, scenario verdicts and Wokwi/KiCad/BOM
+  export all run in the CLI's engines through newline-delimited JSON-RPC over stdio; the
+  extension only spawns the server, calls tools and renders results. The sandbox rule (paths
+  confined to the server's working directory) is inherited, not re-decided. No telemetry, no
+  network: the server is a child process of the user's own editor.
+- **The testable core lives in the main tree, not the extension package.** `mcp-client.ts`
+  (spawn + JSON-RPC + timeouts + typed tool conveniences) and `mcp-format.ts` (result rendering
+  and HTML-escaped webview bodies) sit in `src/lib/cli/`, so the repo's typecheck and suite
+  cover them; the extension's `src/` is excluded from the root tsconfig and checked by its own
+  (`npm run ext:check`) because it needs the `vscode` types. The client imports only Node
+  builtins, so esbuild bundles it into the 20 kB extension verbatim with `vscode` external.
+- **Integration tests spawn the real server.** Ten tests exercise the full stdio path —
+  handshake identity, `tools/list`, project listing/loading, free-run, a scenario verdict, Wokwi
+  export, unknown-tool JSON-RPC error, sandbox-escape refusal, close semantics — against an
+  actual `sparklab-cli mcp` child process. Mocking the protocol here would test nothing that
+  matters.
+- **The stated verification boundary:** VS Code cannot run in this sandbox, so — same convention
+  as the Playwright specs — the editor-host wiring is verified by `tsc -p vscode-sparklab`, the
+  esbuild bundle, and the headless engine tests; what needs a real editor is left to the F5 dev
+  loop documented in `vscode-sparklab/README.md`. Marketplace packaging and richer in-editor
+  rendering (schematic preview, inline ERC squiggles) are explicitly open.
