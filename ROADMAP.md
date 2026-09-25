@@ -21,7 +21,7 @@ being broad.
 | ERC | All 15 diagnostic codes emitted, each with explanation, physics, fix and curriculum link; each proven to fire on a broken circuit and stay quiet on 41 working ones |
 | Missions | 16 guided builds; 11 behavioural steps that run the student's sketch headless to prove it works |
 | Skills | 26-skill taxonomy, BKT mastery that can be lost, 11 effort-based badges, Chaos Lab evidence |
-| Scenarios | Wokwi step vocabulary + 5 extensions, 10 seed scenarios, all executed in CI |
+| Scenarios | Wokwi step vocabulary + 5 extensions incl. deterministic `take-screenshot`, 10 seed scenarios, all executed in CI |
 | Chaos Lab | 8 challenges, each proven solvable, alternative fixes accepted, warning-silencing rejected |
 | Showcase | The 20 ATL projects, each a runnable revision with a behaviour probe run on every change |
 | Interchange | Wokwi diagram.json + project zip (lossless round trip verified on the 28 of 41 seed projects Wokwi can fully represent), KiCad netlist, BOM CSV |
@@ -197,10 +197,18 @@ This is what makes it a lab rather than a simulator.
   `export_diagram`, wrapping the same headless surface as the CLI. The **hosted transport
   shipped** too: `POST /api/mcp` speaks the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN`
   (disabled without it) and confined to `SPARKLAB_MCP_ROOT`.)
-- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`. They need a
-  renderer, a touchscreen part and an MQTT broker respectively. (`assert-vcd-pattern` **shipped**:
-  a level-segment pattern language — `H 1ms; L 500us; H *` — matched with a duration tolerance
-  against the live logic-analyzer capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
+- Scenario step `take-screenshot` — **shipped:** captures a part's visual state (LCD/OLED text,
+  matrix cells, seven-segment value, LED/RGB colour, servo angle) as a byte-deterministic SVG and
+  supports `save-to` and/or `compare-with` for visual regression, exactly like Wokwi's step. File
+  access goes through a `ScenarioIO` adapter: the CLI writes real files next to the project under
+  test, the builder keeps them in memory and returns them in `ScenarioResult.artifacts`. New CLI
+  flags `--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed
+  simulated window. (`assert-vcd-pattern` **shipped**: a level-segment pattern language —
+  `H 1ms; L 500us; H *` — matched with a duration tolerance against the live logic-analyzer
+  capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
+- Scenario steps still deferred: `touch` (needs a touchscreen part — the ILI9341+FT6206 pair is
+  not in the catalogue yet) and `publish-mqtt` (needs the §17.1 in-app MQTT broker; no broker code
+  exists yet). Both remain in the vocabulary plan rather than shipping as always-failing stubs.
 - PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
   hand-authored SVG icon; the service worker itself is the existing generated precache.
 - Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
@@ -865,3 +873,22 @@ touchscreen part and an MQTT broker.
   and evaluation-order/recursion/value preservation.
 - Verification: strict typecheck; 996 tests / 95 files; scenarios 10/10; production build and
   budgets green (builder 102.4 kB gz, unchanged).
+
+### Checkpoint — scenario `take-screenshot` (deterministic SVG capture), 2026-09-25 (local)
+
+- New scenario step `take-screenshot { part-id, save-to, compare-with }` (Wokwi-compatible
+  shape): renders a part's modelled visual state — LCD/OLED text, matrix cells, seven-segment
+  value, LED/RGB colour, servo angle — into a byte-deterministic SVG (`lib/scenarios/screenshot.ts`).
+  Same simulation twice → identical file, which is what `compare-with` visual regression needs.
+  Parts with no visual state fail the step honestly instead of faking an image.
+- File IO is a `ScenarioIO` adapter: CLI writes real files next to the project under test
+  (single `run --scenario` and `test` modes); builder/MCP/chaos use in-memory IO and get the
+  captures back in `ScenarioResult.artifacts`. New §17.3 CLI flags
+  `--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed
+  simulated window.
+- `touch` and `publish-mqtt` remain deferred with concrete reasons (no touch-capable part in the
+  catalogue; no MQTT broker in the codebase) rather than shipping as always-erroring stubs.
+- Verification: strict typecheck; **1009 tests / 98 files** (13 new: renderer determinism and
+  escaping, parse round-trip and validation, real-engine save/compare/mismatch on the dht-lcd
+  template, three CLI end-to-end runs writing and comparing real files); scenarios 10/10;
+  production build and budgets green (builder 102.4 kB gz, unchanged).

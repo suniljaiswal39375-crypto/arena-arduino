@@ -124,6 +124,17 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
       return { kind: 'assert-no-diagnostic', code };
     }
 
+    case 'take-screenshot': {
+      const b = record(body, at);
+      const partId = str(b, 'part-id', at);
+      const saveTo = b['save-to'] === undefined ? undefined : str(b, 'save-to', at);
+      const compareWith = b['compare-with'] === undefined ? undefined : str(b, 'compare-with', at);
+      if (saveTo === undefined && compareWith === undefined) {
+        throw new ScenarioParseError('take-screenshot needs "save-to" and/or "compare-with"', at);
+      }
+      return { kind: 'take-screenshot', partId, saveTo, compareWith };
+    }
+
     case 'assert-vcd-pattern': {
       const b = record(body, at);
       const channel = num(b, 'channel', at);
@@ -159,7 +170,7 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
 
     default:
       throw new ScenarioParseError(
-        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, repeat`,
+        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, take-screenshot, repeat`,
         path,
       );
   }
@@ -216,6 +227,14 @@ function stepToYaml(step: ScenarioStep): Record<string, unknown> {
       return { 'write-serial': step.text };
     case 'assert-no-diagnostic':
       return { 'assert-no-diagnostic': step.code };
+    case 'take-screenshot':
+      return {
+        'take-screenshot': {
+          'part-id': step.partId,
+          ...(step.saveTo !== undefined ? { 'save-to': step.saveTo } : {}),
+          ...(step.compareWith !== undefined ? { 'compare-with': step.compareWith } : {}),
+        },
+      };
     case 'assert-vcd-pattern':
       return {
         'assert-vcd-pattern': {

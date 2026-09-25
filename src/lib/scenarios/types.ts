@@ -23,6 +23,11 @@ export type ScenarioStep =
   /** Spec extension: assert the electrical rule check does not report a code. */
   | { kind: 'assert-no-diagnostic'; code: string }
   /**
+   * Capture a part's visual state as a deterministic SVG. Needs `saveTo`
+   * and/or `compareWith`; a comparison mismatch fails the step.
+   */
+  | { kind: 'take-screenshot'; partId: string; saveTo?: string; compareWith?: string }
+  /**
    * Spec extension: assert a digital waveform on one logic-analyzer channel —
    * either the live capture from this run, or an inline VCD dump (`vcd`).
    * The pattern is level segments: "H 1ms; L 500us; H *".
@@ -48,6 +53,17 @@ export interface StepResult {
   atMs: number;
 }
 
+/**
+ * File access for scenario steps that read or write files (`take-screenshot`).
+ * The CLI supplies a real filesystem adapter; the builder and tests use an
+ * in-memory one, so the runner itself never touches the host.
+ */
+export interface ScenarioIO {
+  /** File contents, or null when the file does not exist. */
+  readText(path: string): string | null;
+  writeText(path: string, content: string): void;
+}
+
 export interface ScenarioResult {
   name: string;
   passed: boolean;
@@ -60,6 +76,8 @@ export interface ScenarioResult {
   simulatedMs: number;
   /** A compile or runtime error that stopped the run. */
   error?: string;
+  /** Files written by steps during the run (screenshots and the like). */
+  artifacts: Array<{ path: string; content: string }>;
 }
 
 export class ScenarioParseError extends Error {

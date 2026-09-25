@@ -2,7 +2,8 @@ import type { ProjectDoc } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
 import { runERC } from '@/lib/erc/diagnostics';
 import { SimEngine } from '@/lib/sim/engine';
-import type { Scenario, ScenarioResult, ScenarioStep, StepResult } from './types';
+import { capturePartSvg } from './screenshot';
+import type { Scenario, ScenarioIO, ScenarioResult, ScenarioStep, StepResult } from './types';
 import { intervalsForChannel, matchPattern, parsePattern, parseVcd, vcdAsTrace, type PatternSegment } from './vcd-pattern';
 
 function currentError(engine: SimEngine): SimEngine['error'] {
@@ -11,6 +12,18 @@ function currentError(engine: SimEngine): SimEngine['error'] {
 
 /** Simulated milliseconds advanced per tick while waiting. */
 const TICK_MS = 10;
+
+/** In-memory ScenarioIO for the builder and tests; `files` keeps what it wrote. */
+export function memoryScenarioIO(seed?: Record<string, string>): ScenarioIO & { files: Map<string, string> } {
+  const files = new Map<string, string>(Object.entries(seed ?? {}));
+  return {
+    files,
+    readText: (path) => files.get(path) ?? null,
+    writeText: (path, content) => {
+      files.set(path, content);
+    },
+  };
+}
 
 /**
  * Wokwi control names that differ from SparkLab's input ids. Wokwi's
@@ -53,6 +66,9 @@ export function resolveControl(
 interface RunState {
   engine: SimEngine;
   doc: ProjectDoc;
+  io: ScenarioIO;
+  /** Files written by steps so far, mirrored into the result. */
+  artifacts: Array<{ path: string; content: string }>;
   /** Serial lines already consumed by a wait step. */
   consumed: number;
   serial: string[];
@@ -202,6 +218,31 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
         : { ok: false, message: `waveform mismatch on ${name} D${step.channel}: ${match.failures.join('; ')}` };
     }
 
+    case 'take-screenshot': {
+      const inst = state.doc.diagram.parts.find((p) => p.id === step.partId);
+      if (!inst) return { ok: false, message: `no part with id "${step.partId}" on the canvas` };
+      const svg = capturePartSvg(state.engine.snapshot().parts[step.partId], getPart(inst.type));
+      if (svg === null) {
+        return { ok: false, message: `"${step.partId}" (${inst.type}) has no visual state to capture` };
+      }
+      if (step.compareWith !== undefined) {
+        const expected = state.io.readText(step.compareWith);
+        if (expected === null) {
+          return { ok: false, message: `cannot read comparison file "${step.compareWith}"` };
+        }
+        if (expected.trim() !== svg.trim()) {
+          return { ok: false, message: `screenshot of "${step.partId}" differs from ${step.compareWith}` };
+        }
+      }
+      if (step.saveTo !== undefined) {
+        state.io.writeText(step.saveTo, svg);
+        state.artifacts.push({ path: step.saveTo, content: svg });
+      }
+      const target = step.compareWith !== undefined ? ` matches ${step.compareWith}` : '';
+      const saved = step.saveTo !== undefined ? `saved to ${step.saveTo}` : '';
+      return { ok: true, message: [`captured "${step.partId}"`, saved, target && `capture${target}`].filter(Boolean).join(', ') };
+    }
+
     case 'repeat': {
       for (let i = 0; i < step.times; i++) {
         for (const inner of step.steps) {
@@ -218,13 +259,18 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
  * Run a scenario against a project, headless. Deterministic: the same project
  * and scenario always produce the same result, because the clock is virtual.
  */
-export function runScenario(project: ProjectDoc, scenario: Scenario, source?: string): ScenarioResult {
+export function runScenario(
+  project: ProjectDoc,
+  scenario: Scenario,
+  source?: string,
+  io: ScenarioIO = memoryScenarioIO(),
+): ScenarioResult {
   const doc: ProjectDoc = structuredClone(project);
   const engine = new SimEngine(doc);
   engine.load(doc, source ?? doc.files['sketch.ino'] ?? '');
   engine.start();
 
-  const state: RunState = { engine, doc, consumed: 0, serial: [], elapsedMs: 0 };
+  const state: RunState = { engine, doc, io, artifacts: [], consumed: 0, serial: [], elapsedMs: 0 };
   const steps: StepResult[] = [];
   const finish = (error?: string): ScenarioResult => {
     const t = engine.serialTranscript();
@@ -239,6 +285,7 @@ export function runScenario(project: ProjectDoc, scenario: Scenario, source?: st
       serial,
       simulatedMs: nowMs(state),
       error,
+      artifacts: state.artifacts,
     };
   };
 

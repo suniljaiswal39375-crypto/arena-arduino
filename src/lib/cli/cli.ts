@@ -5,7 +5,9 @@ import { runERC } from '@/lib/erc/diagnostics';
 import { SimEngine } from '@/lib/sim/engine';
 import { parseScenario } from '@/lib/scenarios/parse';
 import { runScenario } from '@/lib/scenarios/runner';
-import type { ScenarioResult } from '@/lib/scenarios/types';
+import { capturePartSvg } from '@/lib/scenarios/screenshot';
+import { getPart } from '@/lib/parts';
+import type { ScenarioIO, ScenarioResult } from '@/lib/scenarios/types';
 import { templateDoc } from '@/lib/templates';
 import { toWokwiDiagram, librariesTxt } from '@/lib/interop/wokwi';
 import { bomCsv, kicadNetlist } from '@/lib/interop/exports';
@@ -46,6 +48,10 @@ Usage:
 
 Run options:
   --scenario <file>          run an automation scenario instead of free-running
+  --screenshot-part <id>     capture one part's visual state as SVG (also needs
+                             --screenshot-file, optionally --screenshot-time)
+  --screenshot-time <ms>     simulated time to run before the capture (default 1000)
+  --screenshot-file <path>   where to write the SVG capture
   --firmware <hex-file>      run real compiled firmware (Intel HEX) on the AVR
                              engine, with the same expect/fail/serial options
   --elf <file>               NOT SUPPORTED: the AVR slice decodes Intel HEX,
@@ -81,6 +87,9 @@ const VALUE_FLAGS = new Set([
   'serial-log-file',
   'junit-report',
   'json-summary',
+  'screenshot-part',
+  'screenshot-time',
+  'screenshot-file',
   'out',
 ]);
 
@@ -111,6 +120,25 @@ function writeFile(io: CliIO, path: string, content: string | Uint8Array): void 
   const full = resolve(io.cwd, path);
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, content);
+}
+
+/**
+ * Filesystem adapter for scenario steps that read or write files
+ * (e.g. `take-screenshot`). Paths resolve against `base`, which is the
+ * directory of the project under test.
+ */
+function scenarioFsIO(base: string): ScenarioIO {
+  return {
+    readText: (path) => {
+      const full = resolve(base, path);
+      return existsSync(full) ? readFileSync(full, 'utf8') : null;
+    },
+    writeText: (path, content) => {
+      const full = resolve(base, path);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, content);
+    },
+  };
 }
 
 function intFlag(flags: Flags, name: string, fallback: number): number {
@@ -207,11 +235,42 @@ function run(target: string, flags: Flags, io: CliIO): number {
   const scenarioPath = flags.values.get('scenario');
   if (scenarioPath) {
     const scenario = parseScenario(readFileSync(resolve(io.cwd, scenarioPath), 'utf8'));
-    const result = runScenario(project.doc, scenario);
+    // Screenshot paths in the scenario resolve against the project under test.
+    const result = runScenario(project.doc, scenario, undefined, scenarioFsIO(resolve(io.cwd, target)));
     if (!quiet) for (const line of result.serial) io.out(line);
     report(io, scenarioPath, result);
     writeReports(io, flags, [{ file: scenarioPath, result }]);
     return result.passed ? EXIT.ok : EXIT.fail;
+  }
+
+  // Headless visual capture: run the sim for a fixed window, then dump one
+  // part's visual state as a deterministic SVG.
+  const shotPart = flags.values.get('screenshot-part');
+  if (shotPart !== undefined) {
+    const shotFile = flags.values.get('screenshot-file');
+    if (shotFile === undefined) throw new UsageError('--screenshot-part also needs --screenshot-file <path>');
+    const shotMs = intFlag(flags, 'screenshot-time', 1000);
+    const engine = new SimEngine(project.doc);
+    engine.load(project.doc, project.doc.files['sketch.ino'] ?? '');
+    engine.start();
+    for (let t = 0; t < shotMs && !engine.error; t += 10) engine.tick(10, 1);
+    if (engine.error) {
+      io.err(`${engine.error.kind} error, line ${engine.error.line}: ${engine.error.message}`);
+      return EXIT.fail;
+    }
+    const inst = project.doc.diagram.parts.find((p) => p.id === shotPart);
+    if (!inst) {
+      io.err(`no part with id "${shotPart}" on the canvas`);
+      return EXIT.fail;
+    }
+    const svg = capturePartSvg(engine.snapshot().parts[shotPart], getPart(inst.type));
+    if (svg === null) {
+      io.err(`"${shotPart}" (${inst.type}) has no visual state to capture`);
+      return EXIT.fail;
+    }
+    writeFile(io, shotFile, svg);
+    if (!quiet) io.out(`screenshot of "${shotPart}" written to ${shotFile}`);
+    return EXIT.ok;
   }
 
   const timeoutMs = intFlag(flags, 'timeout', DEFAULT_TIMEOUT_MS);
@@ -357,7 +416,7 @@ function test(dir: string, flags: Flags, io: CliIO): number {
   const results: Array<{ file: string; result: ScenarioResult }> = [];
   for (const file of files) {
     const project = loadProject(dirname(file));
-    const result = runScenario(project.doc, parseScenario(readFileSync(file, 'utf8')));
+    const result = runScenario(project.doc, parseScenario(readFileSync(file, 'utf8')), undefined, scenarioFsIO(dirname(file)));
     const rel = relative(io.cwd, file);
     report(io, rel, result);
     results.push({ file: rel, result });

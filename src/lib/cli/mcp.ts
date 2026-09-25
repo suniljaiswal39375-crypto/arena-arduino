@@ -166,6 +166,8 @@ const TOOLS: ToolDef[] = [
           serial: result.serial.slice(-200),
           simulatedMs: result.simulatedMs,
           error: result.error,
+          // Screenshots written by take-screenshot steps (in-memory IO).
+          artifacts: result.artifacts,
         };
       }
       const raw = typeof args.ms === 'number' ? args.ms : 3000;

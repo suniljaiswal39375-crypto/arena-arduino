@@ -924,3 +924,29 @@ suspended. The fix is structural, not another special case.
   argument-embedded call caught mid-delay, busy nested work advancing millis() then returning,
   order + recursion + values through the generator path) on top of the full 996-test suite,
   scenario runs and firmware-parity suites, all green.
+
+## `take-screenshot` renders engine state to deterministic SVG — 25 September 2026
+
+Wokwi's `take-screenshot` rasterises a part's rendered pixels; SparkLab has no renderer, and
+inventing a pixel pipeline just for CI comparison would be theatre. The honest equivalent uses
+what the engines already model: the *decoded* visual state — LCD/OLED text lines, matrix cells,
+seven-segment value, LED/RGB colour, servo angle. `lib/scenarios/screenshot.ts` renders each of
+those into a small, byte-deterministic SVG (fixed geometry, no timestamps, XML-escaped text), so
+two runs of the same simulation produce identical files. `save-to` writes the capture,
+`compare-with` does an exact text comparison (after trim) and fails the step on drift, matching
+Wokwi's semantics (a step needs at least one of the two). Parts with no modelled visual state —
+relay, buzzer, sensors — fail the step with an explicit message instead of producing a fake image.
+
+File access is a `ScenarioIO { readText, writeText }` adapter injected into `runScenario`: the CLI
+supplies a real-filesystem adapter rooted at the project under test; the builder, MCP and chaos
+runs use `memoryScenarioIO`, so browser artifacts stay collectible via `ScenarioResult.artifacts`
+and nothing in the web app touches the host filesystem. The §17.3 CLI flags
+`--screenshot-part/--screenshot-time/--screenshot-file` capture one part after a fixed simulated
+window. `touch` and `publish-mqtt` stay deferred for concrete reasons — no touch-capable part in
+the catalogue (ILI9341+FT6206 not yet implemented) and no MQTT broker in the codebase (§17.1 is
+unbuilt) — rather than shipping as always-erroring stubs.
+
+Verification: 13 new tests (5 renderer determinism/escaping/null cases, parse round-trip +
+validation, runner save/compare/mismatch/missing-file/no-visual-state through a real engine on the
+dht-lcd template, 3 CLI end-to-end runs writing and comparing real files) — suite at 1009 passed /
+2 skipped, scenarios 10/10, budgets unchanged.
