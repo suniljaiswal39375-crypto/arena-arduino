@@ -896,3 +896,31 @@ it instead.
   knows about view evictions, and it says so. The scenario runner was never lossy (it reads the
   lifetime counter) and is unchanged. This is a UI-session improvement, deliberately in-memory:
   per the privacy stance, serial history is never persisted.
+
+## Nested calls suspend: one call path, no synchronous executor — 25 September 2026
+
+Debt item 2 said calls embedded in expressions — `if (helper() > 3)`, `foo(helper())`,
+`return helper() + 1;` — ran the helper in one synchronous step while statement-level calls
+suspended. The fix is structural, not another special case.
+
+- **One call path.** The interpreter had two executors: the generator path (`exec` →
+  `callDeclGenerator`) for statements, and a hand-maintained synchronous twin (`execSync`,
+  ~120 lines of duplicated statement machinery) reached through `callFunction` from inside
+  expressions. Expression evaluation is now generator-based end to end (`*eval`, `*evalCall`,
+  `*doAssign`, `*assignTargetKey`, `*preInc`, `*declareVar`, `*stringMethod`, `*userCall`), and
+  every sketch-defined call — including methods on class instances, which now also respect their
+  declaration closure — runs through `callFn` → `callDeclGenerator`. `execSync` is deleted, so
+  the two executors can never diverge again.
+- **What suspension buys.** A `delay()` inside an expression-embedded helper passes observable
+  time (mid-delay pin states are snapshot-visible, like statement calls); busy work credits
+  virtual time per yield and returns control to the engine tick, so a tight loop in a nested
+  helper no longer blocks a worker frame; evaluation order and short-circuiting are preserved
+  (`&&`, `||`, ternaries, argument lists — pinned by test).
+- **The two contexts with nothing to suspend into.** Global initialisers before `setup()` and
+  interrupt handlers fired from the circuit cannot yield into the engine, so they drive the same
+  generator through `runToCompletion` — bounded at 20 000 resumes with the same HANG diagnostic
+  the old executor raised. No other code path uses it.
+- **Verification.** 4 new runtime tests (condition-embedded call caught mid-delay,
+  argument-embedded call caught mid-delay, busy nested work advancing millis() then returning,
+  order + recursion + values through the generator path) on top of the full 996-test suite,
+  scenario runs and firmware-parity suites, all green.

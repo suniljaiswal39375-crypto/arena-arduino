@@ -364,8 +364,10 @@ export class Interpreter {
       const handler = a[1];
       const mode = String(a[2] ?? 'RISING');
       if (isFunction(handler)) {
+        // Interrupts fire from the circuit mid-step, where there is nothing to
+        // suspend into, so the handler runs to completion inline (bounded).
         this.host.attachInterrupt(pin, mode, () => {
-          this.callFunction(handler, []);
+          this.runToCompletion(this.callFn(handler, []));
         });
       }
       return undefined;
@@ -771,10 +773,13 @@ export class Interpreter {
     }
   }
 
-  /** Constant-ish evaluation used for globals before setup() runs. */
+  /**
+   * Constant-ish evaluation used for globals before setup() runs. Nothing is
+   * running yet, so there is nothing to suspend into: drive to completion.
+   */
   private evalConst(e: Expr): RuntimeValue {
     try {
-      return this.eval(e, this.env);
+      return this.runToCompletion(this.eval(e, this.env));
     } catch {
       return 0;
     }
@@ -908,14 +913,14 @@ export class Interpreter {
         // long cm = measure();  runs measure() suspendably, so a delay inside it
         // is real time the rest of the circuit can be seen in.
         if (s.init && !s.isArray && s.type !== 'object') {
-          const call = this.userCall(s.init, env);
+          const call = yield* this.userCall(s.init, env);
           if (call) {
-            const v = yield* this.callDeclGenerator(call.decl, call.args);
+            const v = yield* this.callFn(call.fn, call.args);
             env.declare(s.name, this.coerceDecl(s, v ?? 0), s.type);
             return;
           }
         }
-        this.declareVar(s, env);
+        yield* this.declareVar(s, env);
         return;
       }
 
@@ -923,25 +928,25 @@ export class Interpreter {
         // beep();  and  x = readSensor();  are the two shapes of helper call a
         // student writes. Both run as generators so delay() inside a helper
         // passes time visibly, instead of the whole helper happening at once.
-        const direct = this.userCall(s.expr, env);
+        const direct = yield* this.userCall(s.expr, env);
         if (direct) {
-          yield* this.callDeclGenerator(direct.decl, direct.args);
+          yield* this.callFn(direct.fn, direct.args);
           return;
         }
         if (s.expr.k === 'assign' && s.expr.op === '=') {
-          const call = this.userCall(s.expr.value, env);
+          const call = yield* this.userCall(s.expr.value, env);
           if (call) {
-            const v = yield* this.callDeclGenerator(call.decl, call.args);
-            this.doAssign(s.expr.target, '=', v ?? 0, env);
+            const v = yield* this.callFn(call.fn, call.args);
+            yield* this.doAssign(s.expr.target, '=', v ?? 0, env);
             return;
           }
         }
-        this.eval(s.expr, env);
+        yield* this.eval(s.expr, env);
         return;
       }
 
       case 'if': {
-        if (toBool(this.eval(s.cond, env))) {
+        if (toBool(yield* this.eval(s.cond, env))) {
           yield* this.exec(s.then, env);
         } else if (s.else) {
           yield* this.exec(s.else, env);
@@ -950,7 +955,7 @@ export class Interpreter {
       }
 
       case 'while': {
-        while (toBool(this.eval(s.cond, env))) {
+        while (toBool(yield* this.eval(s.cond, env))) {
           try {
             yield* this.exec(s.body, new Env(env));
           } catch (err) {
@@ -974,7 +979,7 @@ export class Interpreter {
           }
           this.ops++;
           if (this.shouldYield()) yield* this.doYield();
-          if (!toBool(this.eval(s.cond, env))) break;
+          if (!toBool(yield* this.eval(s.cond, env))) break;
         }
         return;
       }
@@ -983,14 +988,14 @@ export class Interpreter {
         const scope = new Env(env);
         if (s.init) yield* this.exec(s.init, scope);
         for (;;) {
-          if (s.cond && !toBool(this.eval(s.cond, scope))) break;
+          if (s.cond && !toBool(yield* this.eval(s.cond, scope))) break;
           try {
             yield* this.exec(s.body, scope);
           } catch (err) {
             if (err instanceof BreakSignal) break;
             if (!(err instanceof ContinueSignal)) throw err;
           }
-          if (s.step) this.eval(s.step, scope);
+          if (s.step) yield* this.eval(s.step, scope);
           this.ops++;
           if (this.shouldYield()) yield* this.doYield();
         }
@@ -998,13 +1003,13 @@ export class Interpreter {
       }
 
       case 'switch': {
-        const target = this.eval(s.expr, env);
+        const target = yield* this.eval(s.expr, env);
         const scope = new Env(env);
         let matched = false;
         let running = false;
         for (const c of s.cases) {
           if (!matched && c.value !== null) {
-            if (this.eval(c.value, scope) === target) {
+            if ((yield* this.eval(c.value, scope)) === target) {
               matched = true;
               running = true;
             }
@@ -1026,21 +1031,20 @@ export class Interpreter {
       }
 
       case 'return': {
-        const v = s.expr ? this.eval(s.expr, env) : undefined;
+        const v = s.expr ? yield* this.eval(s.expr, env) : undefined;
         throw new ReturnSignal(v ?? null);
       }
     }
   }
 
-  private declareVar(d: DeclInfo, env: Env): RuntimeValue {
+  private *declareVar(d: DeclInfo, env: Env): Generator<void, RuntimeValue, void> {
     let value: RuntimeValue = 0;
     if (d.type === 'object' && d.className) {
-      value = this.constructClass(
-        d.className,
-        (d.ctorArgs ?? []).map((e) => this.eval(e, env)),
-      );
+      const args: RuntimeValue[] = [];
+      for (const e of d.ctorArgs ?? []) args.push(yield* this.eval(e, env));
+      value = this.constructClass(d.className, args);
     } else if (d.init !== undefined) {
-      value = this.eval(d.init, env);
+      value = yield* this.eval(d.init, env);
     } else if (d.isArray) {
       value = [];
     }
@@ -1051,14 +1055,16 @@ export class Interpreter {
   }
 
   /** A direct call to a sketch-defined function, with its arguments evaluated. */
-  private userCall(e: Expr, env: Env): { decl: FuncDecl; args: RuntimeValue[] } | null {
+  private *userCall(e: Expr, env: Env): Generator<void, { fn: RuntimeFunction; args: RuntimeValue[] } | null, void> {
     if (e.k !== 'call' || e.callee.k !== 'ident') return null;
     const fn = env.get(e.callee.name);
     if (!isFunction(fn) || fn.native || !fn.decl) return null;
-    return { decl: fn.decl, args: e.args.map((a) => this.eval(a, env)) };
+    const args: RuntimeValue[] = [];
+    for (const a of e.args) args.push(yield* this.eval(a, env));
+    return { fn, args };
   }
 
-  private *callDeclGenerator(f: FuncDecl, args: RuntimeValue[]): Generator<void, RuntimeValue, void> {
+  private *callDeclGenerator(f: FuncDecl, args: RuntimeValue[], closure?: Env): Generator<void, RuntimeValue, void> {
     if (this.stackDepth >= this.maxStackDepth) {
       throw new RuntimeError(
         `Too much recursion calling ${f.name}(). Arduino boards have very little stack.`,
@@ -1067,7 +1073,7 @@ export class Interpreter {
       );
     }
     this.stackDepth++;
-    const env = new Env(this.env);
+    const env = new Env(closure ?? this.env);
     f.params.forEach((p, i) => {
       env.declare(p.name, this.coerce(p.type, args[i] ?? 0), p.type);
     });
@@ -1088,147 +1094,39 @@ export class Interpreter {
     return null;
   }
 
-  private callFunction(fn: RuntimeFunction, args: RuntimeValue[]): RuntimeValue {
+  /**
+   * Call any runtime function, suspendably. Native functions run inline;
+   * sketch-defined functions run through the generator path so a delay() —
+   * or plain busy work — inside them passes virtual time and yields to the
+   * engine exactly like a statement-level call.
+   */
+  private *callFn(fn: RuntimeFunction, args: RuntimeValue[]): Generator<void, RuntimeValue, void> {
     if (fn.native) return fn.native(args);
     if (!fn.decl) return null;
-    if (this.stackDepth >= this.maxStackDepth) {
-      throw new RuntimeError(`Too much recursion calling ${fn.name}().`, 0, 'STACK');
-    }
-    this.stackDepth++;
-    const env = new Env(fn.closure ?? this.env);
-    fn.decl.params.forEach((p, i) => {
-      env.declare(p.name, this.coerce(p.type, args[i] ?? 0), p.type);
-    });
-    try {
-      const body = fn.decl.body;
-      const stmts = body.k === 'block' ? body.body : [body];
-      for (const s of stmts) {
-        // Nested calls cannot suspend; that is the documented limit of this engine.
-        this.execSync(s, env);
-      }
-    } catch (err) {
-      this.stackDepth--;
-      if (err instanceof ReturnSignal) {
-        // long half(int x) { return x / 2.0; } returns a long.
-        const rt = fn.decl.returnType;
-        return rt === 'void' ? null : coerceScalar(rt, err.value);
-      }
-      throw err;
-    }
-    this.stackDepth--;
-    return null;
+    return yield* this.callDeclGenerator(fn.decl, args, fn.closure);
   }
 
-  /** Run a statement without suspension, for calls made from inside expressions. */
-  private execSync(s: Stmt, env: Env): void {
-    switch (s.k) {
-      case 'block': {
-        const inner = new Env(env);
-        for (const st of s.body) this.execSync(st, inner);
-        return;
+  /**
+   * Drive a generator to completion without handing control back to the
+   * engine. Only for contexts with nothing to suspend into: global
+   * initialisers before setup() and interrupt handlers fired from the
+   * circuit. Bounded, like the old synchronous executor was.
+   */
+  private runToCompletion(gen: Generator<void, RuntimeValue, void>): RuntimeValue {
+    let resumes = 0;
+    let r = gen.next();
+    while (!r.done) {
+      if (++resumes > 20_000) {
+        throw new RuntimeError('Loop inside a function call never finished.', 0, 'HANG');
       }
-      case 'empty':
-        return;
-      case 'var':
-        this.declareVar(s, env);
-        return;
-      case 'expr':
-        this.eval(s.expr, env);
-        return;
-      case 'if':
-        if (toBool(this.eval(s.cond, env))) this.execSync(s.then, env);
-        else if (s.else) this.execSync(s.else, env);
-        return;
-      case 'while': {
-        let guard = 0;
-        while (toBool(this.eval(s.cond, env))) {
-          if (++guard > 1_000_000) {
-            throw new RuntimeError('Loop inside a function call never finished.', 0, 'HANG');
-          }
-          try {
-            this.execSync(s.body, new Env(env));
-          } catch (err) {
-            if (err instanceof BreakSignal) break;
-            if (!(err instanceof ContinueSignal)) throw err;
-          }
-        }
-        return;
-      }
-      case 'dowhile': {
-        let guard = 0;
-        for (;;) {
-          if (++guard > 1_000_000) {
-            throw new RuntimeError('Loop inside a function call never finished.', 0, 'HANG');
-          }
-          try {
-            this.execSync(s.body, new Env(env));
-          } catch (err) {
-            if (err instanceof BreakSignal) break;
-            if (!(err instanceof ContinueSignal)) throw err;
-          }
-          if (!toBool(this.eval(s.cond, env))) break;
-        }
-        return;
-      }
-      case 'for': {
-        const scope = new Env(env);
-        if (s.init) this.execSync(s.init, scope);
-        let guard = 0;
-        for (;;) {
-          if (++guard > 1_000_000) {
-            throw new RuntimeError('Loop inside a function call never finished.', 0, 'HANG');
-          }
-          if (s.cond && !toBool(this.eval(s.cond, scope))) break;
-          try {
-            this.execSync(s.body, scope);
-          } catch (err) {
-            if (err instanceof BreakSignal) break;
-            if (!(err instanceof ContinueSignal)) throw err;
-          }
-          if (s.step) this.eval(s.step, scope);
-        }
-        return;
-      }
-      case 'switch': {
-        const target = this.eval(s.expr, env);
-        const scope = new Env(env);
-        let running = false;
-        for (const c of s.cases) {
-          if (c.value === null) {
-            if (running) {
-              try {
-                for (const st of c.body) this.execSync(st, scope);
-              } catch (err) {
-                if (err instanceof BreakSignal) return;
-                if (!(err instanceof ContinueSignal)) throw err;
-              }
-            }
-            continue;
-          }
-          if (this.eval(c.value, scope) === target) running = true;
-          if (running) {
-            try {
-              for (const st of c.body) this.execSync(st, scope);
-            } catch (err) {
-              if (err instanceof BreakSignal) return;
-              if (!(err instanceof ContinueSignal)) throw err;
-            }
-          }
-        }
-        return;
-      }
-      case 'return':
-        throw new ReturnSignal(s.expr ? this.eval(s.expr, env) : null);
-      case 'break':
-        throw new BreakSignal();
-      case 'continue':
-        throw new ContinueSignal();
+      r = gen.next();
     }
+    return r.value;
   }
 
   /* ----------------------------------------------------------- expressions */
 
-  eval(e: Expr, env: Env): RuntimeValue {
+  *eval(e: Expr, env: Env): Generator<void, RuntimeValue, void> {
     switch (e.k) {
       case 'lit':
         return e.value;
@@ -1247,10 +1145,10 @@ export class Interpreter {
       }
 
       case 'binary': {
-        if (e.op === '&&') return toBool(this.eval(e.left, env)) ? toBool(this.eval(e.right, env)) : false;
-        if (e.op === '||') return toBool(this.eval(e.left, env)) ? true : toBool(this.eval(e.right, env));
-        let a = this.eval(e.left, env);
-        let b = this.eval(e.right, env);
+        if (e.op === '&&') return toBool(yield* this.eval(e.left, env)) ? toBool(yield* this.eval(e.right, env)) : false;
+        if (e.op === '||') return toBool(yield* this.eval(e.left, env)) ? true : toBool(yield* this.eval(e.right, env));
+        let a = yield* this.eval(e.left, env);
+        let b = yield* this.eval(e.right, env);
         // C integer division: 7 / 2 is 3 unless either side is a float.
         if (e.op === '/' && typeof a === 'number' && typeof b === 'number' && !this.isFloatExpr(e, env)) {
           return b === 0 ? 0 : Math.trunc(a / b);
@@ -1266,17 +1164,17 @@ export class Interpreter {
       }
 
       case 'assign': {
-        let value = this.eval(e.value, env);
+        let value = yield* this.eval(e.value, env);
         // command += c;  the idiom for collecting serial input into a String.
         if (e.op === '+=' && typeof value === 'number' && this.isCharExpr(e.value, env)) {
-          const current = this.assignTargetKey(e.target, env)?.get();
+          const current = (yield* this.assignTargetKey(e.target, env))?.get();
           if (typeof current === 'string') value = String.fromCharCode(value);
         }
-        return this.doAssign(e.target, e.op, value, env);
+        return yield* this.doAssign(e.target, e.op, value, env);
       }
 
       case 'unary': {
-        const v = this.eval(e.operand, env);
+        const v = yield* this.eval(e.operand, env);
         switch (e.op) {
           case '!':
             return !toBool(v);
@@ -1287,9 +1185,9 @@ export class Interpreter {
           case '~':
             return ~Math.trunc(toNum(v));
           case '++':
-            return this.preInc(e.operand, 1, env);
+            return yield* this.preInc(e.operand, 1, env);
           case '--':
-            return this.preInc(e.operand, -1, env);
+            return yield* this.preInc(e.operand, -1, env);
           default:
             if (e.op.startsWith('cast:')) {
               const cast = Casts[e.op.slice(5)];
@@ -1300,16 +1198,16 @@ export class Interpreter {
       }
 
       case 'postfix': {
-        const before = this.eval(e.operand, env);
-        this.preInc(e.operand, e.op === '++' ? 1 : -1, env);
+        const before = yield* this.eval(e.operand, env);
+        yield* this.preInc(e.operand, e.op === '++' ? 1 : -1, env);
         return before;
       }
 
       case 'call':
-        return this.evalCall(e.callee, e.args, env);
+        return yield* this.evalCall(e.callee, e.args, env);
 
       case 'member': {
-        const obj = this.eval(e.object, env);
+        const obj = yield* this.eval(e.object, env);
         if (isObject(obj)) {
           const v = obj.fields.get(e.name);
           return v === undefined ? 0 : v;
@@ -1320,33 +1218,36 @@ export class Interpreter {
       }
 
       case 'index': {
-        const obj = this.eval(e.object, env);
-        const idx = Math.trunc(toNum(this.eval(e.index, env)));
+        const obj = yield* this.eval(e.object, env);
+        const idx = Math.trunc(toNum(yield* this.eval(e.index, env)));
         if (Array.isArray(obj)) return obj[idx] ?? 0;
         if (typeof obj === 'string') return obj.charAt(idx);
         return 0;
       }
 
       case 'ternary':
-        return toBool(this.eval(e.cond, env)) ? this.eval(e.then, env) : this.eval(e.else, env);
+        return toBool(yield* this.eval(e.cond, env)) ? yield* this.eval(e.then, env) : yield* this.eval(e.else, env);
 
-      case 'initlist':
-        return e.items.map((i) => this.eval(i, env));
+      case 'initlist': {
+        const items: RuntimeValue[] = [];
+        for (const i of e.items) items.push(yield* this.eval(i, env));
+        return items;
+      }
     }
   }
 
   private warnedNames = new Set<string>();
 
-  private preInc(target: Expr, delta: number, env: Env): RuntimeValue {
-    const current = this.eval(target, env);
+  private *preInc(target: Expr, delta: number, env: Env): Generator<void, RuntimeValue, void> {
+    const current = yield* this.eval(target, env);
     const next = toNum(current) + delta;
-    this.doAssign(target, '=', next, env);
+    yield* this.doAssign(target, '=', next, env);
     return next;
   }
 
-  private doAssign(target: Expr, op: string, raw: RuntimeValue, env: Env): RuntimeValue {
-    const key = this.assignTargetKey(target, env);
-    const current = key ? key.get() : this.eval(target, env);
+  private *doAssign(target: Expr, op: string, raw: RuntimeValue, env: Env): Generator<void, RuntimeValue, void> {
+    const key = yield* this.assignTargetKey(target, env);
+    const current = key ? key.get() : yield* this.eval(target, env);
     let value = raw;
     if (op !== '=') {
       value = this.binary(op.slice(0, -1), current, raw);
@@ -1361,10 +1262,10 @@ export class Interpreter {
     return value;
   }
 
-  private assignTargetKey(
+  private *assignTargetKey(
     target: Expr,
     env: Env,
-  ): { get: () => RuntimeValue; set: (v: RuntimeValue) => void } | null {
+  ): Generator<void, { get: () => RuntimeValue; set: (v: RuntimeValue) => void } | null, void> {
     if (target.k === 'ident') {
       const name = target.name;
       return {
@@ -1375,8 +1276,8 @@ export class Interpreter {
       };
     }
     if (target.k === 'index') {
-      const obj = this.eval(target.object, env);
-      const idx = Math.trunc(toNum(this.eval(target.index, env)));
+      const obj = yield* this.eval(target.object, env);
+      const idx = Math.trunc(toNum(yield* this.eval(target.index, env)));
       if (Array.isArray(obj)) {
         return {
           get: () => obj[idx] ?? 0,
@@ -1389,7 +1290,7 @@ export class Interpreter {
       return null;
     }
     if (target.k === 'member') {
-      const obj = this.eval(target.object, env);
+      const obj = yield* this.eval(target.object, env);
       if (isObject(obj)) {
         return {
           get: () => obj.fields.get(target.name) ?? 0,
@@ -1506,8 +1407,9 @@ export class Interpreter {
     return false;
   }
 
-  private evalCall(callee: Expr, argExprs: Expr[], env: Env): RuntimeValue {
-    const args = argExprs.map((a) => this.eval(a, env));
+  private *evalCall(callee: Expr, argExprs: Expr[], env: Env): Generator<void, RuntimeValue, void> {
+    const args: RuntimeValue[] = [];
+    for (const a of argExprs) args.push(yield* this.eval(a, env));
     // print('A') and print(c) for a char c show the letter, not its code; a
     // float prints with two decimals (or as many as the second argument asks).
     if (callee.k === 'member' && (callee.name === 'print' || callee.name === 'println')) {
@@ -1523,7 +1425,7 @@ export class Interpreter {
 
     if (callee.k === 'ident') {
       const fn = env.get(callee.name);
-      if (isFunction(fn)) return this.callFunction(fn, args);
+      if (isFunction(fn)) return yield* this.callFn(fn, args);
       if (isObject(fn)) {
         // Implicit construction: `Servo s()` is rare; treat as a no-arg construct.
         return this.constructClass(fn.className, args);
@@ -1537,10 +1439,10 @@ export class Interpreter {
     }
 
     if (callee.k === 'member') {
-      const obj = this.eval(callee.object, env);
+      const obj = yield* this.eval(callee.object, env);
       if (isObject(obj)) {
         const fn = obj.fields.get(callee.name);
-        if (isFunction(fn)) return this.callFunction(fn, args);
+        if (isFunction(fn)) return yield* this.callFn(fn, args);
         if (!this.warnedNames.has(`call:${obj.className}.${callee.name}`)) {
           this.warnedNames.add(`call:${obj.className}.${callee.name}`);
           this.host.unsupported(`${obj.className}.${callee.name}()`);
@@ -1548,7 +1450,7 @@ export class Interpreter {
         return 0;
       }
       if (typeof obj === 'string') {
-        return this.stringMethod(obj, callee.name, args, callee.object, env);
+        return yield* this.stringMethod(obj, callee.name, args, callee.object, env);
       }
       if (Array.isArray(obj)) {
         return 0;
@@ -1564,9 +1466,10 @@ export class Interpreter {
    * board (trim, toUpperCase, toLowerCase, replace, remove) write the result
    * back to the variable, so `command.trim();` behaves as it does on hardware.
    */
-  private stringMethod(value: string, name: string, args: RuntimeValue[], target: Expr, env: Env): RuntimeValue {
+  private *stringMethod(value: string, name: string, args: RuntimeValue[], target: Expr, env: Env): Generator<void, RuntimeValue, void> {
+    const targetKey = yield* this.assignTargetKey(target, env);
     const writeBack = (next: string): undefined => {
-      this.assignTargetKey(target, env)?.set(next);
+      targetKey?.set(next);
       return undefined;
     };
     const text = (v: RuntimeValue): string => (typeof v === 'number' ? String.fromCharCode(v) : toText(v));

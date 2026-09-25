@@ -229,9 +229,15 @@ AI feature that talks without touching the simulator.
 ## Known debt, in priority order
 
 1. **Monaco is local and cached on use.** Full offline installation/update UX and low-end Chromebook measurements remain.
-2. **Nested calls inside expressions cannot suspend.** `x = helper()` and `helper();` run as
-   generators, so a `delay()` inside them passes time visibly; `if (helper() > 3)` still runs the
-   helper in one step. Rare in student sketches, but real.
+2. **Nested calls suspend.** Expression evaluation is generator-based end to end, so a
+   sketch-defined function called from *anywhere* — `if (helper() > 3)`, `foo(helper())`,
+   `return helper() + 1;`, a ternary branch — suspends at statement boundaries exactly like a
+   statement-level call: `delay()` inside it passes observable time, busy work credits virtual
+   time and yields to the engine instead of stalling a frame, and the old synchronous executor
+   (`execSync`, ~120 lines of duplicated statement machinery) is gone. The only contexts with
+   nothing to suspend into — global initialisers before `setup()` and interrupt handlers fired
+   from the circuit — drive the same generator to completion through a bounded
+   `runToCompletion` helper (HANG guard intact).
 3. **Accessible menu primitive shipped; combobox still open.** `lib/ui/menu-model` (pure WAI-ARIA
    menu keyboard model: arrows/Home/End, Enter/Space, Escape/Tab, type-ahead) + `components/ui/Menu`
    (menu-button with roving focus, outside dismissal, focus return) now power the toolbar's
@@ -848,3 +854,14 @@ touchscreen part and an MQTT broker.
   "earlier output cleared" notice instead of disappearing.
 - Verification: strict typecheck; 992 tests / 95 files; scenarios 10/10; production build and
   budgets green.
+
+### Checkpoint — nested calls suspend, 2026-09-25 (local)
+
+- Expression evaluation is generator-based end to end; every sketch-defined call suspends at
+  statement boundaries no matter where it appears (conditions, arguments, returns, ternaries,
+  class methods). The duplicated synchronous executor (`execSync`) is deleted; global inits and
+  interrupt handlers drive the generator through a bounded `runToCompletion`.
+- 4 new runtime tests pin mid-delay observability, virtual-time credit for busy nested work,
+  and evaluation-order/recursion/value preservation.
+- Verification: strict typecheck; 996 tests / 95 files; scenarios 10/10; production build and
+  budgets green (builder 102.4 kB gz, unchanged).
