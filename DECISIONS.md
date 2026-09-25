@@ -1014,3 +1014,15 @@ adds nothing a student needs. Anyone with the repo (or CI) can rebuild the exact
 manifest's integrity (main path, menu→command wiring, shipped icons, and that the shell imports
 only `vscode`, node builtins or the tested lib) is pinned by `extension-manifest.test.ts` in the
 main suite so the package can never silently drift from the tested surface.
+
+## CI builds the opt-in Co-Lab flag on so the e2e job can test it — 25 September 2026
+
+Co-Lab stays off by default (zero-config rule): `NEXT_PUBLIC_FEATURE_MULTIPLAYER` gates the UI
+and the flag is absent in local builds. But a feature CI never runs is a feature CI never
+catches, so the CI production-build step now sets the flag, and the e2e job (which serves that
+build) exercises multiplayer end to end — starting with the selection-ghosts spec. Two honesty
+guards: the budgets are re-run on the flagged build (collab remains lazy, so first-load numbers
+are unchanged), and every multiplayer e2e spec starts with a probe that skips gracefully when
+the tab is absent, so flag-off local builds never report a false failure. Presence data
+(selection ghosts included) remains session-only: it is never written to the Yjs document, to
+storage, or to traces.

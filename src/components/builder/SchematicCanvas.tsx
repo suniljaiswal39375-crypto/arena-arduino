@@ -20,7 +20,10 @@ import { cn } from '@/lib/cn';
 import { useI18n } from '@/lib/i18n/client';
 import { Image as ImageIcon } from 'lucide-react';
 import { FIDELITY_LABEL } from '@/lib/brand';
+import { collabState, subscribeCollab } from '@/store/collab';
+import type { PeerInfo } from '@/lib/collab/session';
 import { PartGlyph } from './PartGlyph';
+import { PeerGhosts } from './peer-ghosts';
 
 interface View {
   x: number;
@@ -35,7 +38,14 @@ interface Drag {
   moved: boolean;
 }
 
-export function SchematicCanvas({ states }: { states: Record<string, PartState> }) {
+export function SchematicCanvas({
+  states,
+  peers: peersProp,
+}: {
+  states: Record<string, PartState>;
+  /** Tests inject presence directly; the live canvas subscribes to the Co-Lab bridge. */
+  peers?: PeerInfo[];
+}) {
   const doc = useLab((s) => s.doc);
   const selection = useLab((s) => s.selection);
   const selectedWire = useLab((s) => s.selectedWire);
@@ -50,6 +60,14 @@ export function SchematicCanvas({ states }: { states: Record<string, PartState> 
   const apply = useLab((s) => s.apply);
   const deleteSelection = useLab((s) => s.deleteSelection);
   const { t } = useI18n();
+
+  // Remote selection ghosts: peers' live selections, session-only presence.
+  const [bridge, setBridge] = useState(collabState);
+  useEffect(() => {
+    if (peersProp !== undefined) return;
+    return subscribeCollab(setBridge);
+  }, [peersProp]);
+  const peers = peersProp ?? (bridge.status === 'active' ? bridge.peers : []);
 
   // Photo trace (Phase 14): a session-only reference underlay. It is
   // deliberately *not* persisted or recognized — nothing is auto-placed.
@@ -423,6 +441,9 @@ export function SchematicCanvas({ states }: { states: Record<string, PartState> 
               </g>
             );
           })}
+
+          {/* remote editors' live selections (presence only, never persisted) */}
+          <PeerGhosts parts={doc.diagram.parts} peers={peers} />
 
           {/* wire target ghosts */}
           {pendingWire &&

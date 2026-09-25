@@ -187,8 +187,11 @@ This is what makes it a lab rather than a simulator.
   randomised-concurrency runs, shuffled/late-joiner convergence, stale-base regression, undo
   isolation. File contents are `Y.Text`, so two editors working the same file merge
   character-by-character (localised prefix/suffix deltas with a whole-text rebase fallback when
-  the shared text moved under the anchor). Remaining: comment threads, remote cursors/selection
-  ghosts, roles, session replay.
+  the shared text moved under the anchor). **Selection ghosts shipped:** each peer's live part
+  selection renders on the canvas as a dashed halo + name tag in their presence
+  colour (pure presence data, pointer-transparent, never persisted; unit-,
+  render- and Playwright-covered). Remaining: comment threads, remote code
+  cursors, roles, session replay.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
@@ -936,3 +939,18 @@ touchscreen part and an MQTT broker.
   repository, no account or token anywhere.
 - Verification: strict typecheck; **1023 tests / 99 files** (5 new manifest tests); scenarios
   10/10; production build and budgets green.
+
+### Checkpoint — Co-Lab selection ghosts (peer halos on the canvas), 2026-09-25 (local)
+
+- New `PeerGhosts` overlay: every peer with a live part selection gets a dashed halo in their
+  presence colour plus a name tag, stacked when several peers select the same part, ignored for
+  parts that no longer exist. `SchematicCanvas` subscribes to the Co-Lab bridge when active
+  (tests inject peers via a prop); the overlay is pointer-transparent and aria-hidden — presence
+  only, never part of the document, never persisted.
+- New `e2e/collab-ghosts.spec.ts` proves it across two live editors over BroadcastChannel
+  (join both, select on A, halo appears on B, deselect removes it), with a graceful skip on
+  flag-off builds; the CI production build now sets `NEXT_PUBLIC_FEATURE_MULTIPLAYER=true` so
+  the e2e job exercises the multiplayer surfaces while the local default stays off (budgets
+  re-verified on the flagged build: unchanged, collab stays in lazy chunks).
+- Verification: strict typecheck; **1028 tests / 100 files** (5 new: ghost overlay unit tests +
+  canvas wiring render test); scenarios 10/10; default and flagged builds green.
