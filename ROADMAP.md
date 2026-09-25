@@ -207,9 +207,12 @@ This is what makes it a lab rather than a simulator.
   from the four-slice directive. **§17.1 MQTT broker shipped:** an in-app topic
   bus with `+`/`#` wildcards and retained messages, an MQTT dock tab
   (publish form + message log), and the `publish-mqtt` scenario step that
-  feeds a per-run broker. Remaining buildable items: the touchscreen part
-  (ILI9341+FT6206; unblocks `touch` steps). Payment processing and
-  deployment-tier verification stay blocked on external credentials, as
+  feeds a per-run broker. **Touchscreen shipped:** an ILI9341 TFT + FT6206
+  touch part whose controller is modelled at the library level
+  (`ts.touched()`/`getPoint()`), plus Wokwi's `touch`, `touch-press`,
+  `touch-move`, `touch-release` scenario steps. With that, every buildable
+  item in the remaining-work inventory is done; only payment processing and
+  deployment-tier verification remain, blocked on external credentials as
   documented.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
@@ -236,9 +239,11 @@ This is what makes it a lab rather than a simulator.
   capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
 - Scenario steps: `publish-mqtt` **shipped** — publishes into the run's in-app MQTT bus
   (`lib/mqtt/broker.ts`: level/`+`/`#` matching, retained messages, bounded history) and fails
-  with the broker's reason on an invalid topic. `touch` remains deferred: it needs a
-  touchscreen part, and the ILI9341+FT6206 pair is not in the catalogue yet. It stays in the
-  vocabulary plan rather than shipping as an always-failing stub.
+  with the broker's reason on an invalid topic. `touch`/`touch-press`/`touch-move`/
+  `touch-release` **shipped** — they drive the ILI9341+FT6206 part's touch controls in the
+  controller's coordinate space (0-239 × 0-319), holding the press across simulated time and
+  auto-releasing, as Wokwi does; coordinates outside the part's range fail the step with an
+  actionable message.
 - PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
   hand-authored SVG icon; the service worker itself is the existing generated precache.
 - Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
@@ -1049,3 +1054,23 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; **1064 tests / 105 files** (11 broker + 4 scenario + 3 panel
   render); scenarios 10/10; default and flagged builds and budgets green (builder unchanged at
   102.4 kB).
+
+### Checkpoint — touchscreen part + touch scenario steps, 2026-09-25 (local)
+
+- New functional part `ili9341-touch` (ILI9341 TFT 240×320 with FT6206 capacitive touch):
+  Touch X / Touch Y / Touching controls feed an `Adafruit_FT6206` library model
+  (`begin`/`touched`/`getPoint` returning a `TS_Point`), and `Adafruit_ILI9341` is accepted as
+  an inert object — the TFT framebuffer is deliberately not rendered and the part says so.
+  Coordinates are the controller's own space, passed through exactly as set; the sketch maps
+  them, matching real hardware. The stale "emulated over I2C" note on the firmware-catalogue
+  `emu-ili9341` was corrected, and Wokwi import/export maps the part to `wokwi-ili9341`.
+- Interpreter fix that made it possible: an object declaration initialised from an expression
+  (`TS_Point p = ts.getPoint();`) now evaluates the initialiser instead of constructing a fresh
+  instance of the declared class.
+- Wokwi touch vocabulary lands in the scenario runner: `touch` (press, hold for `duration`
+  across simulated time, auto-release; `wait` accepted as a no-op under the virtual clock),
+  `touch-press`, `touch-move`, `touch-release`; out-of-range coordinates and non-touch parts
+  fail with actionable messages.
+- Verification: strict typecheck; **1070 tests / 106 files** (2 engine + 4 scenario, including
+  an end-to-end press→serial and a press/move/release gesture); scenarios 10/10; default and
+  flagged builds and budgets green.

@@ -39,6 +39,9 @@ export interface SimHost {
   /** Read a modelled sensor by kind, e.g. "dhtTemperature". */
   sensorRead(kind: string, pin: number): number;
 
+  /** The touch controller's state, or null when no touch-capable part exists. */
+  touchState(): { x: number; y: number; pressed: boolean } | null;
+
   attachInterrupt(pin: number, mode: string, handler: () => void): void;
   detachInterrupt(pin: number): void;
 
@@ -93,6 +96,9 @@ export class NullHost implements SimHost {
   oledCommand(): void {}
   sensorRead(): number {
     return 0;
+  }
+  touchState(): null {
+    return null;
   }
   attachInterrupt(): void {}
   detachInterrupt(): void {}

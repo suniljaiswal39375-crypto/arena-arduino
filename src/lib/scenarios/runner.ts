@@ -64,6 +64,34 @@ export function resolveControl(
   return { key: `${partId}.${id}`, value: scaled };
 }
 
+/**
+ * Resolve a touch step against the canvas. Touch lives in the controller's
+ * own coordinate space (0..touchWidth-1 × 0..touchHeight-1 for ILI9341 +
+ * FT6206) and is passed through to the part exactly as given — the sketch
+ * maps it, as on real hardware.
+ */
+export function resolveTouch(
+  doc: ProjectDoc,
+  partId: string,
+  x: number,
+  y: number,
+): { width: number; height: number } | { error: string } {
+  const inst = doc.diagram.parts.find((p) => p.id === partId);
+  if (!inst) {
+    const ids = doc.diagram.parts.map((p) => p.id).join(', ');
+    return { error: `no part with id "${partId}" on the canvas (parts: ${ids})` };
+  }
+  const def = getPart(inst.type);
+  if (!def || def.defaults?.sensor !== 'ft6206' || !def.controls.some((c) => c.id === 'touchPressed')) {
+    return { error: `part "${partId}" (${inst.type}) is not touch-capable — use the ILI9341 TFT with FT6206 Touch part` };
+  }
+  const width = Number(def.defaults?.touchWidth ?? 240);
+  const height = Number(def.defaults?.touchHeight ?? 320);
+  if (!Number.isFinite(x) || x < 0 || x > width) return { error: `touch x=${x} is outside 0..${width} for "${partId}"` };
+  if (!Number.isFinite(y) || y < 0 || y > height) return { error: `touch y=${y} is outside 0..${height} for "${partId}"` };
+  return { width, height };
+}
+
 interface RunState {
   engine: SimEngine;
   doc: ProjectDoc;
@@ -253,6 +281,42 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
       const target = step.compareWith !== undefined ? ` matches ${step.compareWith}` : '';
       const saved = step.saveTo !== undefined ? `saved to ${step.saveTo}` : '';
       return { ok: true, message: [`captured "${step.partId}"`, saved, target && `capture${target}`].filter(Boolean).join(', ') };
+    }
+
+    case 'touch': {
+      const r = resolveTouch(state.doc, step.partId, step.x, step.y);
+      if ('error' in r) return { ok: false, message: r.error };
+      const x = Math.round(step.x);
+      const y = Math.round(step.y);
+      setInput(state, `${step.partId}.touchX`, x);
+      setInput(state, `${step.partId}.touchY`, y);
+      setInput(state, `${step.partId}.touchPressed`, 1);
+      // Hold the press across simulated time so the sketch can observe it,
+      // then release, as Wokwi's auto-release does.
+      const error = advance(state, Math.max(0, step.durationMs));
+      setInput(state, `${step.partId}.touchPressed`, 0);
+      if (error) return { ok: false, message: error };
+      return { ok: true, message: `touched ${step.partId} at (${x}, ${y}) for ${step.durationMs} ms` };
+    }
+
+    case 'touch-press':
+    case 'touch-move': {
+      const r = resolveTouch(state.doc, step.partId, step.x, step.y);
+      if ('error' in r) return { ok: false, message: r.error };
+      setInput(state, `${step.partId}.touchX`, Math.round(step.x));
+      setInput(state, `${step.partId}.touchY`, Math.round(step.y));
+      if (step.kind === 'touch-press') setInput(state, `${step.partId}.touchPressed`, 1);
+      return {
+        ok: true,
+        message: `${step.kind === 'touch-press' ? 'pressed' : 'moved'} ${step.partId} at (${Math.round(step.x)}, ${Math.round(step.y)})`,
+      };
+    }
+
+    case 'touch-release': {
+      const inst = state.doc.diagram.parts.find((p) => p.id === step.partId);
+      if (!inst) return { ok: false, message: `no part with id "${step.partId}" on the canvas` };
+      setInput(state, `${step.partId}.touchPressed`, 0);
+      return { ok: true, message: `released ${step.partId}` };
     }
 
     case 'repeat': {

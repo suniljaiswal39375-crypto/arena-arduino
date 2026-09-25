@@ -370,7 +370,8 @@ export const EMULATOR_PARTS: PartDef[] = [
     adapter: 'static',
     supply: 3.3,
     current: 120,
-    notes: 'Including the FT6206 touch controller, emulated over I2C.',
+    notes:
+      'Catalog entry for Wokwi import mapping. The firmware engine has no ILI9341 pixel pipeline or FT6206 touch model; touch-aware sketches use the functional-engine part "ili9341-touch" instead.',
   }),
   E('emu-ssd1306', 'SSD1306 OLED 128x64', 'Display', {
     wokwi: 'board-ssd1306',

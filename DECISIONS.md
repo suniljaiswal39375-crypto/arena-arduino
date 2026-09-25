@@ -1086,3 +1086,19 @@ panel states this plainly, `publish-mqtt` scenario steps feed the per-run bus, a
 shape (subscribe/publish/retained/history) is what a future networked part would attach to
 without redesign. Refusals are actionable (the broker's reason surfaces in both the panel and
 the failed step), and history truncation is counted, never silent.
+
+## Touchscreen is a modelled controller, not a rendered display — 25 September 2026
+
+The ILI9341+FT6206 part models what the lab can verify: the touch controller, at the library
+level. `ts.touched()` and `ts.getPoint()` read the part's Touch X / Touch Y / Touching
+controls, so scenario steps, the Inputs dock, and sketches all drive one source of truth, and a
+`touch` step holding a press across simulated time is observable by the sketch. Coordinates
+travel in the controller's own space (0-239 × 0-319) and are passed through exactly as given —
+the sketch maps them to display space, precisely as on real hardware (Wokwi documents the same
+convention, including the bottom-right origin the firmware must flip). The TFT itself gets no
+framebuffer: `Adafruit_ILI9341` is an accepted-but-inert object, and the catalogue part states
+that plainly instead of pretending to render. `wait: true` on a `touch` step is parsed and
+treated as a no-op because the engine's virtual clock already advances through the whole press
+duration — there is no firmware latency to wait out. The firmware-catalogue `emu-ili9341`
+entry previously claimed FT6206 touch "emulated over I2C"; no such model exists, so the note
+was corrected rather than left as an unverified claim.

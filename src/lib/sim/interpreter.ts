@@ -728,6 +728,64 @@ export class Interpreter {
     return o;
   }
 
+  /**
+   * Adafruit_FT6206 capacitive touch controller. Reads the touch-capable
+   * part's controls through the host; without such a part on the canvas the
+   * controller reports "not touched". Coordinates are passed through in the
+   * controller's own space — the sketch maps them, as on real hardware.
+   */
+  private makeFt6206(): RuntimeObject {
+    const o: RuntimeObject = { __kind: 'object', className: 'Adafruit_FT6206', fields: new Map() };
+    o.fields.set('begin', { __kind: 'function', name: 'begin', native: () => 1 });
+    o.fields.set('touched', {
+      __kind: 'function',
+      name: 'touched',
+      native: () => (this.host.touchState()?.pressed ? 1 : 0),
+    });
+    o.fields.set('getPoint', {
+      __kind: 'function',
+      name: 'getPoint',
+      native: () => {
+        const t = this.host.touchState();
+        const point: RuntimeObject = { __kind: 'object', className: 'TS_Point', fields: new Map() };
+        point.fields.set('x', t?.x ?? 0);
+        point.fields.set('y', t?.y ?? 0);
+        // The real controller reports pressure; the model reports touch only.
+        point.fields.set('z', t?.pressed ? 1 : 0);
+        return point;
+      },
+    });
+    o.fields.set('readData', { __kind: 'function', name: 'readData', native: () => undefined });
+    return o;
+  }
+
+  /**
+   * Adafruit_ILI9341 TFT: accepted as an inert object. The functional engine
+   * has no TFT framebuffer, so drawing calls succeed and render nothing —
+   * the catalogue part says so plainly.
+   */
+  private makeIli9341(): RuntimeObject {
+    const o: RuntimeObject = { __kind: 'object', className: 'Adafruit_ILI9341', fields: new Map() };
+    for (const name of [
+      'begin',
+      'fillScreen',
+      'setRotation',
+      'setTextColor',
+      'setTextSize',
+      'setCursor',
+      'drawPixel',
+      'drawRect',
+      'drawLine',
+      'drawCircle',
+      'fillRect',
+      'print',
+      'println',
+    ]) {
+      o.fields.set(name, { __kind: 'function', name, native: () => undefined });
+    }
+    return o;
+  }
+
   private constructClass(className: string, args: RuntimeValue[]): RuntimeObject {
     switch (className) {
       case 'Servo':
@@ -740,6 +798,10 @@ export class Interpreter {
         return this.makeStepper(args);
       case 'DHT':
         return this.makeDht(args);
+      case 'Adafruit_FT6206':
+        return this.makeFt6206();
+      case 'Adafruit_ILI9341':
+        return this.makeIli9341();
       default: {
         // Unknown class: give it an inert instance so the sketch still runs and
         // the host can explain the limit.
@@ -1040,9 +1102,21 @@ export class Interpreter {
   private *declareVar(d: DeclInfo, env: Env): Generator<void, RuntimeValue, void> {
     let value: RuntimeValue = 0;
     if (d.type === 'object' && d.className) {
-      const args: RuntimeValue[] = [];
-      for (const e of d.ctorArgs ?? []) args.push(yield* this.eval(e, env));
-      value = this.constructClass(d.className, args);
+      // `TS_Point p = ts.getPoint();` evaluates the initialiser; only a bare
+      // `Type name(...)` or `Type name = Type(...)` constructs an instance.
+      const ctorCall =
+        d.init !== undefined &&
+        d.init.k === 'call' &&
+        d.init.callee.k === 'ident' &&
+        d.init.callee.name === d.className;
+      if (d.init !== undefined && !ctorCall) {
+        value = yield* this.eval(d.init, env);
+      } else {
+        const args: RuntimeValue[] = [];
+        const argExprs = d.ctorArgs ?? (d.init !== undefined && d.init.k === 'call' ? d.init.args : []);
+        for (const e of argExprs) args.push(yield* this.eval(e, env));
+        value = this.constructClass(d.className, args);
+      }
     } else if (d.init !== undefined) {
       value = yield* this.eval(d.init, env);
     } else if (d.isArray) {

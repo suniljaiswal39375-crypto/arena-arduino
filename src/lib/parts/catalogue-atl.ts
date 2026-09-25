@@ -1194,6 +1194,52 @@ void loop() {}
     supply: 5,
     current: 25,
   }),
+  P('ili9341-touch', 'ILI9341 TFT with FT6206 Touch', 'Display', {
+    desc: '240×320 SPI TFT with a capacitive FT6206 touch controller. The touch controller is modelled at the library level; the TFT framebuffer is not rendered.',
+    tags: ['tft', 'touch', 'touchscreen', 'spi', 'ili9341', 'ft6206', 'display'],
+    aliases: ['ili9341', 'tft touch', 'touchscreen'],
+    pins:
+      'VCC:power:l GND:ground:l CS:spi:l RESET:digital:l DC:digital:l SDI:spi:l SCK:spi:l LED:power:l T_IRQ:digital:r SDA:i2c:r SCL:i2c:r',
+    adapter: 'static',
+    tier: 'model',
+    wokwi: 'wokwi-ili9341',
+    controls: [
+      SENSOR_INPUT('touchX', 'Touch X', 0, 239, 0, 'px'),
+      SENSOR_INPUT('touchY', 'Touch Y', 0, 319, 0, 'px'),
+      { id: 'touchPressed', label: 'Touching', kind: 'toggle', default: 0 },
+    ],
+    defaults: { sensor: 'ft6206', touchWidth: 240, touchHeight: 320 },
+    wiring: [
+      'VCC → 3.3 V, GND → GND',
+      'Display SPI: CS/DC/SDI/SCK/RESET to the board SPI pins',
+      'Touch: SDA → A4, SCL → A5 (FT6206 I2C); T_IRQ to any digital pin',
+    ],
+    sketch: `#include <Adafruit_FT6206.h>
+
+Adafruit_FT6206 ts = Adafruit_FT6206();
+
+void setup() {
+  Serial.begin(9600);
+  ts.begin();
+}
+
+void loop() {
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    Serial.print("touch ");
+    Serial.print(p.x);
+    Serial.print(" ");
+    Serial.println(p.y);
+    delay(200);
+  }
+  delay(20);
+}
+`,
+    supply: 3.3,
+    current: 120,
+    notes:
+      'MODEL: ts.begin()/touched()/getPoint() read the part\'s Touch X / Touch Y / Touching controls. Coordinates are the controller\'s own space (0-239 × 0-319), passed through exactly as set — the sketch maps them, as on real hardware. Adafruit_ILI9341 drawing calls are accepted but draw nothing: there is no TFT framebuffer.',
+  }),
   P('leds-assorted', 'LEDs Assorted Colours', 'Display', {
     desc: 'The mixed bag of red, green, yellow, blue and white LEDs from the ATL kit.',
     tags: ['led', 'kit', 'output'],

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MqttBroker } from '@/lib/mqtt/broker';
+import { createProject, makePart } from '@/lib/doc/factory';
+import type { ProjectDoc } from '@/lib/doc/types';
 import { parseDuration, parseScenario, scenarioToYaml } from './parse';
 import { resolveControl, runScenario } from './runner';
 import { SEED_SCENARIOS, projectForScenario } from './seed';
@@ -228,5 +230,95 @@ describe('publish-mqtt step', () => {
     );
     expect(result.passed).toBe(false);
     expect(result.failure?.message).toContain('wildcards');
+  });
+});
+
+describe('touch steps', () => {
+  function touchProject(): { doc: ProjectDoc; sketch: string; tftId: string; unoId: string } {
+    const doc = createProject();
+    const uno = makePart('arduino-uno', 100, 100);
+    const tft = makePart('ili9341-touch', 320, 90);
+    doc.diagram.parts.push(uno, tft);
+    const sketch = `#include <Adafruit_FT6206.h>
+Adafruit_FT6206 ts = Adafruit_FT6206();
+void setup() { Serial.begin(9600); ts.begin(); }
+void loop() {
+  if (ts.touched()) {
+    TS_Point p = ts.getPoint();
+    Serial.print("T ");
+    Serial.print(p.x);
+    Serial.print(" ");
+    Serial.println(p.y);
+    delay(100);
+  }
+  delay(20);
+}
+`;
+    return { doc, sketch, tftId: tft.id, unoId: uno.id };
+  }
+
+  it('parses touch with defaults and explicit duration/wait', () => {
+    const a = parseScenario('steps:\n  - touch: { part-id: tft, x: 10, y: 20 }\n');
+    expect(a.steps[0]).toEqual({ kind: 'touch', partId: 'tft', x: 10, y: 20, durationMs: 50, wait: false });
+    const b = parseScenario('steps:\n  - touch:\n      part-id: tft\n      x: 10\n      y: 20\n      duration: 200ms\n      wait: true\n');
+    expect(b.steps[0]).toEqual({ kind: 'touch', partId: 'tft', x: 10, y: 20, durationMs: 200, wait: true });
+    const c = parseScenario('steps:\n  - touch-release: tft\n');
+    expect(c.steps[0]).toEqual({ kind: 'touch-release', partId: 'tft' });
+  });
+
+  it('presses and releases so the sketch sees the touch', () => {
+    const { doc, sketch, tftId } = touchProject();
+    const result = runScenario(
+      doc,
+      parseScenario(`name: touch it
+steps:
+  - touch: { part-id: ${tftId}, x: 120, y: 160 }
+  - wait-serial: { text: "T 120 160", timeout: 2s }
+`),
+      sketch,
+    );
+    expect(result.passed).toBe(true);
+    expect(result.steps[0]?.message).toContain('touched');
+  });
+
+  it('supports press/move/release gestures', () => {
+    const { doc, sketch, tftId } = touchProject();
+    const result = runScenario(
+      doc,
+      parseScenario(`name: drag
+steps:
+  - touch-press: { part-id: ${tftId}, x: 50, y: 100 }
+  - wait-serial: { text: "T 50 100", timeout: 2s }
+  - touch-move: { part-id: ${tftId}, x: 150, y: 100 }
+  - delay: 150ms
+  - wait-serial: { text: "T 150 100", timeout: 2s }
+  - touch-release: { part-id: ${tftId} }
+  - delay: 300ms
+`),
+      sketch,
+    );
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails on out-of-range coordinates and non-touch parts', () => {
+    const { doc, sketch, tftId, unoId } = touchProject();
+    const out = runScenario(
+      doc,
+      parseScenario(`name: bad coords
+steps:
+  - touch: { part-id: ${tftId}, x: 500, y: 0 }
+`),
+      sketch,
+    );
+    expect(out.passed).toBe(false);
+    expect(out.failure?.message).toContain('outside 0..240');
+
+    const wrongPart = runScenario(
+      doc,
+      parseScenario(`name: wrong part\nsteps:\n  - touch: { part-id: ${unoId}, x: 5, y: 5 }\n`),
+      sketch,
+    );
+    expect(wrongPart.passed).toBe(false);
+    expect(wrongPart.failure?.message).toContain('not touch-capable');
   });
 });

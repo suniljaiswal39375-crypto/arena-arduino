@@ -1211,6 +1211,21 @@ export class Circuit implements SimHost {
     return this.doc.sim.inputs[kindOf] ?? 0;
   }
 
+  /**
+   * The FT6206 touch controller's state, read from the touch-capable part's
+   * controls (Touch X / Touch Y / Touching). Returns null when the canvas has
+   * no such part, so library models can report "not touched" honestly.
+   */
+  touchState(): { x: number; y: number; pressed: boolean } | null {
+    const inst = this.doc.diagram.parts.find((p) => getPart(p.type)?.defaults?.sensor === 'ft6206');
+    if (!inst) return null;
+    return {
+      x: Math.round(this.inputValue(inst, 'touchX')),
+      y: Math.round(this.inputValue(inst, 'touchY')),
+      pressed: this.inputValue(inst, 'touchPressed') !== 0,
+    };
+  }
+
   attachInterrupt(pin: number, mode: string, handler: () => void): void {
     const target = this.interruptPin(pin);
     this.interrupts.set(target, { mode, handler, last: this.levelOfPin(target) });

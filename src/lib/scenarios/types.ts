@@ -38,6 +38,18 @@ export type ScenarioStep =
    * The pattern is level segments: "H 1ms; L 500us; H *".
    */
   | { kind: 'assert-vcd-pattern'; partId: string; channel: number; pattern: string; tolerance?: number; vcd?: string }
+  /**
+   * Press a touch-capable part at (x, y) in the controller's coordinate
+   * space, hold for `durationMs` (default 50), then release. `wait` is
+   * accepted for Wokwi compatibility; the virtual clock makes it a no-op.
+   */
+  | { kind: 'touch'; partId: string; x: number; y: number; durationMs: number; wait: boolean }
+  /** Low-level touch: press (and stay pressed). */
+  | { kind: 'touch-press'; partId: string; x: number; y: number }
+  /** Low-level touch: move while pressed. */
+  | { kind: 'touch-move'; partId: string; x: number; y: number }
+  /** Low-level touch: release. */
+  | { kind: 'touch-release'; partId: string }
   /** Spec extension: run a block of steps several times. */
   | { kind: 'repeat'; times: number; steps: ScenarioStep[] };
 
