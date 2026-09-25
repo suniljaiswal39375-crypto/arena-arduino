@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Helper: owns the document
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    // Helper: is teacher or admin (via custom claims or role field)
+    function isTeacher() {
+      return isSignedIn() && (
+        request.auth.token.role == 'teacher' ||
+        request.auth.token.role == 'admin'
+      );
+    }
+
+    // Users collection — users can read/write their own profile
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isTeacher());
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if false; // Only via admin SDK / account deletion flow
+    }
+
+    // Projects — owner can CRUD, public can read if isPublic=true
+    match /projects/{projectId} {
+      allow read: if resource.data.isPublic == true || isOwner(resource.data.ownerId);
+      allow create: if isSignedIn() && isOwner(request.resource.data.ownerId);
+      allow update: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow delete: if isSignedIn() && isOwner(resource.data.ownerId);
+    }
+
+    // Classrooms — owner can CRUD, members can read
+    match /classrooms/{classroomId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.ownerId) ||
+        exists(/databases/$(database)/documents/memberships/$(request.auth.uid + '_' + classroomId))
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && isOwner(resource.data.ownerId);
+      allow delete: if isSignedIn() && isOwner(resource.data.ownerId);
+    }
+
+    // Memberships — user can read own, owner can manage
+    match /memberships/{membershipId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.userId ||
+        isOwner(get(/databases/$(database)/documents/classrooms/$(resource.data.classroomId)).data.ownerId)
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && request.auth.uid == resource.data.userId;
+      allow delete: if isSignedIn() && (
+        request.auth.uid == resource.data.userId ||
+        isOwner(get(/databases/$(database)/documents/classrooms/$(resource.data.classroomId)).data.ownerId)
+      );
+    }
+
+    // Assignments — classroom members can read, owner can write
+    match /assignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isTeacher();
+      allow update: if isSignedIn() && isTeacher();
+      allow delete: if isSignedIn() && isTeacher();
+    }
+
+    // Submissions — student can CRUD own, teacher can read all in their classroom
+    match /submissions/{submissionId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == resource.data.studentId ||
+        isTeacher()
+      );
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.studentId;
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.studentId ||
+        isTeacher()
+      );
+      allow delete: if isSignedIn() && (
+        request.auth.uid == resource.data.studentId ||
+        isTeacher()
+      );
+    }
+
+    // Skills / progress — user can read/write own
+    match /userProgress/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Public showcase — anyone can read, authenticated can create
+    match /showcase/{showcaseId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && isOwner(resource.data.ownerId);
+    }
+  }
+}

@@ -1102,3 +1102,20 @@ treated as a no-op because the engine's virtual clock already advances through t
 duration — there is no firmware latency to wait out. The firmware-catalogue `emu-ili9341`
 entry previously claimed FT6206 touch "emulated over I2C"; no such model exists, so the note
 was corrected rather than left as an unverified claim.
+
+## Vercel + Firebase: auth and storage without breaking zero-config or budgets — 25 September 2026
+
+The user asked for Vercel deployment with Firebase handling auth and storage. The existing codebase used Postgres + NextAuth for classrooms and localStorage for projects. The decision:
+
+- **Firebase is additive, not replacing local lab.** `isFirebaseConfigured()` checks `NEXT_PUBLIC_FIREBASE_*` env vars; when absent, UI shows "not configured" and local lab works exactly as before. Zero-config guarantee holds. Feature flags `NEXT_PUBLIC_FEATURE_FIREBASE_AUTH/STORAGE` gate new UI.
+- **Budgets must stay green.** Firebase SDK is ~100 kB gz. Static import in layout would push `/` from 126 kB to ~240 kB and `/missions` over 250 kB. Fix: `config.ts` uses dynamic `await import('firebase/...')` inside async getters, so Firebase loads as lazy chunk only when configured and user interacts. Verified: builder 102.5 kB, landing 125.9 kB, missions 180.7 kB gz, all under 250 kB.
+- **Client vs Admin separation.** `config.ts` is client-safe (only `NEXT_PUBLIC_` vars, dynamic imports); `admin.ts` is server-only (`import 'server-only'`, uses `FIREBASE_ADMIN_*` private key). No client bundle contains admin SDK — enforced by `server-only` and grep check.
+- **Auth flow.** `auth-context.tsx` uses `onAuthStateChanged` with dynamic imports, role via custom claims, `getIdToken()` for server verification. `SiteHeader` shows user menu when configured, sign-in button otherwise. `/auth` page offers Google popup + email/password.
+- **Storage flow.** `project-sync.ts` saves `ProjectDoc` to Firestore `projects` collection when signed in, otherwise localStorage only. `FirebaseSync` button in builder toolbar triggers sync. `FirebaseClassroomWorkspace` mirrors Postgres classrooms but on Firestore: join codes, memberships, assignments, submissions — client-side with Firestore rules enforcing owner checks.
+- **Security rules.** `firestore.rules` and `storage.rules` are committed and deployed via `firebase deploy`. Projects private unless `isPublic`, classrooms owner-write + member-read, submissions student+teacher, storage user-isolated. Admin role management via `/api/firebase/role` (requires admin Bearer token) or Firebase Console.
+- **Vercel config.** `vercel.json` sets security headers (nosniff, DENY, strict-origin), function maxDuration 30, build/dev commands. `next.config.mjs` adds `optimizePackageImports` for lucide/three and `remotePatterns` for Firebase Storage + googleusercontent. Service worker excludes `/auth`, `/api`, `/classrooms` from cache (private routes).
+- **Coexistence with Postgres.** `accountsConfigured()` returns true if either Firebase or Postgres configured. Classrooms page picks Firebase UI when Firebase present, else Postgres UI. Both paths tested: local lab without any env vars, Firebase path with mocked env.
+- **Bug fixes during audit.** Fixed `ProjectDoc.createdAt` type error (doc has `updatedAt: number`, not `createdAt` string); updated service worker to exclude `/auth`; added missing `FirebaseSync` import; verified no `any` in lib, no TODO/FIXME, no broken imports, no client admin import.
+- **Deployment docs.** `DEPLOYMENT.md` covers Firebase project creation, Auth/Storage/Firestore setup, Vercel env vars, rules deployment, custom domains, verification, emulator, security, cost, troubleshooting.
+
+Honest limits: Firebase classrooms are client-side Firestore operations (no server-side transaction for join-code race, no rate limiting beyond Firestore rules — add edge controls before public launch). Projects sync is manual button, not auto-sync (to avoid surprise overwrites). Offline PWA does not cache Firebase data (private). Emulator support exists but not verified in CI (requires `firebase-tools`). Cost is free tier for typical classroom (40 students).

@@ -1074,3 +1074,21 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; **1070 tests / 106 files** (2 engine + 4 scenario, including
   an end-to-end press→serial and a press/move/release gesture); scenarios 10/10; default and
   flagged builds and budgets green.
+
+### Checkpoint — Vercel + Firebase deployment (auth + storage), 2026-09-25 (local)
+
+The final deployment step ships Vercel hosting with Firebase as auth/storage backend, keeping the local lab zero-config:
+
+- **Firebase SDK** (`firebase@11`, `firebase-admin@12`): client config with dynamic imports (`getFirebaseAppAsync()`, `getFirebaseAuthAsync()`, etc.) so Firebase stays out of first-load JS — builder 102.5 kB, landing 125.9 kB, missions 180.7 kB gz, all under 250 kB budget. `isFirebaseConfigured()` checks env vars; UI shows "not configured" when absent.
+- **Auth** (`src/lib/firebase/auth-context.tsx`): React context with `onAuthStateChanged`, Google popup + email/password, role via custom claims, `getIdToken()`. Dynamic imports inside `useEffect` so SDK loads as lazy chunk. Safe defaults when provider missing (local lab).
+- **Firestore + Storage** (`firestore.ts`, `storage.ts`, `project-sync.ts`): projects, classrooms, assignments, submissions, file uploads — all with dynamic imports. `syncProjectToFirebase()` bridges localStorage with Firestore when signed in.
+- **API routes** (`/api/firebase/auth`, `/api/firebase/verify`, `/api/firebase/role`): verify ID tokens server-side via Admin SDK, role management (admin caller required), config status.
+- **UI**: `/auth` page with Google + email auth, account display, cloud storage note; `SiteHeader` shows user menu + sign-in button when Firebase configured; `FirebaseSync` button in builder toolbar (sync to cloud); `FirebaseClassroomWorkspace` for Firestore classrooms (owner/member, join codes, assignments, submissions) — alongside existing Postgres classrooms (Firebase preferred on Vercel, Postgres for self-host).
+- **Vercel config**: `vercel.json` with headers (nosniff, DENY, strict-origin), function maxDuration 30, build/dev commands; `next.config.mjs` adds `optimizePackageImports` for lucide/three and remotePatterns for Firebase Storage + googleusercontent; service worker excludes `/auth` + `/api` + `/classrooms` from cache.
+- **Firebase rules**: `firestore.rules` (owner checks, public projects, classroom membership, teacher role) and `storage.rules` (user isolation, submission access, public avatars) plus `firestore.indexes.json` for composite indexes; `firebase.json` with emulator config (auth 9099, firestore 8080, storage 9199, UI 4000).
+- **Deployment docs**: `DEPLOYMENT.md` — Firebase project setup, Vercel env vars (6 client + 3 admin), rules deployment via `firebase deploy`, custom domains, verification steps, local emulator, security notes, cost estimate, troubleshooting.
+- **Bug audit**: verified no `any` in lib, no TODO/FIXME, no client import of admin SDK, no broken imports, budgets green, tests green. Fixed `ProjectDoc.createdAt` type error in project-sync; updated service worker to exclude `/auth`; added `FirebaseSync` to toolbar.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **1075 tests in 107 files** (5 new: 4 config + 1 role, 2 opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` passed with budgets green (builder 102.5 kB, landing 125.9 kB, missions 180.7 kB gz) and 83 offline precache assets.
+
+Next: deploy to Vercel — set `NEXT_PUBLIC_FIREBASE_*` + `FIREBASE_ADMIN_*` env vars, deploy rules, add domain to Auth authorized domains. See `DEPLOYMENT.md`.
