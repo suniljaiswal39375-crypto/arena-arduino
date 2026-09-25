@@ -909,3 +909,13 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; **1015 tests / 98 files** (6 new: Y.Text round trip, localised
   delta, rebase fallback, legacy upgrade, add/delete, concurrent same-file merge through two
   live sessions); scenarios 10/10; production build and budgets green (builder 102.4 kB gz).
+
+### Checkpoint — Hindi builder chrome (Chaos Lab, export/import, inspector, code pane), 2026-09-25 (local)
+
+- The four builder surfaces still carrying hardcoded English — Chaos Lab rail, export/import
+  menu, inspector headings, code pane labels — now use the message catalogue (~40 new keys,
+  EN + HI, placeholder parity enforced). Challenge stories, part names, live-state readouts and
+  diagnostics stay English as authored/generated content, and the `partial` honesty banner now
+  lists exactly those categories.
+- Verification: strict typecheck; **1018 tests / 98 files** (3 new Hindi render tests); scenarios
+  10/10; production build and budgets green (home 122.4 kB gz, +1.4 kB from the new strings).

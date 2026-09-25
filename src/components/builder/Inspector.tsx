@@ -1,6 +1,7 @@
 'use client';
 
 import { useLab } from '@/store/lab';
+import { useI18n } from '@/lib/i18n/client';
 import { getPart } from '@/lib/parts';
 import { ELECTRICAL_LABEL } from '@/lib/parts/types';
 import type { AttrValue } from '@/lib/doc/types';
@@ -11,6 +12,7 @@ import { AlertTriangle, Info, XOctagon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 export function Inspector({ states }: { states: Record<string, PartState> }) {
+  const { t } = useI18n();
   const doc = useLab((s) => s.doc);
   const selection = useLab((s) => s.selection);
   const diagnostics = useLab((s) => s.diagnostics);
@@ -22,7 +24,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
   if (!inst || !def) {
     return (
       <div className="p-3 text-[13px] text-[var(--color-text-dim)]">
-        Select a part to see its pins, attributes and fidelity note.
+        {t('inspectorEmpty')}
       </div>
     );
   }
@@ -53,7 +55,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
       {state && state.kind !== 'none' && (
         <div className="panel-2 px-2.5 py-2">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-faint)]">
-            Live state
+            {t('liveState')}
           </div>
           <div className="mono mt-0.5 text-[12.5px]">{describeState(state)}</div>
         </div>
@@ -62,7 +64,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
       {def.pins.length > 0 && (
         <div>
           <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-faint)]">
-            Pins
+            {t('pins')}
           </div>
           <table className="w-full text-[11.5px]">
             <tbody>
@@ -82,7 +84,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
       {def.controls.length > 0 && (
         <div>
           <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-faint)]">
-            Attributes
+            {t('attributes')}
           </div>
           <div className="space-y-2">
             {def.controls.map((c) => {
@@ -116,7 +118,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
       {faults.length > 0 && (
         <div className="space-y-1.5">
           <div className="text-[10.5px] uppercase tracking-wide text-[var(--color-text-faint)]">
-            Findings
+            {t('findings')}
           </div>
           {faults.map((f) => (
             <div
@@ -151,7 +153,7 @@ export function Inspector({ states }: { states: Record<string, PartState> }) {
       {def.docs.wiring.length > 0 && (
         <div>
           <div className="mb-1 text-[10.5px] uppercase tracking-wide text-[var(--color-text-faint)]">
-            Typical wiring
+            {t('typicalWiring')}
           </div>
           <ul className="space-y-0.5 text-[11.5px] text-[var(--color-text-dim)]">
             {def.docs.wiring.map((w) => (

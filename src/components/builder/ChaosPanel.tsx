@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useLab } from '@/store/lab';
+import { useI18n } from '@/lib/i18n/client';
 import { checkRepair, type ChaosChallenge, type ChaosVerdict } from '@/lib/chaos/chaos';
 import { loadProgress, recordChaosSolve, saveProgress } from '@/lib/skills';
 import { CheckCircle2, Flame, Lightbulb, RotateCcw, Stethoscope } from 'lucide-react';
@@ -12,6 +13,7 @@ import { CheckCircle2, Flame, Lightbulb, RotateCcw, Stethoscope } from 'lucide-r
  * absence of warnings.
  */
 export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge; onRestart: () => void }) {
+  const { t } = useI18n();
   const doc = useLab((s) => s.doc);
   const [hintsShown, setHintsShown] = useState(0);
   const [verdict, setVerdict] = useState<ChaosVerdict | null>(null);
@@ -44,13 +46,13 @@ export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         <section>
-          <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">Hints</h4>
+          <h4 className="text-[11.5px] font-semibold uppercase tracking-wide text-[var(--color-text-faint)]">{t('chaosHints')}</h4>
           <ol className="mt-1.5 space-y-2">
             {challenge.hints.slice(0, hintsShown).map((h, i) => (
               <li key={h} className="panel-2 flex gap-2 p-2.5 text-[12.5px] leading-relaxed">
                 <Lightbulb size={14} className="mt-0.5 shrink-0 text-[var(--color-warn)]" />
                 <span>
-                  <span className="font-semibold">Hint {i + 1}. </span>
+                  <span className="font-semibold">{t('chaosHintPrefix', { count: i + 1 })} </span>
                   {h}
                 </span>
               </li>
@@ -58,16 +60,16 @@ export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge
           </ol>
           {hintsShown < challenge.hints.length ? (
             <button type="button" className="btn btn-sm mt-2" onClick={() => setHintsShown((n) => n + 1)}>
-              <Lightbulb size={13} /> {hintsShown === 0 ? 'I need a hint' : 'Another hint'}
+              <Lightbulb size={13} /> {hintsShown === 0 ? t('chaosNeedHint') : t('chaosAnotherHint')}
             </button>
           ) : (
-            <p className="mt-2 text-[11.5px] text-[var(--color-text-faint)]">That is every hint.</p>
+            <p className="mt-2 text-[11.5px] text-[var(--color-text-faint)]">{t('chaosAllHints')}</p>
           )}
         </section>
 
         {verdict && !verdict.fixed && (
           <section className="rounded-md border border-[#55262c] bg-[#2a1418] p-3" role="status">
-            <p className="text-[12.5px] font-semibold text-[var(--color-fault)]">Not fixed yet</p>
+            <p className="text-[12.5px] font-semibold text-[var(--color-fault)]">{t('chaosNotFixed')}</p>
             <ul className="mt-1 list-disc space-y-1 pl-4 text-[12px] text-[var(--color-text-dim)]">
               {verdict.remaining.map((r) => (
                 <li key={r}>{r}</li>
@@ -79,11 +81,11 @@ export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge
         {verdict?.fixed && (
           <section className="rounded-md border border-[#1f4d3a] bg-[#10261c] p-3" role="status">
             <p className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-ok)]">
-              <CheckCircle2 size={15} /> Fixed. It works again.
+              <CheckCircle2 size={15} /> {t('chaosFixed')}
             </p>
             <p className="mt-2 text-[12.5px] leading-relaxed">{challenge.answer}</p>
             <p className="mt-2 text-[11.5px] text-[var(--color-text-faint)]">
-              Recorded as evidence for {challenge.skills.join(', ')}.
+              {t('chaosRecorded', { skills: challenge.skills.join(', ') })}
             </p>
           </section>
         )}
@@ -91,7 +93,7 @@ export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge
 
       <div className="flex gap-2 border-t border-[var(--color-border)] p-2.5">
         <button type="button" className="btn btn-primary flex-1" onClick={check} disabled={checking}>
-          <Stethoscope size={14} /> {checking ? 'Checking…' : 'Check my fix'}
+          <Stethoscope size={14} /> {checking ? t('chaosChecking') : t('chaosCheck')}
         </button>
         <button
           type="button"
@@ -102,8 +104,8 @@ export function ChaosPanel({ challenge, onRestart }: { challenge: ChaosChallenge
             setRecorded(false);
             onRestart();
           }}
-          aria-label="Restart the challenge"
-          title="Restart the challenge"
+          aria-label={t('chaosRestart')}
+          title={t('chaosRestart')}
         >
           <RotateCcw size={14} />
         </button>

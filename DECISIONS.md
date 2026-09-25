@@ -980,3 +980,25 @@ store bridge emits *localised* deltas instead of whole replacements.
   rebase, legacy upgrade, add/delete files, concurrent same-file merge through two CollabSessions)
   on top of the existing convergence suites: 1015 passed / 2 skipped, scenarios 10/10, budgets
   unchanged.
+
+## Hindi remainder: builder chrome now translated, honesty note widened — 25 September 2026
+
+The Phase-15 Hindi slice had left four builder surfaces with hardcoded English: the Chaos Lab
+rail, the export/import controls, the inspector headings and the code pane labels. They now go
+through the message catalogue (~40 new keys, EN + HI, placeholder parity enforced by the existing
+catalogue test): hint ladder buttons, repair-check states, every export format label and hint,
+import notices (including the skipped-parts warnings), inspector section headings and empty
+state, the sketch textarea label, the editor-loading and offline-editor notices.
+
+What stays English, and says so: the `partial` honesty banner (shown whenever the UI runs in
+Hindi) now names the remaining categories explicitly — component names, challenge stories,
+live-state readouts, skill descriptions and diagnostic explanations. These are authored or
+generated content (96 kit + 75 emulator part entries, 8 chaos challenges, 15 ERC diagnostics);
+translating them is a content project, not a chrome pass, and claiming otherwise would break the
+honesty rule. One copy change: the Wokwi-zip skipped-parts notice no longer inflects "it was /
+they were" — plural inflection is locale-shaped, so the sentence reads "those parts were left
+out" in both languages.
+
+Verification: 3 new Hindi render tests (export/import + file input aria, empty inspector, chaos
+panel chrome around English challenge content) on top of the catalogue parity tests — suite at
+1018 passed / 2 skipped; scenarios 10/10; budgets green (home +1.4 kB gz from the new strings).

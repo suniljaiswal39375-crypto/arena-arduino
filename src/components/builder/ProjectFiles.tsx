@@ -2,6 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { useLab } from '@/store/lab';
+import { useI18n } from '@/lib/i18n/client';
+import type { MessageKey } from '@/lib/i18n/messages';
 import { importProjectJSON } from '@/lib/doc/persistence';
 import { toWokwiDiagram, fromWokwiDiagram, type WokwiDiagram } from '@/lib/interop/wokwi';
 import { wokwiZip, importWokwiZip } from '@/lib/interop/bundle';
@@ -28,6 +30,7 @@ function download(name: string, content: string | Uint8Array, type: string): voi
  * than silently dropped.
  */
 export function ProjectFiles() {
+  const { t } = useI18n();
   const doc = useLab((s) => s.doc);
   const loadDoc = useLab((s) => s.loadDoc);
   const [open, setOpen] = useState(false);
@@ -35,33 +38,33 @@ export function ProjectFiles() {
   const fileInput = useRef<HTMLInputElement>(null);
   const base = slugify(doc.name);
 
-  const exports: Array<{ label: string; hint: string; run: () => void }> = [
+  const exports: Array<{ label: MessageKey; hint: MessageKey; run: () => void }> = [
     {
-      label: 'Wokwi project (.zip)',
-      hint: 'diagram.json + sketch.ino + libraries.txt',
+      label: 'exportWokwiZip',
+      hint: 'exportWokwiZipHint',
       run: () => {
         const { bytes, skipped } = wokwiZip(doc);
         download(`${base}-wokwi.zip`, bytes, 'application/zip');
         setNotice(
           skipped.length
-            ? { tone: 'warn', text: `Wokwi has no model for ${skipped.join(', ')}, so ${skipped.length === 1 ? 'it was' : 'they were'} left out of the zip.` }
-            : { tone: 'ok', text: 'Exported. Upload the zip on wokwi.com or run it with wokwi-cli.' },
+            ? { tone: 'warn', text: t('exportWokwiSkipped', { parts: [...new Set(skipped)].join(', ') }) }
+            : { tone: 'ok', text: t('exportWokwiDone') },
         );
       },
     },
     {
-      label: 'diagram.json',
-      hint: 'Wokwi diagram only',
+      label: 'exportDiagram',
+      hint: 'exportDiagramHint',
       run: () => download('diagram.json', `${JSON.stringify(toWokwiDiagram(doc).diagram, null, 2)}\n`, 'application/json'),
     },
-    { label: 'sketch.ino', hint: 'Open in the Arduino IDE', run: () => download('sketch.ino', doc.files['sketch.ino'] ?? '', 'text/plain') },
+    { label: 'exportSketch', hint: 'exportSketchHint', run: () => download('sketch.ino', doc.files['sketch.ino'] ?? '', 'text/plain') },
     {
-      label: 'SparkLab project (.json)',
-      hint: 'Everything, losslessly',
+      label: 'exportSparklab',
+      hint: 'exportSparklabHint',
       run: () => download(`${base}.sparklab.json`, JSON.stringify(doc, null, 2), 'application/json'),
     },
-    { label: 'KiCad netlist (.net)', hint: 'For PCB layout', run: () => download(`${base}.net`, kicadNetlist(doc), 'text/plain') },
-    { label: 'Bill of materials (.csv)', hint: 'For ordering parts', run: () => download(`${base}-bom.csv`, bomCsv(doc), 'text/csv') },
+    { label: 'exportKicad', hint: 'exportKicadHint', run: () => download(`${base}.net`, kicadNetlist(doc), 'text/plain') },
+    { label: 'exportBom', hint: 'exportBomHint', run: () => download(`${base}-bom.csv`, bomCsv(doc), 'text/csv') },
   ];
 
   const importFile = async (file: File): Promise<void> => {
@@ -69,7 +72,7 @@ export function ProjectFiles() {
       if (file.name.endsWith('.zip')) {
         const { doc: imported, unknownParts } = importWokwiZip(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.zip$/, ''));
         loadDoc(imported);
-        setNotice(importNotice(unknownParts.map((p) => p.type)));
+        setNotice(importNotice(t, unknownParts.map((p) => p.type)));
         return;
       }
       const text = await file.text();
@@ -78,25 +81,25 @@ export function ProjectFiles() {
         const { doc: imported, unknownParts } = fromWokwiDiagram(parsed as WokwiDiagram, undefined, file.name.replace(/\.json$/, ''));
         imported.files['sketch.ino'] = doc.files['sketch.ino'] ?? imported.files['sketch.ino'] ?? '';
         loadDoc(imported);
-        setNotice(importNotice(unknownParts.map((p) => p.type), 'Your current sketch was kept.'));
+        setNotice(importNotice(t, unknownParts.map((p) => p.type), t('importKeptSketch')));
         return;
       }
       const project = importProjectJSON(text);
-      if (!project) throw new Error('This file is not a SparkLab project or a Wokwi diagram.');
+      if (!project) throw new Error(t('importBadFile'));
       loadDoc(project);
-      setNotice({ tone: 'ok', text: `Opened ${project.name}.` });
+      setNotice({ tone: 'ok', text: t('importOpened', { name: project.name }) });
     } catch (err) {
-      setNotice({ tone: 'error', text: (err as Error).message || 'Could not read that file.' });
+      setNotice({ tone: 'error', text: (err as Error).message || t('importReadError') });
     }
   };
 
   return (
     <div className="relative flex items-center gap-1.5" onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); setNotice(null); e.stopPropagation(); e.currentTarget.querySelector('button')?.focus(); } }}>
       <button type="button" className="btn btn-sm" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Download size={13} /> Export
+        <Download size={13} /> {t('export')}
       </button>
       <button type="button" className="btn btn-sm" onClick={() => fileInput.current?.click()}>
-        <Upload size={13} /> Import
+        <Upload size={13} /> {t('import')}
       </button>
       <input
         ref={fileInput}
@@ -104,7 +107,7 @@ export function ProjectFiles() {
         tabIndex={-1}
         accept=".json,.zip,application/json,application/zip"
         className="sr-only"
-        aria-label="Import a SparkLab project, a Wokwi diagram.json or a Wokwi project zip"
+        aria-label={t('importAria')}
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) void importFile(f);
@@ -124,8 +127,8 @@ export function ProjectFiles() {
                 setOpen(false);
               }}
             >
-              <span className="block text-[12.5px] font-medium">{x.label}</span>
-              <span className="block text-[11px] text-[var(--color-text-dim)]">{x.hint}</span>
+              <span className="block text-[12.5px] font-medium">{t(x.label)}</span>
+              <span className="block text-[11px] text-[var(--color-text-dim)]">{t(x.hint)}</span>
             </button>
           ))}
         </div>
@@ -145,7 +148,7 @@ export function ProjectFiles() {
         >
           {notice.text}
           <button type="button" className="ml-2 underline" onClick={() => setNotice(null)}>
-            Dismiss
+            {t('dismiss')}
           </button>
         </div>
       )}
@@ -153,8 +156,10 @@ export function ProjectFiles() {
   );
 }
 
-function importNotice(unknown: string[], extra = ''): { tone: 'ok' | 'warn'; text: string } {
-  if (unknown.length === 0) return { tone: 'ok', text: `Imported. ${extra}`.trim() };
+type Translator = (key: MessageKey, values?: Record<string, string | number>) => string;
+
+function importNotice(t: Translator, unknown: string[], extra = ''): { tone: 'ok' | 'warn'; text: string } {
+  if (unknown.length === 0) return { tone: 'ok', text: `${t('importDone')} ${extra}`.trim() };
   const names = [...new Set(unknown)].join(', ');
-  return { tone: 'warn', text: `Imported, but SparkLab has no model for ${names}; those parts and their wires were skipped. ${extra}`.trim() };
+  return { tone: 'warn', text: `${t('importSkipped', { parts: names })} ${extra}`.trim() };
 }

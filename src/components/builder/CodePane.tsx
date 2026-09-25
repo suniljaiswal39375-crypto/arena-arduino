@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useEffect, useRef, useState } from 'react';
 import { loader } from '@monaco-editor/react';
 import { useLab } from '@/store/lab';
+import { useI18n } from '@/lib/i18n/client';
 
 loader.config({ paths: { vs: '/vendor/monaco/vs' } });
 
@@ -16,6 +17,7 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
 const MONACO_TIMEOUT_MS = 7000;
 
 export function CodePane() {
+  const { t } = useI18n();
   const doc = useLab((s) => s.doc);
   const setFile = useLab((s) => s.setFile);
   const [file, setActiveFile] = useState('sketch.ino');
@@ -56,7 +58,7 @@ export function CodePane() {
           </button>
         ))}
         <span className="ml-auto pr-1 text-[10.5px] text-[var(--color-text-faint)]">
-          {fallback ? 'offline editor' : 'Monaco'}
+          {fallback ? t('editorOffline') : 'Monaco'}
         </span>
       </div>
 
@@ -97,6 +99,7 @@ function PlainEditor({
   value: string;
   onChange: (next: string) => void;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const lines = value.split('\n').length;
 
@@ -129,16 +132,17 @@ function PlainEditor({
           }
         }}
         className="mono min-h-0 flex-1 resize-none bg-transparent px-3 py-2.5 text-[12.5px] leading-[1.55] text-[#e6edf3] outline-none"
-        aria-label="Sketch source"
+        aria-label={t('sketchSource')}
       />
     </div>
   );
 }
 
 function EditorSkeleton() {
+  const { t } = useI18n();
   return (
     <div className="flex h-full items-center justify-center text-[12px] text-[var(--color-text-faint)]">
-      Loading editor…
+      {t('editorLoading')}
     </div>
   );
 }
