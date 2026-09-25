@@ -25,6 +25,8 @@ export function firmwareSnapshotAsSim(snapshot: FirmwareSnapshot, loadError: Sim
     clockUs: snapshot.clockUs,
     parts: snapshot.parts,
     serial: snapshot.serial,
+    serialTotal: snapshot.serialTotal,
+    serialDropped: snapshot.serialDropped,
     plot: snapshot.plot,
     plotLabels: snapshot.plotLabels,
     logicAnalyzers: snapshot.logicAnalyzers,

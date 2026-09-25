@@ -239,8 +239,12 @@ AI feature that talks without touching the simulator.
    `e2e/menus.spec.ts`. A combobox primitive waits for a real consumer (the palette search is a
    plain filter today). Screen-reader verification still runs only in the CI browser job.
 4. **Keyboard wiring and a text connection table are shipped.** Precise pointer-free placement and screen-reader testing remain (see `/accessibility`).
-5. **The serial log is capped at 600 lines** in memory; the scenario runner reads a lifetime counter
-   so it never misses a line, but the Serial panel loses its earliest output on long runs.
+5. **The Serial panel keeps a 2 000-line session transcript.** The engines still cap their own
+   window (the worker cannot grow unbounded), but the sim client folds each window into a session
+   view keyed on the engine's lifetime line counter, so ordinary long runs keep their full history;
+   the scenario runner was never affected (it reads the lifetime counter). Lines that fall off the
+   view cap — or that were printed between two snapshots — are counted and surfaced as an honest
+   "earlier output cleared" note (EN + HI) instead of vanishing silently.
 6. **Wokwi export ships its own logic chips and stays honest about the rest.** The three shipped
    chips (NOT gate, window comparator, pulse generator) now export through Wokwi's custom-chip
    mechanism: diagram type `chip-<slug>` plus the `<slug>.chip.json` and `<slug>.c` (Wokwi Chips API
@@ -834,3 +838,13 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; 986 tests / 94 files (4 new catalogue tests); scenarios 10/10;
   production build and budgets green (builder 102.4 kB, missions 175.1 kB gz). Billing plan copy
   and README updated to the 174-part total; landing counter is dynamic.
+
+### Checkpoint — Serial panel session transcript, 2026-09-25 (local)
+
+- Engines keep their bounded serial window; snapshots now carry `serialTotal`. The sim client
+  folds windows into a 2 000-line session transcript (`serial-transcript.ts`, 6 unit tests:
+  overlap dedupe, idempotent snapshots, gap counting, restart rewind, bounded eviction, default
+  cap). Lines lost to the cap or to snapshot gaps are counted and shown as an EN + HI
+  "earlier output cleared" notice instead of disappearing.
+- Verification: strict typecheck; 992 tests / 95 files; scenarios 10/10; production build and
+  budgets green.

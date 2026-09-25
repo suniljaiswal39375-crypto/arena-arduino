@@ -875,3 +875,24 @@ type could be verified, and deferred what could not be.
   types within the emulator catalogue (the servo family's shared `wokwi-servo` stays legal across
   catalogues by design), the eight verified id→type mappings plus the visual-tier promises, and a
   Wokwi export/import round trip through one of the new parts.
+
+## Serial panel: session transcript over the engine window, drops counted not hidden — 25 September 2026
+
+Debt item 5 said the Serial panel loses its earliest output on long runs because the engines
+cap their serial log at 600 lines. The fix keeps that engine cap and stops losing history above
+it instead.
+
+- **Why the engine cap stays.** The engines run in a worker and their serial log is a bounded
+  window by design — an unbounded log there is an unbounded memory leak for a sketch that prints
+  forever. Spec §8 calls for a ring buffer; what was missing was a view that outlives one ring.
+- **The fix.** Snapshots now carry `serialTotal` (lines ever printed). The sim client folds each
+  window into a session transcript (`src/lib/sim/serial-transcript.ts`, pure and unit-tested):
+  windows are deduplicated by the lifetime counter, engine restarts rewind the transcript, gaps —
+  lines printed between snapshots that no window reaches back to — are counted in `dropped`, and
+  the retained view is capped at 2 000 lines with head eviction also counted. The panel renders
+  the transcript, and when `dropped > 0` shows a notice (new i18n key `serialDropped`, EN + HI)
+  stating exactly how many earlier lines were cleared. Nothing is forgotten silently.
+- **Honesty notes.** The engines themselves still report `serialDropped: 0`; only the client
+  knows about view evictions, and it says so. The scenario runner was never lossy (it reads the
+  lifetime counter) and is unchanged. This is a UI-session improvement, deliberately in-memory:
+  per the privacy stance, serial history is never persisted.

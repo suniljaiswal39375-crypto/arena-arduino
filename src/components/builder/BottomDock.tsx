@@ -115,6 +115,7 @@ function SerialPanel({
   const [draft, setDraft] = useState('');
   const scroller = useRef<HTMLDivElement | null>(null);
   const lines = snapshot?.serial ?? [];
+  const dropped = snapshot?.serialDropped ?? 0;
 
   useEffect(() => {
     const el = scroller.current;
@@ -123,6 +124,11 @@ function SerialPanel({
 
   return (
     <div className="flex h-full flex-col">
+      {dropped > 0 && (
+        <p className="border-b border-[var(--color-border)] px-2 py-1 text-[11px] text-[var(--color-text-faint)]">
+          {t('serialDropped', { count: dropped })}
+        </p>
+      )}
       <div ref={scroller} className="mono min-h-0 flex-1 overflow-y-auto p-2 text-[12px] leading-relaxed">
         {lines.length === 0 ? (
           <p className="p-1 text-[var(--color-text-faint)]">

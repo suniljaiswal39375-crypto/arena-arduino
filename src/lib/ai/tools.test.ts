@@ -268,6 +268,8 @@ describe('simulation tools', () => {
           { at: 200, text: 'temp=27\n' },
           { at: 300, text: 'humidity=55\n' },
         ],
+        serialTotal: 3,
+        serialDropped: 0,
         plot: [],
         plotLabels: [],
         logicAnalyzers: [],

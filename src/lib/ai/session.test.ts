@@ -132,7 +132,7 @@ describe('MentorSession: findings and feedback', () => {
         missionSlug: null,
         progress: emptyProgress(),
         snapshot: {
-          running: false, clockUs: 2_000_000, parts: {}, serial: [], plot: [], plotLabels: [],
+          running: false, clockUs: 2_000_000, parts: {}, serial: [], serialTotal: 0, serialDropped: 0, plot: [], plotLabels: [],
           logicAnalyzers: [], scope: null, multimeter: null, error: null, unsupported: [],
         },
       }),
