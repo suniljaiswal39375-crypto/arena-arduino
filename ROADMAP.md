@@ -184,9 +184,10 @@ This is what makes it a lab rather than a simulator.
   same headless surface as the CLI. The **hosted transport shipped** too: `POST /api/mcp` speaks
   the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN` (disabled without it) and confined to
   `SPARKLAB_MCP_ROOT`.)
-- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
-  They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
-  pattern assertions against the new bounded capture respectively.
+- Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`. They need a
+  renderer, a touchscreen part and an MQTT broker respectively. (`assert-vcd-pattern` **shipped**:
+  a level-segment pattern language — `H 1ms; L 500us; H *` — matched with a duration tolerance
+  against the live logic-analyzer capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
 - PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
   hand-authored SVG icon; the service worker itself is the existing generated precache.
 - Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
@@ -580,4 +581,26 @@ the budget gate green (builder **102.3 kB**, landing **119.8 kB**, missions **17
 Local verification: `npm run typecheck` passed; full suite green (see commit message for counts);
 build + budget gate green.
 
-Next: pricing/billing decision, multiplayer Co-Lab, then the remaining polish in Phase 15.
+### `assert-vcd-pattern` — waveform assertions in scenarios — 25 September 2026
+
+- **`lib/scenarios/vcd-pattern.ts`:** a pure pattern contract — level segments (`H`/`L`/`X` with
+  optional durations in ns/us/ms/s and a trailing `*` for "anything after"), an interval collapser
+  over the bounded logic capture (initial state + edges → maximal runs), and a tolerance matcher
+  (default ±25 %; a window-cut final segment is matched as *at least*, and reported as such).
+  Levels never tolerate; only durations do.
+- **VCD reader:** parses the analyzer's own export format (`$var` scalars, `#timestamps`,
+  `value id` changes, `$dumpvars` initial values) so a scenario can assert against a recorded dump
+  inline (`vcd:`) as well as against the live capture (`part-id` of an `emu-logic-analyzer`).
+- **Wiring:** `assert-vcd-pattern` joins the scenario step vocabulary (types, parser with
+  pattern/tolerance validation, YAML round-trip, runner dispatch). Failures name the segment, the
+  observed run and the tolerance ("segment 1 lasted 50ms, expected 100ms ±25%").
+- **Tests:** 16 — parser, interval collapsing, tolerance/wildcard/window-cut semantics, VCD
+  round-trip through `toVcd`, and four end-to-end `runScenario` cases including a live blink
+  waveform on a wired analyzer and an inline recorded dump.
+
+Local verification: `npm run typecheck` passed; `npm test` passed **886 tests in 82 files**
+(2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` + budget
+gate green.
+
+Next: multiplayer Co-Lab, pricing/billing decision, VS Code extension shell, then the remaining
+polish in Phase 15.

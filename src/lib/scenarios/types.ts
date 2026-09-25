@@ -22,6 +22,12 @@ export type ScenarioStep =
   | { kind: 'write-serial'; text: string }
   /** Spec extension: assert the electrical rule check does not report a code. */
   | { kind: 'assert-no-diagnostic'; code: string }
+  /**
+   * Spec extension: assert a digital waveform on one logic-analyzer channel —
+   * either the live capture from this run, or an inline VCD dump (`vcd`).
+   * The pattern is level segments: "H 1ms; L 500us; H *".
+   */
+  | { kind: 'assert-vcd-pattern'; partId: string; channel: number; pattern: string; tolerance?: number; vcd?: string }
   /** Spec extension: run a block of steps several times. */
   | { kind: 'repeat'; times: number; steps: ScenarioStep[] };
 

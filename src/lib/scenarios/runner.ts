@@ -3,6 +3,7 @@ import { getPart } from '@/lib/parts';
 import { runERC } from '@/lib/erc/diagnostics';
 import { SimEngine } from '@/lib/sim/engine';
 import type { Scenario, ScenarioResult, ScenarioStep, StepResult } from './types';
+import { intervalsForChannel, matchPattern, parsePattern, parseVcd, vcdAsTrace, type PatternSegment } from './vcd-pattern';
 
 function currentError(engine: SimEngine): SimEngine['error'] {
   return engine.error;
@@ -165,6 +166,40 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
       return hits.length === 0
         ? { ok: true, message: `no ${step.code}` }
         : { ok: false, message: `${step.code}: ${hits[0]?.title ?? ''}` };
+    }
+
+    case 'assert-vcd-pattern': {
+      let trace;
+      if (step.vcd !== undefined) {
+        // An inline dump is asserted as-is; part-id does not apply to it.
+        try {
+          trace = vcdAsTrace(parseVcd(step.vcd));
+        } catch (err) {
+          return { ok: false, message: `inline VCD: ${(err as Error).message}` };
+        }
+      } else {
+        const analyzers = state.engine.snapshot().logicAnalyzers;
+        trace = analyzers.find((t) => t.id === step.partId);
+        if (!trace) {
+          return {
+            ok: false,
+            message: `no logic capture for part \"${step.partId}\" — place an emulator logic analyzer wired to the pin (and let time pass before this step)`,
+          };
+        }
+      }
+      let segments: PatternSegment[];
+      try {
+        segments = parsePattern(step.pattern);
+      } catch (err) {
+        return { ok: false, message: (err as Error).message };
+      }
+      const intervals = intervalsForChannel(trace, step.channel);
+      const windowEndNs = Math.max(0, trace.endNs - trace.startNs);
+      const match = matchPattern(intervals, segments, windowEndNs, step.tolerance ?? 0.25);
+      const name = trace.label;
+      return match.ok
+        ? { ok: true, message: `waveform matches on ${name} D${step.channel} (${match.consumed} interval(s))` }
+        : { ok: false, message: `waveform mismatch on ${name} D${step.channel}: ${match.failures.join('; ')}` };
     }
 
     case 'repeat': {

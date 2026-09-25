@@ -628,3 +628,18 @@ has been performed.
 - **Both transports share one dispatcher** (`handleMcpMessage`); the line handler and the HTTP
   route are thin shells. Protocol semantics — silence for notifications, `isError` for tool
   failures — cannot drift between local and hosted.
+
+## Waveform assertions assert levels, tolerate durations — 25 September 2026
+
+- **`assert-vcd-pattern` is a contract over the bounded capture, not a sampler.** The pattern
+  language describes maximal level runs (`H 1ms; L 500us; H *`) and the matcher collapses the
+  analyzer's event edges into exactly those runs. Levels must match exactly — a HIGH is never
+  "close enough" — while durations carry an explicit tolerance (default ±25 %) because real
+  sketches jitter around `delay()`. A final segment the window cut short is matched as *at least*
+  its duration and the failure says so, rather than inventing a duration nobody observed.
+- **The same matcher serves live captures and recorded dumps.** `vcd:` parses the analyzer's own
+  export (the format `toVcd` produces, verified by round-trip), so CI can assert a waveform a
+  student recorded in the builder — and the round-trip test guarantees the writer and reader agree.
+- **Unexpected activity is a failure unless the pattern ends in `*`.** A pattern that names three
+  segments against a capture with five runs has not been satisfied; silence after the pattern must
+  be stated, not assumed.
