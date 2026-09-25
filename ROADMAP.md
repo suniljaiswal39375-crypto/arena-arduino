@@ -170,8 +170,11 @@ This is what makes it a lab rather than a simulator.
 - Hindi and regional language UI. The strings are already centralised enough to extract; the
   layout needs to survive longer words.
 - Multiplayer Co-Lab over Yjs.
-- VS Code extension and MCP server, so a project can be driven from an agent. (The CLI and the
-  GitHub Action exist; the MCP server would wrap the same `runScenario` / `SimEngine` surface.)
+- VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
+  `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
+  `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
+  same headless surface as the CLI. Remaining for Phase 15: a hosted/remote MCP transport with
+  `SPARKLAB_CLI_TOKEN` auth.)
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
   They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
   pattern assertions against the new bounded capture respectively.
@@ -482,4 +485,23 @@ Local verification for this checkpoint: `npm run typecheck` passed; `npm test` p
 **840 tests in 76 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
 `npm run build` compiled successfully.
 
-Next: MCP surface (spec §12.7), then Phase 14.
+### MCP server (`sparklab-cli mcp`) — 25 September 2026
+
+- **`src/lib/cli/mcp.ts`:** a newline-delimited JSON-RPC 2.0 handler (`handleMcpLine`) plus a
+  stdio loop (`runMcpServer`), matching the MCP stdio transport: `initialize` (protocol
+  `2024-11-05`, `serverInfo sparklab-cli`), `notifications/initialized`, `ping`, `tools/list`,
+  `tools/call`. Tool failures come back as `isError` tool results, never as protocol errors;
+  unknown notifications stay silent; parse errors answer `-32700`.
+- **Four tools over the same headless surface as the CLI:** `list_projects` (bounded-depth scan
+  for `*.sparklab.json` / `project.json` / `diagram.json`), `load_project` (board, parts, wiring,
+  warnings, ERC summary), `run_simulation` (free-run 50–30 000 ms → serial tail + final part
+  states, or an inline scenario YAML → verdict via `runScenario`), `export_diagram` (Wokwi
+  files / KiCad netlist / BOM CSV).
+- **Wiring:** `runCli(['mcp'], io)` requires `io.input` (an `AsyncIterable<string>`; the bin script
+  attaches readline over stdin). A local stdio server needs no token — the client host spawned it —
+  so the zero-config rule holds; remote transports will gate on `SPARKLAB_CLI_TOKEN` later.
+- **Tests:** 13 covering protocol semantics (handshake, silence rules, error frames) and every tool
+  against a real project on disk, plus an end-to-end `runCli(['mcp'])` run asserting exactly one
+  response per request.
+
+Next: Phase 14 (3D workbench, photo-to-circuit research), then remaining Phase 15 breadth.

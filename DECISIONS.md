@@ -565,3 +565,18 @@ has been performed.
 - **The Wokwi export carries the real artifacts** (`<name>.chip.json` + `<name>.c`, diagram type
   `chip-<name>`), so what the student composed in SparkLab is exactly what a Wokwi project would
   compile — and the C templates mirror the shipped chips' implementations pin-for-pin.
+
+## The MCP server is the CLI surface, by process not by promise — 25 September 2026
+
+- **`sparklab-cli mcp` wraps exactly the headless surface the CLI already had** — project loading,
+  ERC, free-runs, scenario execution, exports — through the same `loadProject` / `SimEngine` /
+  `runScenario` functions. There is no second execution path to drift out of sync with the CLI.
+- **Tool failures are data, not protocol errors.** A bad path or a compile error comes back as an
+  `isError` tool result the agent can read and reason about; only genuinely malformed JSON-RPC
+  produces protocol-level error frames. Unknown notifications stay silent, as the transport requires.
+- **A local stdio server carries no token.** The client host spawned the process; demanding
+  `SPARKLAB_CLI_TOKEN` there would be theatre. The token gates hosted/remote transports, which do
+  not exist yet — when they do, auth arrives with them.
+- **Bounds are enforced at the tool boundary** (free-run 50–30 000 ms, serial tails capped at 200
+  lines, project scans capped at 50 hits / depth 3) so one careless agent call cannot stall a
+  session or flood a context window.

@@ -10,6 +10,7 @@ import { templateDoc } from '@/lib/templates';
 import { toWokwiDiagram, librariesTxt } from '@/lib/interop/wokwi';
 import { bomCsv, kicadNetlist } from '@/lib/interop/exports';
 import { findScenarios, loadProject } from './project-dir';
+import { runMcpServer } from './mcp';
 import { junitReport } from './junit';
 import { runFirmware } from './firmware-run';
 import { boardTypeOf } from '@/lib/sim/firmware/doc';
@@ -24,6 +25,8 @@ export interface CliIO {
   out: (line: string) => void;
   err: (line: string) => void;
   cwd: string;
+  /** Stdin as newline-delimited lines; required by the `mcp` command. */
+  input?: AsyncIterable<string>;
 }
 
 /** Exit codes. 42 on timeout matches wokwi-cli's --timeout-exit-code default. */
@@ -39,6 +42,7 @@ Usage:
   sparklab-cli lint <project-dir>          electrical rule check; non-zero on any error
   sparklab-cli test [dir] --recursive      run every *.test.yaml scenario under dir
   sparklab-cli diagram export <project-dir> --wokwi | --kicad | --bom-csv [--out <file>]
+  sparklab-cli mcp                         Model Context Protocol server on stdio
 
 Run options:
   --scenario <file>          run an automation scenario instead of free-running
@@ -146,6 +150,9 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
       case 'diagram':
         if (rest[0] !== 'export') throw new UsageError('Usage: sparklab-cli diagram export <project-dir> --wokwi | --kicad | --bom-csv');
         return exportDiagram(rest[1] ?? '.', flags, io);
+      case 'mcp':
+        if (!io.input) throw new UsageError('sparklab-cli mcp reads JSON-RPC from stdin; no stdin is attached.');
+        return runMcpServer(io.input, io);
       default:
         return run(command, flags, io);
     }
