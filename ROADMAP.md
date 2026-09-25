@@ -15,7 +15,7 @@ being broad.
 | Area | Scope |
 | --- | --- |
 | Document | Schema-versioned project, Immer-patch undo/redo, persistence, first-run blink project |
-| Parts | 96 ATL kit + 67 emulator parts + 3 custom chips, pin tables, wiring guides, virtual inputs |
+| Parts | 96 ATL kit + 75 emulator parts + 3 custom chips, pin tables, wiring guides, virtual inputs |
 | Canvas | Custom SVG: pan, zoom, snap, drag, rotate, wire pin-to-pin, wire hit-areas |
 | Runtime | Tokenizer, parser, interpreter, virtual clock; C integer division, typed assignment, char literals, String class, arrays, interrupts on input edges, relay contacts |
 | ERC | All 15 diagnostic codes emitted, each with explanation, physics, fix and curriculum link; each proven to fire on a broken circuit and stay quiet on 41 working ones |
@@ -249,8 +249,15 @@ AI feature that talks without touching the simulator.
    has no model for) are still reported by name at export time rather than faked with stub shims —
    see DECISIONS.md. Closing more of that gap means either upstream Wokwi parts or custom chips with
    verified pinouts, not silence.
-7. **The emulator catalogue is 67 parts** against the ~72 Wokwi parts the spec lists. The gap is the
-   less common displays and motor drivers; add them as data.
+7. **The emulator catalogue is 75 parts.** The documented gap in spec §9.B is closed: 6 mm
+   pushbutton, 74HC595, 74HC165, NLSF595, biaxial stepper, WS2812 ring and strip, and Franzininho
+   WiFi shipped as data with Wokwi ids verified against docs.wokwi.com (4 catalogue tests pin ids,
+   uniqueness and the export round trip). Parts the firmware slice does not decode yet carry the
+   `visual` tier with a note instead of a false EXACT. Remaining: the spec's logic gates / MUX /
+   flip-flops (Wokwi documents them without public part-type ids — need capture from a live Wokwi
+   diagram before mapping), the extra ESP32 board variants (DevKit v1, C5, C61, P4, XIAO family,
+   Wemos S2 mini, ESP32-2432S028R, M5Stack Core S3, S3-BOX-3), and the NeoPixel meter / ILI9341
+   FT6206 touch variants.
 
 ## Builder correctness and keyboard pass
 - Shipped: normalized compact pin sides, unique catalogue pin positions, invalid-pin rejection, corrected mission query initialization, keyboard connection/part controls and text connection table.
@@ -814,3 +821,16 @@ touchscreen part and an MQTT broker.
 - Verification: strict typecheck; 982 tests / 93 files passing (4 new interop tests: export
   type per shipped chip, wiring round trip, zip attachment + dedup, honesty next to a chip);
   scenarios 10/10; production build and budgets green (builder 102.4 kB gz).
+
+### Checkpoint — emulator catalogue 67 → 75 parts, 2026-09-25 (local)
+
+- Added the eight spec §9.B parts whose Wokwi ids are documented: 6 mm pushbutton, 74HC595 and
+  74HC165 shift registers, NLSF595 LED driver, biaxial stepper, WS2812 ring/strip, Franzininho
+  WiFi. Pin names copied verbatim from docs.wokwi.com so exports translate losslessly.
+- Honesty kept: undecoded parts carry `visual` tier + explicit notes (no false EXACT); the
+  6 mm button is exact via the existing button adapter; ring/strip reuse the WS2812 timing model.
+- Deferred with reasons: logic gates / MUX / flip-flops (no published Wokwi part-type ids) and
+  the remaining ESP32 board variants — next data pass (DECISIONS.md).
+- Verification: strict typecheck; 986 tests / 94 files (4 new catalogue tests); scenarios 10/10;
+  production build and budgets green (builder 102.4 kB, missions 175.1 kB gz). Billing plan copy
+  and README updated to the 174-part total; landing counter is dynamic.

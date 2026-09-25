@@ -848,3 +848,30 @@ and the small remainder that *is* fixable is now fixed properly.
   tests pin this (export type per shipped chip, wiring round trip, zip attachment/dedup with
   exact chip.json and C content, and honesty — an analogue part next to an exported chip is
   still reported).
+
+## Emulator catalogue: eight verified parts in, honesty tiers kept — 25 September 2026
+
+Debt item 7 asked to close the emulator-catalogue gap against spec §9.B "as data". Data is only
+honest when every field is defensible, so this slice shipped exactly the parts whose Wokwi part
+type could be verified, and deferred what could not be.
+
+- **What shipped (67 → 75).** 6 mm pushbutton (`wokwi-pushbutton-6mm`), 74HC595 (`wokwi-74hc595`),
+  74HC165 (`wokwi-74hc165`), NLSF595 (`wokwi-nlsf595`), biaxial stepper (`wokwi-biaxial-stepper`),
+  WS2812 ring (`wokwi-led-ring`) and strip (`wokwi-led-strip`), Franzininho WiFi
+  (`board-franzininho-wifi`). Every id, pin name and attribute was taken from the corresponding
+  docs.wokwi.com reference page — pin strings use Wokwi's exact names (including `VDD.2`/`VSS.2`
+  on the strip) so Wokwi export needs no translation. The landing-page counter reads
+  `EMULATOR_CATALOGUE.length` and updated itself.
+- **Tier honesty.** The two shift registers, the NLSF595 and the biaxial stepper get
+  `tier: 'visual'` with notes that say plainly: exported to Wokwi with real pin names where Wokwi
+  models them; the SparkLab firmware slice does not decode them yet, so they stay static in-lab.
+  The 6 mm pushbutton is `exact` because it is electrically the already-modelled button adapter;
+  the ring and strip reuse the verified WS2812 bit-timing model.
+- **Deliberately deferred.** (a) The spec's logic gates, MUX and flip-flops: Wokwi's docs list
+  them but publish no part-type ids, and guessing ids would write unverifiable mappings into
+  exports — they wait for a capture from a live Wokwi diagram. (b) The remaining ESP32 board
+  variants and the NeoPixel meter / ILI9341-touch variants, which are the next data pass.
+- **Pinned by tests.** `src/lib/parts/catalogue.test.ts` (4 tests): unique part ids, unique Wokwi
+  types within the emulator catalogue (the servo family's shared `wokwi-servo` stays legal across
+  catalogues by design), the eight verified id→type mappings plus the visual-tier promises, and a
+  Wokwi export/import round trip through one of the new parts.

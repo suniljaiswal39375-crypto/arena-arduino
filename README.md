@@ -46,7 +46,7 @@ explicitly when absent. Local `arduino-cli` spawning is for development only. AV
 common-cathode seven-segment segments and plain-GPIO ULN2003 inputs are decoded from register,
 bus or pin observations — not from the source sketch. Tests compare the observable outputs of
 both engines. This is an educational emulator with the stated clock bridge, not a blanket
-hardware-fidelity claim. The 166-part catalogue also includes visual/export-only parts.
+hardware-fidelity claim. The 174-part catalogue also includes visual/export-only parts.
 
 ---
 
@@ -54,7 +54,7 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 
 | Area | Status |
 | --- | --- |
-| 166-part catalogue (96 ATL kit + 67 emulator parts + 3 custom chips), with aliases, pin tables, wiring guides, virtual inputs | ✅ |
+| 174-part catalogue (96 ATL kit + 75 emulator parts + 3 custom chips), with aliases, pin tables, wiring guides, virtual inputs | ✅ |
 | Custom SVG schematic canvas: pan, zoom, grid snap, drag, rotate, wire by clicking pin to pin, coloured wires, wire hit-areas | ✅ |
 | Functional runtime: tokenizer → parser → interpreter, ~100 builtins, Servo/LCD/OLED/Stepper/DHT classes, virtual clock | ✅ |
 | Electrical rule check with 15 stable diagnostic IDs, each with a one-line explanation, the physics, a fix and a curriculum link | ✅ |

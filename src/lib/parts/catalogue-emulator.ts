@@ -619,6 +619,107 @@ export const EMULATOR_PARTS: PartDef[] = [
     adapter: 'sensor-value',
     supply: 5,
   }),
+  E('emu-pushbutton-6mm', 'Pushbutton (6 mm)', 'Passive', {
+    wokwi: 'wokwi-pushbutton-6mm',
+    pins: '1:digital:l 2:digital:r',
+    adapter: 'button',
+    tier: 'exact',
+    desc: 'The compact 6 mm tactile switch; electrically identical to the 12 mm pushbutton.',
+    supply: 5,
+    current: 0,
+  }),
+  E('emu-74hc595', '74HC595 Shift Register', 'Driver', {
+    desc: '8-bit serial-in parallel-out shift register: drive eight outputs from three pins, chainable via Q7S.',
+    tags: ['shift-register', 'logic', '74hc595'],
+    aliases: ['74hc595', 'shift register'],
+    wokwi: 'wokwi-74hc595',
+    pins:
+      'DS:digital:l SHCP:digital:l STCP:digital:l OE:digital:l MR:digital:l VCC:power:l GND:ground:l ' +
+      'Q0:digital:r Q1:digital:r Q2:digital:r Q3:digital:r Q4:digital:r Q5:digital:r Q6:digital:r Q7:digital:r Q7S:digital:r',
+    adapter: 'static',
+    tier: 'visual',
+    supply: 5,
+    notes:
+      'Exported to Wokwi with its real pin names, where Wokwi models the shifting. The SparkLab firmware slice does not decode this part yet, so its outputs stay static here.',
+  }),
+  E('emu-74hc165', '74HC165 Input Shift Register', 'Driver', {
+    desc: '8-bit parallel-in serial-out shift register: read eight inputs through one pin, chainable via DS.',
+    tags: ['shift-register', 'logic', '74hc165'],
+    aliases: ['74hc165'],
+    wokwi: 'wokwi-74hc165',
+    pins:
+      'D0:digital:l D1:digital:l D2:digital:l D3:digital:l D4:digital:l D5:digital:l D6:digital:l D7:digital:l ' +
+      'PL:digital:l CP:digital:l CE:digital:l DS:digital:l VCC:power:l GND:ground:l Q7:digital:r Q7_N:digital:r',
+    adapter: 'static',
+    tier: 'visual',
+    supply: 5,
+    notes:
+      'Exported to Wokwi with its real pin names, where Wokwi models the sampling and shifting. The SparkLab firmware slice does not decode this part yet, so reads stay static here.',
+  }),
+  E('emu-nlsf595', 'NLSF595 LED Driver', 'Driver', {
+    desc: 'Serial tri-colour LED driver: a 595-style shift register made to sink the segments of two common-anode RGB LEDs.',
+    tags: ['shift-register', 'led-driver', 'nlsf595'],
+    aliases: ['nlsf595'],
+    wokwi: 'wokwi-nlsf595',
+    pins:
+      'SI:digital:l SCK:digital:l RCK:digital:l OE:digital:l SCLR:digital:l VCC:power:l GND:ground:l ' +
+      'QA:digital:r QB:digital:r QC:digital:r QD:digital:r QE:digital:r QF:digital:r QG:digital:r QH:digital:r SQH:digital:r',
+    adapter: 'static',
+    tier: 'visual',
+    supply: 5,
+    notes:
+      'Exported to Wokwi with its real pin names, where Wokwi models the shifting. The SparkLab firmware slice does not decode this part yet, so its outputs stay static here.',
+  }),
+  E('emu-biaxial-stepper', 'Biaxial Stepper Motor', 'Motor', {
+    desc: 'Two concentric stepper motors in one body: an outer shaft and an inner shaft, each with its own coil pair.',
+    tags: ['stepper', 'motor', 'biaxial'],
+    aliases: ['biaxial stepper'],
+    wokwi: 'wokwi-biaxial-stepper',
+    pins: 'A1+:power:l A1-:power:l B1+:power:l B1-:power:l A2+:power:r A2-:power:r B2+:power:r B2-:power:r',
+    adapter: 'static',
+    tier: 'visual',
+    supply: 12,
+    current: 1000,
+    notes:
+      'Exported to Wokwi, which animates both shafts. The SparkLab stepper decoder drives a single coil set, so this twin motor stays static here.',
+  }),
+  E('emu-ws2812-ring', 'WS2812 LED Ring', 'Display', {
+    desc: 'Sixteen addressable WS2812 LEDs in a ring; chainable through DOUT.',
+    tags: ['neopixel', 'ws2812', 'led-ring'],
+    aliases: ['neopixel ring', 'led ring'],
+    wokwi: 'wokwi-led-ring',
+    pins: 'DIN:digital:l VCC:power:l GND:ground:r DOUT:digital:r',
+    adapter: 'static',
+    defaults: { pixels: 16 },
+    supply: 5,
+    current: 960,
+    notes: 'The same WS2812 bit-timing model as the single LED, arranged in a ring.',
+  }),
+  E('emu-ws2812-strip', 'WS2812 LED Strip', 'Display', {
+    desc: 'A strip of addressable WS2812 LEDs with power taps at both ends; chainable through DOUT.',
+    tags: ['neopixel', 'ws2812', 'led-strip'],
+    aliases: ['neopixel strip', 'led strip'],
+    wokwi: 'wokwi-led-strip',
+    pins: 'DIN:digital:l VDD:power:l VSS:ground:l DOUT:digital:r VDD.2:power:r VSS.2:ground:r',
+    adapter: 'static',
+    defaults: { pixels: 8 },
+    supply: 5,
+    current: 480,
+    notes: 'The same WS2812 bit-timing model as the single LED, laid out as a strip.',
+  }),
+  E('emu-franzininho-wifi', 'Franzininho WiFi', 'Microcontroller', {
+    desc: 'Brazilian open-source ESP32-S2 board with onboard LEDs on GPIO 21 (blue) and 33 (orange).',
+    tags: ['esp32', 'esp32-s2', 'wifi', 'franzininho'],
+    aliases: ['franzininho wifi'],
+    pins:
+      '3V3:power:l GND:ground:l D1:digital:l D2:digital:l D3:digital:l D4:digital:l D5:digital:l D6:digital:l D7:digital:l D8:digital:l D9:digital:l D10:digital:l D11:digital:l D12:digital:l ' +
+      'D21:digital:r D33:pwm:r D34:digital:r D35:digital:r D36:digital:r D37:digital:r D38:digital:r D45:digital:r D46:digital:r',
+    adapter: 'board',
+    wokwi: 'board-franzininho-wifi',
+    defaults: { analogBase: 1, voltage: 3.3, arch: 'xtensa', fqbn: 'esp32:esp32:esp32s2' },
+    supply: 3.3,
+    current: 110,
+  }),
 ];
 
 export const EMULATOR_CATALOGUE: PartDef[] = [...EMULATOR_BOARDS, ...EMULATOR_PARTS];

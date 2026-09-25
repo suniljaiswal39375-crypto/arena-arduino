@@ -55,7 +55,7 @@ export const PLANS: Plan[] = [
     priceNote: 'No account. No API keys. No time limit.',
     cta: 'start',
     bullets: [
-      'Builder, both engines, 166-part catalogue',
+      'Builder, both engines, 174-part catalogue',
       '16 missions, skills model and badges',
       'Chaos Lab, Chip Studio, Inspect bench',
       'Wokwi / KiCad / BOM export, CLI, scenarios, MCP server',
@@ -94,7 +94,7 @@ export const PLANS: Plan[] = [
 ];
 
 export const FEATURE_MATRIX: FeatureRow[] = [
-  { id: 'builder', label: 'Builder, functional + firmware engines, 166 parts', availability: 'local', hostedIn: [] },
+  { id: 'builder', label: 'Builder, functional + firmware engines, 174 parts', availability: 'local', hostedIn: [] },
   { id: 'missions', label: '16 guided missions, skills model, badges', availability: 'local', hostedIn: [] },
   { id: 'inspect', label: 'Chaos Lab, Chip Studio, Inspect bench (scope, logic, DMM)', availability: 'local', hostedIn: [] },
   { id: 'interop', label: 'Wokwi / KiCad / BOM export, CLI, scenarios, MCP server', availability: 'local', hostedIn: [] },
