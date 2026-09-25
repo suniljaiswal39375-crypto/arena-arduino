@@ -74,6 +74,19 @@ The editor-facing logic (`mcp-client.ts`, `mcp-format.ts`) is unit-tested in
 the main suite (`src/lib/cli/mcp-client.test.ts`, `mcp-format.test.ts`)
 against the real MCP server, so the shell itself stays small.
 
+## Packaging
+
+From the repository root, `npm run ext:package` typechecks the extension,
+bundles `dist/extension.js` and produces an installable
+`vscode-sparklab/sparklab-vscode.vsix` with `@vscode/vsce`. Install it with
+`code --install-extension vscode-sparklab/sparklab-vscode.vsix`. The `.vsix`
+is a local build artifact (git-ignored): the extension is distributed from
+this repository, not from the VS Code marketplace, so nothing requires an
+account or a publisher token. The manifest itself is kept honest by
+`src/lib/cli/extension-manifest.test.ts` (main path, menu→command wiring,
+referenced icons, and that the shell only imports `vscode`, node builtins or
+the tested lib).
+
 ## Honesty
 
 The extension runs the same engines as the builder with the same limits:

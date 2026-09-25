@@ -6,6 +6,12 @@
   "publisher": "sparklab",
   "license": "SEE LICENSE IN THE REPOSITORY",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suniljaiswal39375-crypto/arena-arduino.git",
+    "directory": "vscode-sparklab"
+  },
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },

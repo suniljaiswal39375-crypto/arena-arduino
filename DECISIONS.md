@@ -1002,3 +1002,15 @@ out" in both languages.
 Verification: 3 new Hindi render tests (export/import + file input aria, empty inspector, chaos
 panel chrome around English challenge content) on top of the catalogue parity tests — suite at
 1018 passed / 2 skipped; scenarios 10/10; budgets green (home +1.4 kB gz from the new strings).
+
+## The VS Code extension packages locally; no marketplace account — 25 September 2026
+
+`npm run ext:package` runs the extension typecheck, the esbuild bundle and `vsce package`,
+producing `vscode-sparklab/sparklab-vscode.vsix` — verified byte-clean by `unzip -t` and a valid
+VSIX manifest (publisher `sparklab`, engine `^1.90.0`, workspace kind). The `.vsix` is a local,
+git-ignored artifact: SparkLab is open-source-by-repository, the zero-config rule forbids
+accounts, and a marketplace publisher needs an Azure DevOps account plus a review pipeline that
+adds nothing a student needs. Anyone with the repo (or CI) can rebuild the exact package; the
+manifest's integrity (main path, menu→command wiring, shipped icons, and that the shell imports
+only `vscode`, node builtins or the tested lib) is pinned by `extension-manifest.test.ts` in the
+main suite so the package can never silently drift from the tested surface.

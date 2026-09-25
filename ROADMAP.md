@@ -193,7 +193,11 @@ This is what makes it a lab rather than a simulator.
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
   stdio server by a headlessly unit-tested client (`src/lib/cli/mcp-client.ts`, 10 integration
-  tests against the real server). Open: marketplace packaging, richer in-editor rendering.
+  tests against the real server). **Packaging shipped:** `npm run ext:package` typechecks,
+  bundles and produces an installable `vscode-sparklab/sparklab-vscode.vsix` (brand icon
+  included; the `.vsix` is a git-ignored local artifact — the extension is distributed from the
+  repository, not the marketplace, and the manifest is kept honest by
+  `src/lib/cli/extension-manifest.test.ts`). Open: richer in-editor rendering.
   (The **MCP server shipped**: `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with
   `list_projects`, `load_project`, `run_simulation` — free-run or scenario YAML — and
   `export_diagram`, wrapping the same headless surface as the CLI. The **hosted transport
@@ -919,3 +923,16 @@ touchscreen part and an MQTT broker.
   lists exactly those categories.
 - Verification: strict typecheck; **1018 tests / 98 files** (3 new Hindi render tests); scenarios
   10/10; production build and budgets green (home 122.4 kB gz, +1.4 kB from the new strings).
+
+### Checkpoint — VS Code extension packaging (installable .vsix), 2026-09-25 (local)
+
+- `npm run ext:package` typechecks the extension, bundles `dist/extension.js` and packages
+  `vscode-sparklab/sparklab-vscode.vsix` with `@vscode/vsce` (now a devDependency): brand icon
+  PNG added, repository field set, `.vsix` git-ignored. Verified by `unzip -t` + manifest
+  inspection; install with `code --install-extension`.
+- New `src/lib/cli/extension-manifest.test.ts` pins the package to the tested surface (main
+  path, menus reference declared commands, icons exist, imports confined to vscode/node/the
+  tested lib). DECISIONS records the no-marketplace stance: the extension ships from the
+  repository, no account or token anywhere.
+- Verification: strict typecheck; **1023 tests / 99 files** (5 new manifest tests); scenarios
+  10/10; production build and budgets green.

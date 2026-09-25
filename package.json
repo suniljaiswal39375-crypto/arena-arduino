@@ -26,7 +26,8 @@
     "firmware:farm": "vite-node --config vitest.config.ts scripts/firmware-build-farm.ts",
     "collab:relay": "vite-node --config vitest.config.ts scripts/collab-relay.ts",
     "ext:check": "tsc -p vscode-sparklab",
-    "ext:build": "node vscode-sparklab/esbuild.mjs"
+    "ext:build": "node vscode-sparklab/esbuild.mjs",
+    "ext:package": "npm run ext:check && npm run ext:build && cd vscode-sparklab && ../node_modules/.bin/vsce package --out sparklab-vscode.vsix"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "1.11.3",
@@ -66,6 +67,7 @@
     "@types/react-dom": "^19.0.3",
     "@types/vscode": "^1.138.0",
     "@types/ws": "^8.18.1",
+    "@vscode/vsce": "^4.0.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.3",
     "vite": "6.4.3",
