@@ -1,6 +1,7 @@
 import type { ProjectDoc } from '@/lib/doc/types';
 import { getPart } from '@/lib/parts';
 import { runERC } from '@/lib/erc/diagnostics';
+import { MqttBroker } from '@/lib/mqtt/broker';
 import { SimEngine } from '@/lib/sim/engine';
 import { capturePartSvg } from './screenshot';
 import type { Scenario, ScenarioIO, ScenarioResult, ScenarioStep, StepResult } from './types';
@@ -67,6 +68,8 @@ interface RunState {
   engine: SimEngine;
   doc: ProjectDoc;
   io: ScenarioIO;
+  /** The run's in-app MQTT bus (§17.1). */
+  mqtt: MqttBroker;
   /** Files written by steps so far, mirrored into the result. */
   artifacts: Array<{ path: string; content: string }>;
   /** Serial lines already consumed by a wait step. */
@@ -184,6 +187,15 @@ function runStep(state: RunState, step: ScenarioStep): { ok: boolean; message: s
         : { ok: false, message: `${step.code}: ${hits[0]?.title ?? ''}` };
     }
 
+    case 'publish-mqtt': {
+      const r = state.mqtt.publish(step.topic, step.payload, { retain: step.retain });
+      if (!r.ok) return { ok: false, message: `publish refused: ${r.reason}` };
+      return {
+        ok: true,
+        message: `published to "${step.topic}"${step.retain === true ? ' (retained)' : ''}`,
+      };
+    }
+
     case 'assert-vcd-pattern': {
       let trace;
       if (step.vcd !== undefined) {
@@ -264,13 +276,14 @@ export function runScenario(
   scenario: Scenario,
   source?: string,
   io: ScenarioIO = memoryScenarioIO(),
+  mqtt: MqttBroker = new MqttBroker(),
 ): ScenarioResult {
   const doc: ProjectDoc = structuredClone(project);
   const engine = new SimEngine(doc);
   engine.load(doc, source ?? doc.files['sketch.ino'] ?? '');
   engine.start();
 
-  const state: RunState = { engine, doc, io, artifacts: [], consumed: 0, serial: [], elapsedMs: 0 };
+  const state: RunState = { engine, doc, io, mqtt, artifacts: [], consumed: 0, serial: [], elapsedMs: 0 };
   const steps: StepResult[] = [];
   const finish = (error?: string): ScenarioResult => {
     const t = engine.serialTranscript();

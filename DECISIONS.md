@@ -1074,3 +1074,15 @@ per-peer inline styles, and a hover label is the honest middle ground). Broadcas
 to 40 ms because cursor-move events fire far faster than presence needs to travel. The offline
 textarea fallback deliberately draws nothing: faking caret overlays there would be decoration
 pretending to be editing feedback.
+
+## The MQTT broker is a lab bus, not a network stack — 25 September 2026
+
+Spec §17.1 asks for an in-app MQTT broker view. What ships is exactly that: an in-memory topic
+bus implementing MQTT's topic semantics (levels, `+`/`#` wildcards, retained messages with the
+empty-payload-clears rule) plus a dock tab that publishes to it and shows its bounded log. The
+simulated sketches have no network stack — no WiFi part, no TCP model — so nothing on the
+canvas can subscribe; saying otherwise would claim connectivity the engines do not model. The
+panel states this plainly, `publish-mqtt` scenario steps feed the per-run bus, and the module's
+shape (subscribe/publish/retained/history) is what a future networked part would attach to
+without redesign. Refusals are actionable (the broker's reason surfaces in both the panel and
+the failed step), and history truncation is counted, never silent.

@@ -25,7 +25,7 @@ export interface HistoryEntry {
   inverse: Patch[];
 }
 
-export type DockTab = 'serial' | 'plotter' | 'scope' | 'logic' | 'multimeter' | 'inputs' | 'diagnostics' | 'build';
+export type DockTab = 'serial' | 'plotter' | 'scope' | 'logic' | 'multimeter' | 'mqtt' | 'inputs' | 'diagnostics' | 'build';
 
 interface LabState {
   doc: ProjectDoc;

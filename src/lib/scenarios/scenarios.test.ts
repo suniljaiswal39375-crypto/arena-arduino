@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MqttBroker } from '@/lib/mqtt/broker';
 import { parseDuration, parseScenario, scenarioToYaml } from './parse';
 import { resolveControl, runScenario } from './runner';
 import { SEED_SCENARIOS, projectForScenario } from './seed';
@@ -183,5 +184,49 @@ describe('set-control resolution', () => {
     const a = resolveControl(doc, 'btn', 'pressed', 1);
     const b = resolveControl(doc, 'btn2', 'pressed', 1);
     expect('key' in a && a.key).not.toBe('key' in b && b.key);
+  });
+});
+
+describe('publish-mqtt step', () => {
+  it('parses topic, payload, and retain', () => {
+    const s = parseScenario(
+      'steps:\n  - publish-mqtt:\n      topic: lab/temp\n      payload: "21.5"\n      retain: true\n',
+    );
+    expect(s.steps[0]).toEqual({ kind: 'publish-mqtt', topic: 'lab/temp', payload: '21.5', retain: true });
+  });
+
+  it('defaults payload to an empty string and omit retain', () => {
+    const s = parseScenario('steps:\n  - publish-mqtt: { topic: lab/ping }\n');
+    expect(s.steps[0]).toEqual({ kind: 'publish-mqtt', topic: 'lab/ping', payload: '' });
+  });
+
+  it('publishes into the run broker, and a subscriber sees it', () => {
+    const doc = templateDoc('uno-blink')!;
+    const broker = new MqttBroker();
+    const seen: string[] = [];
+    broker.subscribe('lab/#', (m) => seen.push(`${m.topic}=${m.payload}`));
+    const result = runScenario(
+      doc,
+      parseScenario(
+        'name: mqtt\nsteps:\n  - publish-mqtt:\n      topic: lab/temp\n      payload: "21.5"\n',
+      ),
+      undefined,
+      undefined,
+      broker,
+    );
+    expect(result.passed).toBe(true);
+    expect(result.steps[0]?.message).toContain('published to "lab/temp"');
+    expect(seen).toEqual(['lab/temp=21.5']);
+    expect(broker.messages()).toHaveLength(1);
+  });
+
+  it('fails the step on an invalid topic with the broker reason', () => {
+    const doc = templateDoc('uno-blink')!;
+    const result = runScenario(
+      doc,
+      parseScenario('name: bad\nsteps:\n  - publish-mqtt: { topic: "lab/#", payload: x }\n'),
+    );
+    expect(result.passed).toBe(false);
+    expect(result.failure?.message).toContain('wildcards');
   });
 });

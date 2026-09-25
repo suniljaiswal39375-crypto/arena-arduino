@@ -168,9 +168,17 @@ function parseStep(raw: unknown, path: string): ScenarioStep {
       return { kind: 'repeat', times, steps: b.steps.map((s, i) => parseStep(s, `${at}.steps[${i}]`)) };
     }
 
+    case 'publish-mqtt': {
+      const b = record(body, at);
+      const topic = str(b, 'topic', at);
+      const payload = b.payload === undefined ? '' : str(b, 'payload', at);
+      const retain = b.retain === undefined ? undefined : b.retain === true;
+      return { kind: 'publish-mqtt', topic, payload, retain };
+    }
+
     default:
       throw new ScenarioParseError(
-        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, take-screenshot, repeat`,
+        `unknown step "${action}". Supported: delay, set-control, set-virtual-input, wait-serial, assert-serial-regex, expect-pin, write-serial, assert-no-diagnostic, assert-vcd-pattern, take-screenshot, publish-mqtt, repeat`,
         path,
       );
   }
@@ -243,6 +251,14 @@ function stepToYaml(step: ScenarioStep): Record<string, unknown> {
           pattern: step.pattern,
           ...(step.tolerance !== undefined ? { tolerance: step.tolerance } : {}),
           ...(step.vcd !== undefined ? { vcd: step.vcd } : {}),
+        },
+      };
+    case 'publish-mqtt':
+      return {
+        'publish-mqtt': {
+          topic: step.topic,
+          payload: step.payload,
+          ...(step.retain === true ? { retain: true } : {}),
         },
       };
     case 'repeat':

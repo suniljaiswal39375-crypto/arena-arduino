@@ -204,9 +204,12 @@ This is what makes it a lab rather than a simulator.
   any offset (rebuilt through real Yjs merges). **Remote code cursors shipped:** presence
   carries an optional caret (file + offset); Monaco draws a colour-matched ghost caret per
   peer in the same file (name on hover), throttled at 40 ms. That completes the Co-Lab tail
-  from the four-slice directive. Remaining buildable items: §17.1 MQTT broker (unblocks
-  `publish-mqtt` scenarios) and a touchscreen part (unlocks `touch` steps). Payment
-  processing and deployment-tier verification stay blocked on external credentials, as
+  from the four-slice directive. **§17.1 MQTT broker shipped:** an in-app topic
+  bus with `+`/`#` wildcards and retained messages, an MQTT dock tab
+  (publish form + message log), and the `publish-mqtt` scenario step that
+  feeds a per-run broker. Remaining buildable items: the touchscreen part
+  (ILI9341+FT6206; unblocks `touch` steps). Payment processing and
+  deployment-tier verification stay blocked on external credentials, as
   documented.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
@@ -231,9 +234,11 @@ This is what makes it a lab rather than a simulator.
   simulated window. (`assert-vcd-pattern` **shipped**: a level-segment pattern language —
   `H 1ms; L 500us; H *` — matched with a duration tolerance against the live logic-analyzer
   capture or an inline VCD dump; see `lib/scenarios/vcd-pattern.ts`.)
-- Scenario steps still deferred: `touch` (needs a touchscreen part — the ILI9341+FT6206 pair is
-  not in the catalogue yet) and `publish-mqtt` (needs the §17.1 in-app MQTT broker; no broker code
-  exists yet). Both remain in the vocabulary plan rather than shipping as always-failing stubs.
+- Scenario steps: `publish-mqtt` **shipped** — publishes into the run's in-app MQTT bus
+  (`lib/mqtt/broker.ts`: level/`+`/`#` matching, retained messages, bounded history) and fails
+  with the broker's reason on an invalid topic. `touch` remains deferred: it needs a
+  touchscreen part, and the ILI9341+FT6206 pair is not in the catalogue yet. It stays in the
+  vocabulary plan rather than shipping as an always-failing stub.
 - PWA install — **shipped:** `app/manifest.ts` (standalone, brand colours, start at /builder) plus a
   hand-authored SVG icon; the service worker itself is the existing generated precache.
 - Accessibility audit — **shipped (staged gate):** `e2e/accessibility.spec.ts` runs axe per route
@@ -1026,3 +1031,21 @@ touchscreen part and an MQTT broker.
   round-trip + malformed rejection, caret propagation over presence; fixture caret added to the
   round-trip case); new `e2e/collab-cursors.spec.ts` for CI (two pages, ghost caret visible);
   scenarios 10/10; default and flagged builds and budgets green.
+
+### Checkpoint — §17.1 in-app MQTT broker + publish-mqtt step, 2026-09-25 (local)
+
+- `lib/mqtt/broker.ts`: a pure in-memory MQTT topic bus — concrete-topic validation, `+` and
+  `#` subscription matching (including `sport/#` matching `sport`), retained messages with the
+  empty-payload-clears rule, bounded 200-message history with a dropped counter, and change
+  listeners for the UI. `lib/mqtt/bus.ts` exposes one lab-wide bus per page; headless scenario
+  runs get their own instance.
+- Builder gains an MQTT dock tab: a publish form (topic / payload / retain) with the broker's
+  refusal reasons shown inline, a newest-first message log with retained markers, a clear
+  button, and an honesty note that sketches do not model a network stack yet — the bus is fed
+  by `publish-mqtt` scenario steps and by the panel itself (EN + HI).
+- Scenario vocabulary: `publish-mqtt {topic, payload, retain}` parses, serialises
+  (`scenarioToYaml` round-trips), and runs against the run broker; an invalid topic fails the
+  step with the broker's reason.
+- Verification: strict typecheck; **1064 tests / 105 files** (11 broker + 4 scenario + 3 panel
+  render); scenarios 10/10; default and flagged builds and budgets green (builder unchanged at
+  102.4 kB).

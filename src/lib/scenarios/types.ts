@@ -23,6 +23,11 @@ export type ScenarioStep =
   /** Spec extension: assert the electrical rule check does not report a code. */
   | { kind: 'assert-no-diagnostic'; code: string }
   /**
+   * Spec extension: publish to the run's in-app MQTT bus (§17.1). The step
+   * fails on an invalid topic; delivery to subscribers is immediate.
+   */
+  | { kind: 'publish-mqtt'; topic: string; payload: string; retain?: boolean }
+  /**
    * Capture a part's visual state as a deterministic SVG. Needs `saveTo`
    * and/or `compareWith`; a comparison mismatch fails the step.
    */
