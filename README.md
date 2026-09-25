@@ -58,14 +58,14 @@ hardware-fidelity claim. The 174-part catalogue also includes visual/export-only
 | Custom SVG schematic canvas: pan, zoom, grid snap, drag, rotate, wire by clicking pin to pin, coloured wires, wire hit-areas | ✅ |
 | Functional runtime: tokenizer → parser → interpreter, ~100 builtins, Servo/LCD/OLED/Stepper/DHT classes, virtual clock | ✅ |
 | Electrical rule check with 15 stable diagnostic IDs, each with a one-line explanation, the physics, a fix and a curriculum link | ✅ |
-| Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock | ✅ |
+| Serial monitor, serial plotter with labelled series, virtual input sliders, diagnostics dock, in-app MQTT broker tab (spec §17.1: wildcard subscriptions, retained messages, publish form) | ✅ |
 | 16 guided missions, each step checked against the live circuit; hints, stuck detection, locked reference sketch | ✅ |
 | 26-skill taxonomy with Bayesian Knowledge Tracing (pTransit 0.2, pGuess 0.35, pSlip 0.1) and 11 effort-based badges | ✅ |
 | Public site: landing, component library with per-part pages, mission pages, mastery map, docs; PWA-installable (manifest + generated service worker) | ✅ |
 | Quality gates: post-build performance budget on real gzipped output (fail the build, never raise the limit) and an axe audit per route in the CI browser job | ✅ critical-violations gate · non-critical reported |
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
-| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
+| Automation scenarios (Wokwi step vocabulary incl. `take-screenshot` and `touch*`, + extensions `publish-mqtt`/`assert-vcd-pattern`/`set-virtual-input`/`repeat`), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
 | VS Code extension shell (`vscode-sparklab/`): projects view, inspect/ERC, free-run and scenario simulation, Wokwi/KiCad/BOM export — driven over the shipped MCP stdio server; engine logic unit-tested headlessly | ✅ shell slice · see `vscode-sparklab/README.md` |
 | Pricing page + plan model (`/pricing`): local lab free forever; paid tiers = hosted convenience only, with "Pricing TBD" instead of invented numbers and no checkout | ✅ model shipped · payment integration pending the hosted-tier decision |
 | Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
@@ -75,7 +75,7 @@ hardware-fidelity claim. The 174-part catalogue also includes visual/export-only
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
 | 3D workbench: an orbitable viewing aid over the current sheet (lazy chunk; positions mirror the schematic) and a session-only photo-trace underlay | ✅ viewing aid |
-| Co-Lab (multiplayer): Yjs CRDT document, strong convergence under concurrent edits, collaboration-safe undo, session-only presence — zero-config BroadcastChannel rooms **and** cross-device rooms over a WebSocket relay that keeps the merged room state (`npm run collab:relay`) | ✅ flag-gated (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`) · relay rooms memory-only |
+| Co-Lab (multiplayer): Yjs CRDT document, strong convergence under concurrent edits, collaboration-safe undo, session-only presence with selection ghosts, remote code cursors, editor/view-only roles, room comment threads on parts, and a bounded local session replay — zero-config BroadcastChannel rooms **and** cross-device rooms over a WebSocket relay that keeps the merged room state (`npm run collab:relay`) | ✅ flag-gated (`NEXT_PUBLIC_FEATURE_MULTIPLAYER`) · relay rooms memory-only |
 | Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, persistent multiplayer rooms (accounts/storage), photo-to-circuit recognition | ⏳ see ROADMAP |
 
 ---
@@ -114,8 +114,10 @@ src/
     showcase/              the 20 showcase projects and their behaviour probes
     chips/                 3 custom chips: logic, chip.json, Wokwi Chips API C source
     collab/                Co-Lab: Yjs doc model, join/founder protocol, state-diff
-                           bridge, presence; BroadcastChannel + memory + WebSocket
-                           transports, and a Node room relay (merged server state)
+                           bridge, presence (roles, carets), comments, bounded session
+                           replay; BroadcastChannel + memory + WebSocket transports,
+                           and a Node room relay (merged server state)
+    mqtt/                  in-app MQTT topic bus (§17.1 broker view)
     interop/               Wokwi diagram.json + zip, KiCad netlist, BOM CSV
     cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point),
                            MCP stdio client + editor-facing formatters
