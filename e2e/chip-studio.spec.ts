@@ -10,7 +10,7 @@ test('a student can author a chip and place it on the canvas', async ({ page }) 
   await dialog.getByLabel('What is it for?').fill('Flips a daylight signal for a night lamp.');
 
   // The live preview proves the chip composes before it is added.
-  await expect(dialog.getByText('user-chip-night-trigger', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('Night Trigger', { exact: false })).toBeVisible();
 
   await dialog.getByRole('button', { name: 'Add chip to canvas' }).click();
   await expect(dialog).not.toBeVisible();

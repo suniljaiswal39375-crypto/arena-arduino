@@ -15,7 +15,9 @@ test('the 3D workbench opens over the builder and closes cleanly', async ({ page
 
 test('photo trace adds a session-only underlay with honest wording', async ({ page }) => {
   await page.goto('/builder');
-  await page.getByRole('button', { name: 'Photo trace' }).setInputFiles({
+  // The file input itself is visually hidden behind its label, so the test
+  // targets it through the label association Playwright resolves for files.
+  await page.getByLabel('Photo trace').setInputFiles({
     name: 'bench.png',
     mimeType: 'image/png',
     buffer: Buffer.from(

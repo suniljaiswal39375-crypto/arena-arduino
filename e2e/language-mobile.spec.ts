@@ -11,7 +11,7 @@ test('Hindi controls persist while the saved project and sketch stay unchanged',
   const original = await readProject();
   await page.getByLabel('Language / भाषा').selectOption('hi');
   await expect(page.getByRole('textbox', { name: 'परियोजना का नाम' })).toHaveValue(original.name);
-  await expect(page.getByText('मुख्य नियंत्रण और सभी 16 निर्देशित अभ्यास हिंदी में हैं।', { exact: false })).toBeVisible();
+  await expect(page.getByText('सभी 16 निर्देशित अभ्यास हिंदी में हैं', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'कीबोर्ड से तार जोड़ें' }).click();
   await expect(page.getByRole('button', { name: 'पिन जोड़ें' })).toBeVisible();
   await expect(page.locator('main')).toHaveAttribute('lang', 'hi');
@@ -124,7 +124,7 @@ test('phone export and mission menus stay on screen and close with Escape', asyn
   await expect(page.getByRole('button', { name: 'Export', exact: true })).toBeFocused();
   await expect(exportItem).toHaveCount(0);
   await page.getByRole('button', { name: 'Missions', exact: true }).click();
-  const firstMission = page.getByRole('button', { name: /Smart Streetlight/ }).first();
+  const firstMission = page.getByRole('menuitem', { name: /Smart Streetlight/ }).first();
   await expect(firstMission).toBeVisible();
   await firstMission.focus();
   await page.keyboard.press('Escape');

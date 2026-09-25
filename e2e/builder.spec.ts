@@ -21,7 +21,7 @@ test('mission link loads BOM and saved work survives a plain builder reload', as
   await expect(page.getByRole('textbox', { name: 'Project name' })).toHaveValue('My saved traffic circuit');
   await expect(page.getByRole('button', { name: 'Mission', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Templates', exact: true }).click();
-  await page.getByRole('button', { name: /^Blink The hello world/ }).click();
+  await page.getByRole('menuitem', { name: /^Blink The hello world/ }).click();
   await expect(page.getByRole('button', { name: 'Mission', exact: true })).toHaveCount(0);
 });
 
