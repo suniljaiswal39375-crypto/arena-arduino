@@ -5,6 +5,7 @@ import { Users } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/client';
 import { useLab } from '@/store/lab';
 import {
+  collabSession,
   collabState,
   collabWsUrl,
   startCollab,
@@ -167,10 +168,82 @@ export default function CoLabPanel() {
               ))}
             </ul>
           )}
+
+          <h3 className="mt-1 text-[13px] font-semibold">{t('colabComments')}</h3>
+          <CommentsForSelection />
         </div>
       )}
 
       <p className="mt-auto text-[12px] text-[var(--color-muted)]">{t('colabNote')}</p>
+    </div>
+  );
+}
+
+/**
+ * The room's comment thread for the currently selected part. Comments live
+ * only in the shared room document: they are annotations for the people in
+ * the room, never circuit state, never written to the saved project.
+ */
+function CommentsForSelection() {
+  const { t } = useI18n();
+  const selection = useLab((s) => s.selection);
+  const [bridge, setBridge] = useState<CollabBridgeState>(() => collabState());
+  const [draft, setDraft] = useState('');
+  useEffect(() => subscribeCollab(setBridge), []);
+
+  if (!selection) {
+    return <p className="text-[13px] text-[var(--color-muted)]">{t('colabCommentsNoSelection')}</p>;
+  }
+  const thread = bridge.comments[selection] ?? [];
+
+  const post = (): void => {
+    collabSession()?.addComment(selection, draft);
+    setDraft('');
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      {thread.length === 0 ? (
+        <p className="text-[13px] text-[var(--color-muted)]">{t('colabCommentsNone')}</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {thread.map((c) => (
+            <li
+              key={c.id}
+              className={cn('rounded-md border border-[var(--color-border)] p-2 text-[12.5px] leading-relaxed', c.resolved && 'opacity-60')}
+            >
+              <div className="flex items-center gap-1.5">
+                <span aria-hidden className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                <span className="font-medium">{c.author}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm ml-auto"
+                  onClick={() => collabSession()?.setCommentResolved(selection, c.id, !c.resolved)}
+                >
+                  {c.resolved ? t('colabCommentReopen') : t('colabCommentResolve')}
+                </button>
+              </div>
+              <p className={cn('mt-1', c.resolved && 'line-through')}>{c.text}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-1.5">
+        <input
+          className="input min-w-0 flex-1"
+          value={draft}
+          maxLength={500}
+          placeholder={t('colabCommentPlaceholder')}
+          aria-label={t('colabCommentsAria', { id: selection })}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') post();
+          }}
+        />
+        <button type="button" className="btn btn-sm" onClick={post} disabled={draft.trim() === ''}>
+          {t('colabCommentAdd')}
+        </button>
+      </div>
     </div>
   );
 }

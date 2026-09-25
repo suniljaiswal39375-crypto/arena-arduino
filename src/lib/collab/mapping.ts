@@ -12,15 +12,19 @@
  *   multimeter  Y.Map  prefKey -> JSON-encoded value
  *   provenance  Y.Map  key -> JSON-encoded value
  *   chips       Y.Map  chipId -> JSON-encoded ChipDef
+ *   comments    Y.Map  partId -> Y.Array of Y.Map { id, author, color, text, at, resolved }
  *
  * Design decisions are recorded in DECISIONS.md ("Co-Lab foundation" and
  * "File contents are Y.Text"). File contents are Y.Text so two editors
  * working the same file merge character-by-character instead of one whole
  * file overwriting the other; the diff anchor is the last synchronised
  * content, with a full-replace fallback if the shared text moved underneath
- * (a concurrent remote edit in the same file). The one remaining honest
- * limit: nested preference objects are JSON-encoded values (LWW per key)
- * because no command edits them field-by-field concurrently.
+ * (a concurrent remote edit in the same file). Comments live only in the
+ * shared room document (they are annotations, not circuit state), so they
+ * never appear in the projected ProjectDoc and never persist to a saved
+ * project file. The one remaining honest limit: nested preference objects
+ * are JSON-encoded values (LWW per key) because no command edits them
+ * field-by-field concurrently.
  */
 import * as Y from 'yjs';
 import type {
@@ -47,6 +51,7 @@ export const SHARED_KEYS = [
   'multimeter',
   'provenance',
   'chips',
+  'comments',
 ] as const;
 export type SharedKey = (typeof SHARED_KEYS)[number];
 
@@ -80,6 +85,56 @@ export function sharedProvenance(doc: Y.Doc): Y.Map<string> {
 }
 export function sharedChips(doc: Y.Doc): Y.Map<string> {
   return doc.getMap('chips');
+}
+/**
+ * Room-level part comments: partId -> ordered Y.Array of comment maps.
+ * Comments are annotations on the shared room, not circuit state: they are
+ * never projected into the ProjectDoc and never written to a saved project.
+ */
+export function sharedComments(doc: Y.Doc): Y.Map<Y.Array<Y.Map<unknown>>> {
+  return doc.getMap('comments');
+}
+
+export interface RoomComment {
+  id: string;
+  author: string;
+  color: string;
+  text: string;
+  /** Unix ms when the comment was posted. */
+  at: number;
+  resolved: boolean;
+}
+
+/** Read one part's comments in posting order. */
+export function readComments(list: Y.Array<Y.Map<unknown>>): RoomComment[] {
+  const out: RoomComment[] = [];
+  list.forEach((map) => {
+    const id = map.get('id');
+    const text = map.get('text');
+    if (typeof id !== 'string' || typeof text !== 'string') return;
+    const author = map.get('author');
+    const color = map.get('color');
+    const at = map.get('at');
+    out.push({
+      id,
+      author: typeof author === 'string' ? author : '',
+      color: typeof color === 'string' ? color : '#00b4d8',
+      text,
+      at: typeof at === 'number' ? at : 0,
+      resolved: map.get('resolved') === true,
+    });
+  });
+  return out;
+}
+
+/** All open (unresolved) comment counts per part, for canvas badges. */
+export function commentCounts(doc: Y.Doc): Record<string, number> {
+  const counts: Record<string, number> = {};
+  sharedComments(doc).forEach((list, partId) => {
+    const open = readComments(list).filter((c) => !c.resolved).length;
+    if (open > 0) counts[partId] = open;
+  });
+  return counts;
 }
 
 /** All shared roots, for bulk operations like the undo manager scope. */

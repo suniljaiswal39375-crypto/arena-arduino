@@ -69,6 +69,16 @@ describe('builder render smoke', () => {
     expect(render(<SchematicCanvas states={{}} peers={[]} />)).not.toContain('Asha');
   });
 
+  it('shows open room comments as count badges on the canvas', () => {
+    useLab.getState().loadDoc(templateDoc('uno-blink')!);
+    const r1 = useLab.getState().doc.diagram.parts.find((p) => p.id === 'r1')!;
+    const anchor = `translate(${r1.x + 130} ${r1.y - 2})`;
+    const html = render(<SchematicCanvas states={{}} commentCounts={{ r1: 3 }} />);
+    expect(html).toContain(anchor);
+    expect(html).toContain('>3<');
+    expect(render(<SchematicCanvas states={{}} commentCounts={{}} />)).not.toContain(anchor);
+  });
+
   it('renders every template', () => {
     for (const t of templates()) {
       const doc = templateDoc(t.slug)!;

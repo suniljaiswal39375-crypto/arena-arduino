@@ -109,6 +109,11 @@ export const en = {
   inspectorEmpty: 'Select a part to see its pins, attributes and fidelity note.',
   liveState: 'Live state', pins: 'Pins', attributes: 'Attributes', findings: 'Findings', typicalWiring: 'Typical wiring',
   sketchSource: 'Sketch source', editorLoading: 'Loading editor…', editorOffline: 'offline editor',
+  colabComments: 'Comments on the selected part', colabCommentsNone: 'No comments on this part yet.',
+  colabCommentsNoSelection: 'Select a part on the canvas to read or leave a comment.',
+  colabCommentPlaceholder: 'Add a comment…', colabCommentAdd: 'Comment',
+  colabCommentResolve: 'Resolve', colabCommentReopen: 'Reopen',
+  colabCommentsAria: 'Comment on {id}',
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
@@ -218,6 +223,11 @@ export const hi: Record<MessageKey, string> = {
   inspectorEmpty: 'पिन, गुण और सटीकता नोट देखने के लिए कोई घटक चुनें।',
   liveState: 'लाइव स्थिति', pins: 'पिन', attributes: 'गुण', findings: 'निष्कर्ष', typicalWiring: 'आम वायरिंग',
   sketchSource: 'कोड का स्रोत', editorLoading: 'एडिटर लोड हो रहा है…', editorOffline: 'ऑफ़लाइन एडिटर',
+  colabComments: 'चुने गए घटक पर टिप्पणियाँ', colabCommentsNone: 'इस घटक पर अभी कोई टिप्पणी नहीं।',
+  colabCommentsNoSelection: 'टिप्पणी पढ़ने या लिखने के लिए कैनवास पर कोई घटक चुनें।',
+  colabCommentPlaceholder: 'टिप्पणी जोड़ें…', colabCommentAdd: 'टिप्पणी',
+  colabCommentResolve: 'हल हुआ', colabCommentReopen: 'फिर खोलें',
+  colabCommentsAria: '{id} पर टिप्पणी',
 };
 
 /** Text interpolation only. React escapes values; no HTML or eval is used. */

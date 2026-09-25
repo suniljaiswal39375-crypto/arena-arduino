@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { describe, expect, it } from 'vitest';
-import { diffAndApply, projectYDoc, seedYDoc } from './mapping';
+import { commentCounts, diffAndApply, projectYDoc, readComments, seedYDoc, sharedComments } from './mapping';
 import { execute, type Command } from '@/lib/doc/commands';
 import { makePart, makeWire, createProject, recomputeFidelity } from '@/lib/doc/factory';
 import { tierForType } from '@/lib/parts';
@@ -249,5 +249,41 @@ describe('collab mapping: file contents as Y.Text', () => {
     diffAndApply(ydoc, added, removed, 'local');
     expect(projectYDoc(ydoc).files['notes.md']).toBeUndefined();
     expect(projectYDoc(ydoc).files['sketch.ino']).toBe(SKETCH);
+  });
+});
+
+describe('collab mapping: room comments', () => {
+  it('counts open comments per part without touching the projection', () => {
+    const doc = createProject();
+    doc.files['sketch.ino'] = 'void setup() {}\n';
+    const ydoc = new Y.Doc();
+    seedYDoc(ydoc, doc);
+    expect(commentCounts(ydoc)).toEqual({});
+
+    const threads = sharedComments(ydoc);
+    const list = new Y.Array<Y.Map<unknown>>();
+    threads.set('led1', list);
+    const entry = new Y.Map<unknown>();
+    entry.set('id', 'c1');
+    entry.set('author', 'Asha');
+    entry.set('color', '#e63946');
+    entry.set('text', 'check this');
+    entry.set('at', 1234);
+    entry.set('resolved', false);
+    list.push([entry]);
+    const resolved = new Y.Map<unknown>();
+    resolved.set('id', 'c2');
+    resolved.set('author', 'Ravi');
+    resolved.set('text', 'done');
+    resolved.set('at', 1235);
+    resolved.set('resolved', true);
+    list.push([resolved]);
+
+    expect(commentCounts(ydoc)).toEqual({ led1: 1 });
+    const comments = readComments(list);
+    expect(comments.map((c) => [c.author, c.resolved])).toEqual([['Asha', false], ['Ravi', true]]);
+    // Comments never leak into the projected circuit document.
+    expect(projectYDoc(ydoc).files).toEqual(doc.files);
+    expect(JSON.stringify(projectYDoc(ydoc))).not.toContain('check this');
   });
 });

@@ -20,7 +20,7 @@
 
 import { useLab } from './lab';
 import type { ProjectDoc } from '@/lib/doc/types';
-import type { CollabSession, CollabTransport, PeerInfo } from '@/lib/collab/session';
+import type { CollabSession, CollabTransport, PeerInfo, RoomComment } from '@/lib/collab/session';
 import type { WsLinkStatus } from '@/lib/collab/ws';
 
 export type CollabStatus = 'idle' | 'connecting' | 'active' | 'unsupported';
@@ -34,6 +34,8 @@ export interface CollabBridgeState {
   mode: CollabMode | null;
   /** Live status of the relay link (server mode only). */
   link: WsLinkStatus | null;
+  /** Room comment threads keyed by part id (session-only room state). */
+  comments: Record<string, RoomComment[]>;
 }
 
 export function collabEnabled(): boolean {
@@ -61,6 +63,7 @@ let state: CollabBridgeState = {
   peers: [],
   mode: null,
   link: null,
+  comments: {},
 };
 const listeners = new Set<(s: CollabBridgeState) => void>();
 
@@ -82,6 +85,11 @@ export function subscribeCollab(cb: (s: CollabBridgeState) => void): () => void 
 
 export function collabActive(): boolean {
   return session !== null;
+}
+
+/** The live session (for comment actions), or null when not in a room. */
+export function collabSession(): CollabSession | null {
+  return session;
 }
 
 export async function startCollab(opts: {
@@ -142,6 +150,7 @@ export async function startCollab(opts: {
       }
     },
     onPeers: (peers) => setState({ peers }),
+    onComments: (comments) => setState({ comments }),
   });
   session = created;
   created.setPresence({ name: opts.name, selectedPartId: useLab.getState().selection });

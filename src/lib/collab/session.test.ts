@@ -579,3 +579,54 @@ describe('CollabSession: authoritative sync (hosted join)', () => {
     expect(a.projection().diagram.parts.length).toBe(doc.diagram.parts.length);
   });
 });
+
+describe('CollabSession: room comments', () => {
+  it('comments sync between editors, resolve, and never enter the projected doc', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const a = makeEditor(hub, 'a', start);
+    const b = makeEditor(hub, 'b', start);
+    await settle();
+
+    const ledId = start.diagram.parts.find((p) => p.type === 'led')!.id;
+    const id = a.session.addComment(ledId, 'Check this resistor value');
+    expect(id).not.toBeNull();
+    // Empty and whitespace-only text is rejected.
+    expect(a.session.addComment(ledId, '   ')).toBeNull();
+
+    await until(() => (b.session.comments()[ledId] ?? []).length === 1, 1000);
+    const thread = b.session.comments()[ledId]!;
+    expect(thread[0]!.text).toBe('Check this resistor value');
+    expect(thread[0]!.author).toBe('a');
+    expect(thread[0]!.resolved).toBe(false);
+
+    // Comments are room annotations: the projected circuit doc is untouched.
+    expect(JSON.stringify(a.session.projection())).toBe(JSON.stringify(b.session.projection()));
+    expect(Object.keys(a.session.projection())).not.toContain('comments');
+
+    // Resolving on b propagates back to a.
+    b.session.setCommentResolved(ledId, thread[0]!.id, true);
+    await until(() => (a.session.comments()[ledId] ?? [])[0]?.resolved === true, 1000);
+    expect(b.session.comments()[ledId]![0]!.resolved).toBe(true);
+  });
+
+  it('onComments fires for both local posts and remote merges', async () => {
+    const hub = new MemoryHub();
+    const start = baseDoc();
+    const events: number[] = [];
+    const a = makeEditor(hub, 'a', start);
+    const bSession = new CollabSession({
+      room: 'test', name: 'b', doc: start, transport: hub.connect('b'),
+      joinGraceMs: GRACE, heartbeatMs: 60_000,
+      onComments: (c) => events.push(Object.values(c).flat().length),
+    });
+    disposeAll.push(() => bSession.dispose());
+    bSession.connect();
+    await settle();
+
+    const unoId = start.diagram.parts[0]!.id;
+    a.session.addComment(unoId, 'hello');
+    await until(() => events.length > 0 && events[events.length - 1] === 1, 1000);
+    expect(events[events.length - 1]).toBe(1);
+  });
+});

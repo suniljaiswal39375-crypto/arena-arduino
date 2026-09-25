@@ -32,7 +32,7 @@ import * as Y from 'yjs';
 import { nanoid } from 'nanoid';
 import type { ProjectDoc } from '@/lib/doc/types';
 import { WIRE_COLOR_HEX } from '@/lib/doc/types';
-import { diffAndApply, projectYDoc, seedYDoc, sharedTypes } from './mapping';
+import { diffAndApply, projectYDoc, readComments, seedYDoc, sharedComments, sharedTypes, type RoomComment } from './mapping';
 
 export interface PresenceState {
   clientId: string;
@@ -84,7 +84,11 @@ export interface CollabSessionOptions {
   onRemote?: (doc: ProjectDoc) => void;
   /** Called whenever the visible peer set changes. */
   onPeers?: (peers: PeerInfo[]) => void;
+  /** Called whenever the room's comment threads change (any origin). */
+  onComments?: (comments: Record<string, RoomComment[]>) => void;
 }
+
+export type { RoomComment };
 
 const REMOTE_ORIGIN = 'sparklab.remote';
 const PEER_COLORS = Object.values(WIRE_COLOR_HEX);
@@ -122,6 +126,7 @@ export class CollabSession {
   private readonly peers = new Map<string, PresenceState>();
   private selfPresence: PresenceState;
   private lastProjectionJson = '';
+  private lastCommentsJson = '';
   /** True once this doc holds the room's history (adopted or founder-seeded). */
   private adopted = false;
   private joinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -143,6 +148,7 @@ export class CollabSession {
     };
 
     this.lastProjectionJson = JSON.stringify(projectYDoc(this.ydoc));
+    this.lastCommentsJson = JSON.stringify(this.comments());
     this.undoManager = new Y.UndoManager(sharedTypes(this.ydoc), {
       trackedOrigins: new Set([this.localOrigin]),
     });
@@ -250,6 +256,59 @@ export class CollabSession {
     return changed;
   }
 
+  /** The room's comment threads, keyed by part id. */
+  comments(): Record<string, RoomComment[]> {
+    const out: Record<string, RoomComment[]> = {};
+    sharedComments(this.ydoc).forEach((list, partId) => {
+      const items = readComments(list);
+      if (items.length > 0) out[partId] = items;
+    });
+    return out;
+  }
+
+  /**
+   * Post a comment on a part as this editor. Returns the comment id, or null
+   * for empty text. Comments are room annotations, not document commands.
+   */
+  addComment(partId: string, text: string): string | null {
+    if (this.disposed) return null;
+    const trimmed = text.trim().slice(0, 500);
+    if (trimmed === '') return null;
+    if (!this.adopted) this.found('local-edit');
+    const id = nanoid(8);
+    this.ydoc.transact(() => {
+      const threads = sharedComments(this.ydoc);
+      let list = threads.get(partId);
+      if (!list) {
+        list = new Y.Array<Y.Map<unknown>>();
+        threads.set(partId, list); // attach before populating
+      }
+      const entry = new Y.Map<unknown>();
+      entry.set('id', id);
+      entry.set('author', this.selfPresence.name);
+      entry.set('color', this.selfPresence.color);
+      entry.set('text', trimmed);
+      entry.set('at', Date.now());
+      entry.set('resolved', false);
+      list.push([entry]);
+    }, this.localOrigin);
+    return id;
+  }
+
+  /** Open or resolve a comment on a part. */
+  setCommentResolved(partId: string, commentId: string, resolved: boolean): void {
+    if (this.disposed) return;
+    this.ydoc.transact(() => {
+      const list = sharedComments(this.ydoc).get(partId);
+      if (!list) return;
+      for (const map of list.toArray()) {
+        if (map.get('id') === commentId && map.get('resolved') !== resolved) {
+          map.set('resolved', resolved);
+        }
+      }
+    }, this.localOrigin);
+  }
+
   canUndo(): boolean {
     return this.undoManager.undoStack.length > 0;
   }
@@ -317,6 +376,9 @@ export class CollabSession {
   }
 
   private onYDocUpdate = (update: Uint8Array, origin: unknown): void => {
+    // Comments never enter the projection, so watch them on every origin
+    // (local post/undo, remote merge) and notify when the threads change.
+    this.emitComments();
     // Local edits (the local origin) and this session's own undo/redo (whose
     // origin is the undo manager itself) both belong to this editor and must
     // be broadcast. Everything else arrived from the network.
@@ -415,5 +477,13 @@ export class CollabSession {
 
   private emitPeers(): void {
     this.opts.onPeers?.(this.peerList());
+  }
+
+  private emitComments(): void {
+    const comments = this.comments();
+    const json = JSON.stringify(comments);
+    if (json === this.lastCommentsJson) return;
+    this.lastCommentsJson = json;
+    this.opts.onComments?.(comments);
   }
 }

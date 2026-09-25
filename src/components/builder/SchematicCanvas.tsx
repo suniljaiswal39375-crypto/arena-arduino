@@ -24,6 +24,17 @@ import { collabState, subscribeCollab } from '@/store/collab';
 import type { PeerInfo } from '@/lib/collab/session';
 import { PartGlyph } from './PartGlyph';
 import { PeerGhosts } from './peer-ghosts';
+import { CommentBadges } from './comment-badges';
+
+/** Open (unresolved) comment counts per part, from the bridge's threads. */
+function openCommentCounts(comments: Record<string, Array<{ resolved: boolean }>>): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const [partId, list] of Object.entries(comments)) {
+    const open = list.filter((c) => !c.resolved).length;
+    if (open > 0) counts[partId] = open;
+  }
+  return counts;
+}
 
 interface View {
   x: number;
@@ -41,10 +52,13 @@ interface Drag {
 export function SchematicCanvas({
   states,
   peers: peersProp,
+  commentCounts: commentCountsProp,
 }: {
   states: Record<string, PartState>;
   /** Tests inject presence directly; the live canvas subscribes to the Co-Lab bridge. */
   peers?: PeerInfo[];
+  /** Tests inject open-comment counts; the live canvas derives them from the bridge. */
+  commentCounts?: Record<string, number>;
 }) {
   const doc = useLab((s) => s.doc);
   const selection = useLab((s) => s.selection);
@@ -68,6 +82,7 @@ export function SchematicCanvas({
     return subscribeCollab(setBridge);
   }, [peersProp]);
   const peers = peersProp ?? (bridge.status === 'active' ? bridge.peers : []);
+  const commentCounts = commentCountsProp ?? openCommentCounts(bridge.comments);
 
   // Photo trace (Phase 14): a session-only reference underlay. It is
   // deliberately *not* persisted or recognized — nothing is auto-placed.
@@ -444,6 +459,9 @@ export function SchematicCanvas({
 
           {/* remote editors' live selections (presence only, never persisted) */}
           <PeerGhosts parts={doc.diagram.parts} peers={peers} />
+
+          {/* open room comments per part (room annotations, never persisted) */}
+          <CommentBadges parts={doc.diagram.parts} counts={commentCounts} />
 
           {/* wire target ghosts */}
           {pendingWire &&

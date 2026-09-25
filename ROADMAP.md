@@ -190,8 +190,11 @@ This is what makes it a lab rather than a simulator.
   the shared text moved under the anchor). **Selection ghosts shipped:** each peer's live part
   selection renders on the canvas as a dashed halo + name tag in their presence
   colour (pure presence data, pointer-transparent, never persisted; unit-,
-  render- and Playwright-covered). Remaining: comment threads, remote code
-  cursors, roles, session replay.
+  render- and Playwright-covered). **Comment threads shipped:** parts carry
+  room comments (Y.Map partId -> Y.Array) with post/resolve/reopen, open-count
+  badges on the canvas and a thread UI in the Co-Lab panel; comments are room
+  annotations only — never projected into the circuit doc, never persisted to
+  a saved project. Remaining: remote code cursors, roles, session replay.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
@@ -954,3 +957,19 @@ touchscreen part and an MQTT broker.
   re-verified on the flagged build: unchanged, collab stays in lazy chunks).
 - Verification: strict typecheck; **1028 tests / 100 files** (5 new: ghost overlay unit tests +
   canvas wiring render test); scenarios 10/10; default and flagged builds green.
+
+### Checkpoint — Co-Lab room comment threads, 2026-09-25 (local)
+
+- `comments` joined the shared Yjs roots: partId -> ordered Y.Array of comment maps
+  (id/author/color/text/at/resolved). `CollabSession` gains `comments()`, `addComment()`,
+  `setCommentResolved()` and an `onComments` change feed; the Co-Lab bridge carries the threads
+  to the UI. The canvas shows open-count badges (`CommentBadges`), the Co-Lab panel shows the
+  thread for the selected part with add/resolve/reopen (EN + HI keys). Collaboration-safe undo
+  covers comment posts because the undo manager already tracks all shared roots.
+- Honesty: comments are annotations for the people in a room, not circuit state — they are
+  never projected into the ProjectDoc and never written to saved project files (stated in
+  DECISIONS.md and in the module docs).
+- Verification: strict typecheck; **1035 tests / 101 files** (7 new: two-session comment
+  convergence + resolve propagation + onComments feed, badge unit tests, canvas wiring, mapping
+  non-projection); scenarios 10/10; default and flagged builds green; the collab e2e spec now
+  also posts, badges, resolves and reopens a comment across two live editors.

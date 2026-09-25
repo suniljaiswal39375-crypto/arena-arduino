@@ -1026,3 +1026,15 @@ are unchanged), and every multiplayer e2e spec starts with a probe that skips gr
 the tab is absent, so flag-off local builds never report a false failure. Presence data
 (selection ghosts included) remains session-only: it is never written to the Yjs document, to
 storage, or to traces.
+
+## Co-Lab comments are room annotations, not circuit state — 25 September 2026
+
+Comment threads live in a `comments` root of the shared Yjs document (partId -> Y.Array of
+comment maps) and are deliberately absent from the projected `ProjectDoc`: they are notes the
+people in a room leave for each other, like sticky notes on a bench, not properties of the
+circuit. Consequences, all stated in the UI/README rather than implied: exporting or saving a
+project never carries its comments; a fork starts with a clean thread; and the collaboration-
+safe undo manager (which tracks every shared root) lets an editor take back their own comment
+post without touching anyone else's. `onComments` fires on every origin (local post, undo,
+remote merge) so badges and threads never disagree with the shared state; text is capped at 500
+characters and trimmed, and empty posts are refused before they reach the wire.
