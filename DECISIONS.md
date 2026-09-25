@@ -950,3 +950,33 @@ Verification: 13 new tests (5 renderer determinism/escaping/null cases, parse ro
 validation, runner save/compare/mismatch/missing-file/no-visual-state through a real engine on the
 dht-lcd template, 3 CLI end-to-end runs writing and comparing real files) — suite at 1009 passed /
 2 skipped, scenarios 10/10, budgets unchanged.
+
+## File contents are Y.Text: same-file edits merge character-by-character — 25 September 2026
+
+Co-Lab's foundation shipped file collaboration as per-file last-writer-wins: the `files` map held
+plain strings, so two editors working the same sketch at once meant one whole file silently
+replaced the other. The shared document now stores each file's content as a `Y.Text`, and the
+store bridge emits *localised* deltas instead of whole replacements.
+
+- **How the diff works.** `diffAndApply` anchors on the base document's content (what the shared
+  state is known to represent), strips the shared prefix/suffix between base and new content, and
+  applies only the middle as a Y.Text delete + insert. Everything the command layer emits for a
+  file is a single contiguous edit, so real keystroke-scale changes become tiny deltas, and two
+  edits in different regions of the same file merge through Yjs intact — pinned by a session-level
+  test where two editors concurrently change the baud rate and the delay of one sketch and both
+  replicas project the merged result.
+- **The honest limits.** (1) If the shared text moved under the anchor — a concurrent remote edit
+  landed in the same file between base and diff — positional deltas would land in the wrong place,
+  so the delta code detects the mismatch and replaces the whole text: still correct content, with
+  the concurrent change re-asserted by its author on the next sync. (2) A remote change still
+  reaches the local editor as a full document projection, so the editor's caret position (UI
+  state, not document state) is not preserved through a remote edit; content is never lost. Both
+  are strictly better than the old overwrite.
+- **Compatibility.** Readers tolerate legacy plain-string values (rooms seeded before this
+  change), upgrading them to Y.Text on first edit; seeding now creates Y.Text directly. The undo
+  manager already tracked the `files` root, so collaboration-safe undo covers text deltas with no
+  extra wiring.
+- **Verification.** 6 new tests (seed/project round trip through Y.Text, localised delta, anchor
+  rebase, legacy upgrade, add/delete files, concurrent same-file merge through two CollabSessions)
+  on top of the existing convergence suites: 1015 passed / 2 skipped, scenarios 10/10, budgets
+  unchanged.

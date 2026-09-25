@@ -191,3 +191,63 @@ describe('collab mapping: diff parity with the command layer', () => {
     parity([{ t: 'clearCanvas' }, { t: 'loadDoc', doc: replacement }]);
   });
 });
+
+describe('collab mapping: file contents as Y.Text', () => {
+  const SKETCH = 'void setup() {\n  Serial.begin(9600);\n}\nvoid loop() {\n  delay(100);\n}\n';
+
+  function seeded(): { ydoc: Y.Doc; doc: ProjectDoc } {
+    const doc = createProject();
+    doc.files['sketch.ino'] = SKETCH;
+    const ydoc = new Y.Doc();
+    seedYDoc(ydoc, doc);
+    return { ydoc, doc };
+  }
+
+  it('seeds files as Y.Text and projects their content', () => {
+    const { ydoc } = seeded();
+    const value = ydoc.getMap('files').get('sketch.ino');
+    expect(value).toBeInstanceOf(Y.Text);
+    expect(projectYDoc(ydoc).files['sketch.ino']).toBe(SKETCH);
+  });
+
+  it('applies a single-edit file change as a localised delta', () => {
+    const { ydoc, doc } = seeded();
+    const after = { ...doc, files: { ...doc.files, 'sketch.ino': SKETCH.replace('delay(100)', 'delay(250)') } };
+    expect(diffAndApply(ydoc, doc, after, 'local')).toBe(true);
+    expect(projectYDoc(ydoc).files['sketch.ino']).toBe(after.files['sketch.ino']);
+    // No change when the content matches the base.
+    expect(diffAndApply(ydoc, after, after, 'local')).toBe(false);
+  });
+
+  it('rebases safely when the shared text moved under the anchor', () => {
+    const { ydoc, doc } = seeded();
+    // A concurrent remote edit lands directly in the shared text after the
+    // base was recorded: the diff must still converge on the local result.
+    const text = ydoc.getMap('files').get('sketch.ino');
+    expect(text).toBeInstanceOf(Y.Text);
+    (text as Y.Text).insert(0, '// remote note\n');
+    const after = { ...doc, files: { ...doc.files, 'sketch.ino': SKETCH.replace('9600', '115200') } };
+    expect(diffAndApply(ydoc, doc, after, 'local')).toBe(true);
+    expect(projectYDoc(ydoc).files['sketch.ino']).toBe(after.files['sketch.ino']);
+  });
+
+  it('upgrades legacy plain-string file values to Y.Text on first edit', () => {
+    const { ydoc, doc } = seeded();
+    ydoc.getMap('files').set('legacy.txt', 'old content');
+    const after: ProjectDoc = { ...doc, files: { ...doc.files, 'legacy.txt': 'old contents!' } };
+    expect(diffAndApply(ydoc, doc, after, 'local')).toBe(true);
+    expect(ydoc.getMap('files').get('legacy.txt')).toBeInstanceOf(Y.Text);
+    expect(projectYDoc(ydoc).files['legacy.txt']).toBe('old contents!');
+  });
+
+  it('adding and deleting files keeps working through Y.Text', () => {
+    const { ydoc, doc } = seeded();
+    const added: ProjectDoc = { ...doc, files: { ...doc.files, 'notes.md': '# notes' } };
+    diffAndApply(ydoc, doc, added, 'local');
+    expect(projectYDoc(ydoc).files['notes.md']).toBe('# notes');
+    const removed: ProjectDoc = { ...added, files: { 'sketch.ino': SKETCH } };
+    diffAndApply(ydoc, added, removed, 'local');
+    expect(projectYDoc(ydoc).files['notes.md']).toBeUndefined();
+    expect(projectYDoc(ydoc).files['sketch.ino']).toBe(SKETCH);
+  });
+});

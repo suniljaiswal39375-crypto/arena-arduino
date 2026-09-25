@@ -214,6 +214,28 @@ describe('CollabSession: convergence', () => {
     expect(projected.diagram.parts.some((p) => p.type === 'buzzer-active')).toBe(true);
   });
 
+  it('concurrent edits to the SAME file merge character-by-character', async () => {
+    const rand = mulberry32(777);
+    const hub = new MemoryHub(true); // manual delivery keeps the edits concurrent
+    const start = baseDoc();
+    const shared = 'void setup() {\n  Serial.begin(9600);\n}\nvoid loop() {\n  delay(100);\n}\n';
+    start.files['sketch.ino'] = shared;
+    const a = makeEditor(hub, 'a', start);
+    await sleep(GRACE + 5); // a founds the room with the shared sketch
+    const b = makeEditor(hub, 'b', start);
+    drain(hub); // b adopts a's history before either edits
+
+    // Neither has seen the other's edit: both diff from the same base.
+    edit(a, [{ t: 'setFile', name: 'sketch.ino', content: shared.replace('Serial.begin(9600)', 'Serial.begin(115200)') }]);
+    edit(b, [{ t: 'setFile', name: 'sketch.ino', content: shared.replace('delay(100)', 'delay(250)') }]);
+    hub.flushShuffled(rand);
+    hub.flushShuffled(rand); // echoes heal both ways
+
+    const merged = 'void setup() {\n  Serial.begin(115200);\n}\nvoid loop() {\n  delay(250);\n}\n';
+    expect(a.session.projection().files['sketch.ino']).toBe(merged);
+    expect(b.session.projection().files['sketch.ino']).toBe(merged);
+  });
+
   it('duplicate updates are idempotent', async () => {
     const hub = new MemoryHub();
     const start = baseDoc();

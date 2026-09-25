@@ -185,8 +185,10 @@ This is what makes it a lab rather than a simulator.
   projections via `applyRemoteDoc`. Transport: BroadcastChannel (same browser, zero-config) plus a
   memory hub for adversarial tests. Verified: round trips of all seeds, command parity, 10 seeded
   randomised-concurrency runs, shuffled/late-joiner convergence, stale-base regression, undo
-  isolation. Remaining: hosted WebSocket transport (cross-device), per-file → `Y.Text` merging,
-  comment threads, remote cursors/selection ghosts, roles, session replay.
+  isolation. File contents are `Y.Text`, so two editors working the same file merge
+  character-by-character (localised prefix/suffix deltas with a whole-text rebase fallback when
+  the shared text moved under the anchor). Remaining: comment threads, remote cursors/selection
+  ghosts, roles, session replay.
 - VS Code extension, so a project can be driven from an editor panel — **shell shipped**
   (`vscode-sparklab/`): a SparkLab Projects view plus inspect/ERC, free-run and scenario-YAML
   simulation (PASS/FAIL webviews) and Wokwi/KiCad/BOM export, all driven over the shipped MCP
@@ -892,3 +894,18 @@ touchscreen part and an MQTT broker.
   escaping, parse round-trip and validation, real-engine save/compare/mismatch on the dht-lcd
   template, three CLI end-to-end runs writing and comparing real files); scenarios 10/10;
   production build and budgets green (builder 102.4 kB gz, unchanged).
+
+### Checkpoint — Co-Lab file contents as Y.Text (character-level merge), 2026-09-25 (local)
+
+- Shared `files` map now holds Y.Text instead of plain strings: two editors working the SAME
+  file concurrently merge character-by-character instead of one whole file overwriting the
+  other. `diffAndApply` emits localised prefix/suffix deltas anchored on the base document, with
+  a whole-text rebase fallback when a concurrent remote edit moved the shared text underneath.
+- Legacy plain-string file values are tolerated and upgraded on first edit; seeding creates
+  Y.Text directly; collaboration-safe undo already covered the files root.
+- Honest limits documented in DECISIONS.md: anchor-mismatch falls back to full replace (content
+  still correct), and a remote edit reaches the local editor as a full projection (caret
+  position is UI state and is not preserved; content is never lost).
+- Verification: strict typecheck; **1015 tests / 98 files** (6 new: Y.Text round trip, localised
+  delta, rebase fallback, legacy upgrade, add/delete, concurrent same-file merge through two
+  live sessions); scenarios 10/10; production build and budgets green (builder 102.4 kB gz).

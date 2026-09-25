@@ -6,18 +6,21 @@
  *   meta        Y.Map  name / engine / board (scalar strings)
  *   parts       Y.Map  partId -> Y.Map { type, x, y, rotate, label?, attrs: Y.Map }
  *   wires       Y.Map  wireId -> Y.Map { fp, fq, tp, tq, color, via? }
- *   files       Y.Map  fileName -> string content
+ *   files       Y.Map  fileName -> Y.Text content (character-level merging)
  *   inputs      Y.Map  inputName -> number
  *   scope       Y.Map  prefKey -> JSON-encoded value
  *   multimeter  Y.Map  prefKey -> JSON-encoded value
  *   provenance  Y.Map  key -> JSON-encoded value
  *   chips       Y.Map  chipId -> JSON-encoded ChipDef
  *
- * Design decisions are recorded in DECISIONS.md ("Co-Lab foundation"). The two
- * honest limits: file collaboration is per-file last-writer-wins (the editor
- * emits whole files, so character-level Y.Text merging would fight it), and
- * nested preference objects are JSON-encoded values (LWW per key) because no
- * command edits them field-by-field concurrently.
+ * Design decisions are recorded in DECISIONS.md ("Co-Lab foundation" and
+ * "File contents are Y.Text"). File contents are Y.Text so two editors
+ * working the same file merge character-by-character instead of one whole
+ * file overwriting the other; the diff anchor is the last synchronised
+ * content, with a full-replace fallback if the shared text moved underneath
+ * (a concurrent remote edit in the same file). The one remaining honest
+ * limit: nested preference objects are JSON-encoded values (LWW per key)
+ * because no command edits them field-by-field concurrently.
  */
 import * as Y from 'yjs';
 import type {
@@ -56,7 +59,11 @@ export function sharedParts(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
 export function sharedWires(doc: Y.Doc): Y.Map<Y.Map<unknown>> {
   return doc.getMap('wires');
 }
-export function sharedFiles(doc: Y.Doc): Y.Map<string> {
+/**
+ * File contents are Y.Text for character-level merging. Legacy rooms may
+ * still hold plain strings, so readers must check at runtime.
+ */
+export function sharedFiles(doc: Y.Doc): Y.Map<Y.Text | string> {
   return doc.getMap('files');
 }
 export function sharedInputs(doc: Y.Doc): Y.Map<number> {
@@ -206,7 +213,11 @@ export function seedYDoc(doc: Y.Doc, project: ProjectDoc, origin: unknown = 'see
 
     const files = sharedFiles(doc);
     for (const name of Array.from(files.keys())) files.delete(name);
-    for (const [name, content] of Object.entries(project.files)) files.set(name, content);
+    for (const [name, content] of Object.entries(project.files)) {
+      const text = new Y.Text();
+      files.set(name, text); // attach before populating
+      text.insert(0, content);
+    }
 
     const inputs = sharedInputs(doc);
     for (const name of Array.from(inputs.keys())) inputs.delete(name);
@@ -297,10 +308,12 @@ export function projectYDoc(doc: Y.Doc): ProjectDoc {
   connections.sort((a, b) => a.id.localeCompare(b.id));
 
   const files: Record<string, string> = {};
-  const fileKeys = Array.from(sharedFiles(doc).keys()).sort();
+  const filesMap = sharedFiles(doc);
+  const fileKeys = Array.from(filesMap.keys()).sort();
   for (const name of fileKeys) {
-    const content = sharedFiles(doc).get(name);
-    if (typeof content === 'string') files[name] = content;
+    const content = filesMap.get(name);
+    if (content instanceof Y.Text) files[name] = content.toString();
+    else if (typeof content === 'string') files[name] = content;
   }
 
   const inputs: Record<string, number> = {};
@@ -474,7 +487,20 @@ export function diffAndApply(doc: Y.Doc, before: ProjectDoc, after: ProjectDoc, 
       if (!(name in after.files)) { files.delete(name); changed = true; }
     }
     for (const [name, content] of Object.entries(after.files)) {
-      if (files.get(name) !== content) { files.set(name, content); changed = true; }
+      const prev = before.files[name];
+      if (prev === content) continue;
+      let text = files.get(name);
+      if (!(text instanceof Y.Text)) {
+        // New file, or a legacy plain-string value: (re)create as Y.Text,
+        // seeded with the base content so the delta anchors correctly.
+        const created = new Y.Text();
+        files.set(name, created); // attach before populating
+        if (typeof prev === 'string') created.insert(0, prev);
+        text = created;
+      }
+      if (text.toString() === content) continue;
+      applyTextDelta(text, prev ?? '', content);
+      changed = true;
     }
 
     const inputs = sharedInputs(doc);
@@ -507,6 +533,39 @@ export function diffAndApply(doc: Y.Doc, before: ProjectDoc, after: ProjectDoc, 
     }
   }, origin);
   return changed;
+}
+
+/**
+ * Minimal character-level delta from `anchor` to `next`, applied as Y.Text
+ * operations: strip the shared prefix and suffix, then delete/insert the
+ * middle. Single contiguous edits (everything the editor's command layer
+ * emits for files) become tiny deltas, so concurrent edits elsewhere in the
+ * same text survive the merge.
+ *
+ * The anchor is the content the shared state is known to hold (the base
+ * document). If the Y.Text actually holds something else — a remote edit
+ * landed in this file since the base was recorded — positional deltas would
+ * land in the wrong place, so replace the whole text instead: still correct
+ * content, and the concurrent remote change is re-asserted by the peer that
+ * made it on the next sync.
+ */
+function applyTextDelta(text: Y.Text, anchor: string, next: string): void {
+  if (text.toString() !== anchor) {
+    text.delete(0, text.length);
+    text.insert(0, next);
+    return;
+  }
+  const minLen = Math.min(anchor.length, next.length);
+  let start = 0;
+  while (start < minLen && anchor.charCodeAt(start) === next.charCodeAt(start)) start += 1;
+  let endA = anchor.length;
+  let endB = next.length;
+  while (endA > start && endB > start && anchor.charCodeAt(endA - 1) === next.charCodeAt(endB - 1)) {
+    endA -= 1;
+    endB -= 1;
+  }
+  if (endA > start) text.delete(start, endA - start);
+  if (endB > start) text.insert(start, next.slice(start, endB));
 }
 
 function syncProvKey(
