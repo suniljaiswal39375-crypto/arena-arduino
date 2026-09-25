@@ -181,8 +181,9 @@ This is what makes it a lab rather than a simulator.
 - VS Code extension, so a project can be driven from an editor panel. (The **MCP server shipped**:
   `sparklab-cli mcp` serves newline-delimited JSON-RPC on stdio with `list_projects`,
   `load_project`, `run_simulation` — free-run or scenario YAML — and `export_diagram`, wrapping the
-  same headless surface as the CLI. Remaining for Phase 15: a hosted/remote MCP transport with
-  `SPARKLAB_CLI_TOKEN` auth.)
+  same headless surface as the CLI. The **hosted transport shipped** too: `POST /api/mcp` speaks
+  the same protocol over HTTP, gated by `SPARKLAB_CLI_TOKEN` (disabled without it) and confined to
+  `SPARKLAB_MCP_ROOT`.)
 - Scenario steps not yet supported: `take-screenshot`, `touch`, `publish-mqtt`, `assert-vcd-pattern`.
   They need a renderer, a touchscreen part, an MQTT broker and a parser/contract for VCD
   pattern assertions against the new bounded capture respectively.
@@ -559,5 +560,24 @@ Local verification: `npm run typecheck` passed; `npm test` passed **863 tests in
 (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` passed with
 the budget gate green (builder **102.3 kB**, landing **119.8 kB**, missions **172.9 kB** gzipped).
 
-Next: pricing/billing decision, multiplayer Co-Lab, hosted MCP transport, then the remaining
-polish in Phase 15.
+### Hosted MCP transport — 25 September 2026
+
+- **`POST /api/mcp`:** the stdio protocol over HTTP, one JSON-RPC message per POST (MCP
+  streamable-HTTP "single JSON response" mode). Notifications answer `202` with an empty body —
+  the HTTP spelling of stdio's silence. `handleMcpMessage` was extracted from the line handler so
+  both transports share one dispatch; the stdio behaviour is byte-identical (its 13 tests are
+  untouched and green).
+- **Auth:** without `SPARKLAB_CLI_TOKEN` the endpoint answers `503 mcp-not-configured` and points
+  local users at stdio; with it configured, every request must present `Authorization: Bearer`,
+  wrong/missing → `401` with `WWW-Authenticate: Bearer`. Bodies over 64 KB → `413`; malformed
+  JSON → `400` with the `-32700` frame.
+- **Sandbox:** every `path`/`root` argument resolves inside `SPARKLAB_MCP_ROOT` (default: the
+  server cwd) before any tool runs — enforced centrally in the `tools/call` dispatch, so future
+  tools inherit it. An escape is an `isError` tool result, not a traversal.
+- **Tests:** 7 hosted-transport tests (auth matrix, transport semantics, size guard, sandbox
+  containment with real temp dirs) on top of the 13 stdio tests.
+
+Local verification: `npm run typecheck` passed; full suite green (see commit message for counts);
+build + budget gate green.
+
+Next: pricing/billing decision, multiplayer Co-Lab, then the remaining polish in Phase 15.

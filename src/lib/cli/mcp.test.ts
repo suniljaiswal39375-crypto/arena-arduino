@@ -135,9 +135,15 @@ describe('MCP tools', () => {
   });
 
   it('reports bad paths and unknown tools as tool errors, not protocol errors', () => {
+    // Paths outside the sandbox root (the handler cwd) are refused outright.
     const bad = JSON.parse(call('tools/call', { name: 'load_project', arguments: { path: '/no/such/dir' } })!);
     expect(bad.result.isError).toBe(true);
-    expect(JSON.parse(bad.result.content[0].text).error).toMatch(/No such file/);
+    expect(JSON.parse(bad.result.content[0].text).error).toMatch(/escapes the project root/);
+    // Inside the root but missing → the loader's own readable error.
+    const insideRoot = mkdtempSync(join(tmpdir(), 'sparklab-mcp-empty-'));
+    const missing = JSON.parse(call('tools/call', { name: 'load_project', arguments: { path: join(insideRoot, 'nope') } })!);
+    expect(missing.result.isError).toBe(true);
+    expect(JSON.parse(missing.result.content[0].text).error).toMatch(/No such file/);
     expect(JSON.parse(call('tools/call', { name: 'nope', arguments: {} }, 2)!)).toMatchObject({ id: 2, error: { code: -32602 } });
   });
 });

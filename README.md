@@ -65,7 +65,7 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Quality gates: post-build performance budget on real gzipped output (fail the build, never raise the limit) and an axe audit per route in the CI browser job | ✅ critical-violations gate · non-critical reported |
 | Wokwi interchange: `diagram.json` and project `.zip` export/import with pin-name translation, topology round-trips verified on the 28 of 41 seed projects fully representable in Wokwi; unsupported parts reported | ✅ |
 | KiCad netlist and BOM CSV export | ✅ |
-| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (`sparklab-cli mcp`) | ✅ |
+| Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
 | Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
 | AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |

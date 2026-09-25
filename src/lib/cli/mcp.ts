@@ -1,5 +1,5 @@
 import { readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { PRODUCT_NAME, PRODUCT_VERSION } from '@/lib/brand';
 import { runERC } from '@/lib/erc/diagnostics';
 import { SimEngine } from '@/lib/sim/engine';
@@ -225,16 +225,25 @@ function toolResult(payload: unknown, isError = false): { content: Array<{ type:
 /* --------------------------------------------------------------- dispatch */
 
 /**
- * Handle one transport line. Returns the response line, or null when the
- * message was a notification or unparseable noise that must not be answered.
+ * Resolve a client-supplied path inside the sandbox root. The hosted
+ * transport serves whoever holds the token, and that principal only gets the
+ * project tree under the root — never the machine. The local stdio server
+ * keeps the plain working directory (it was spawned by the user's own host).
  */
-export function handleMcpLine(line: string, cwd: string): string | null {
-  let msg: unknown;
-  try {
-    msg = JSON.parse(line);
-  } catch {
-    return line.trim() === '' ? null : err(null, -32700, 'Parse error');
+export function sandboxPath(root: string, requested: string | undefined): string {
+  const base = resolve(root);
+  const target = resolve(base, requested && requested.trim() !== '' ? requested : '.');
+  if (target !== base && !target.startsWith(base + sep)) {
+    throw new Error(`path escapes the project root: ${requested}`);
   }
+  return target;
+}
+
+/**
+ * Handle one parsed JSON-RPC message. Returns the response line, or null
+ * when the message was a notification that must not be answered.
+ */
+export function handleMcpMessage(msg: unknown, cwd: string): string | null {
   if (typeof msg !== 'object' || msg === null) return err(null, -32600, 'Invalid Request');
   const req = msg as RpcRequest;
   if (typeof req.method !== 'string') return err(req.id ?? null, -32600, 'Invalid Request');
@@ -264,7 +273,17 @@ export function handleMcpLine(line: string, cwd: string): string | null {
       };
       const tool = TOOLS.find((t) => t.name === params.name);
       if (!tool) return err(req.id ?? null, -32602, `Unknown tool: ${String(params.name)}`);
-      const args = (typeof params.arguments === 'object' && params.arguments !== null ? params.arguments : {}) as Record<string, unknown>;
+      const rawArgs = (typeof params.arguments === 'object' && params.arguments !== null ? params.arguments : {}) as Record<string, unknown>;
+      // Every path argument is resolved inside the sandbox root up front, so
+      // no tool can wander outside it even if a future tool forgets to care.
+      const args: Record<string, unknown> = { ...rawArgs };
+      try {
+        for (const key of ['path', 'root'] as const) {
+          if (typeof args[key] === 'string') args[key] = sandboxPath(cwd, args[key] as string);
+        }
+      } catch (cause) {
+        return ok(req.id ?? null, toolResult({ error: cause instanceof Error ? cause.message : String(cause) }, true));
+      }
       try {
         return ok(req.id ?? null, toolResult(tool.run(args, cwd)));
       } catch (cause) {
@@ -275,6 +294,20 @@ export function handleMcpLine(line: string, cwd: string): string | null {
       if (req.id === undefined || req.id === null) return null; // unknown notification
       return err(req.id, -32601, `Method not found: ${req.method}`);
   }
+}
+
+/**
+ * Handle one transport line. Returns the response line, or null when the
+ * message was a notification or unparseable noise that must not be answered.
+ */
+export function handleMcpLine(line: string, cwd: string): string | null {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(line);
+  } catch {
+    return line.trim() === '' ? null : err(null, -32700, 'Parse error');
+  }
+  return handleMcpMessage(msg, cwd);
 }
 
 /** The stdio server: one response line per request line, until EOF. */

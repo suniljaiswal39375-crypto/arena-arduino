@@ -614,3 +614,17 @@ has been performed.
 - **The PWA manifest declares what is real.** Standalone display, brand colours, an SVG icon
   authored in-repo (no binary assets, no build step). Offline capability remains the generated
   service worker's job; the manifest only makes the install prompt truthful.
+
+## Hosted MCP: the token gate arrives with the network — 25 September 2026
+
+- **Two transports, one protocol, different trust.** The local stdio server was spawned by the
+  user's host and stays token-free (zero-config); the hosted endpoint serves whoever holds the
+  token, so it is disabled (`503`) until `SPARKLAB_CLI_TOKEN` exists and answers `401` on every
+  missing or wrong bearer. The previous decision anticipated exactly this: the gate ships with the
+  network transport, not before.
+- **The token holder gets the project tree, not the machine.** Path arguments are sandboxed to
+  `SPARKLAB_MCP_ROOT` centrally in the `tools/call` dispatch rather than per-tool, so the guarantee
+  cannot be forgotten by a future tool. Escapes are ordinary tool errors the agent can read.
+- **Both transports share one dispatcher** (`handleMcpMessage`); the line handler and the HTTP
+  route are thin shells. Protocol semantics — silence for notifications, `isError` for tool
+  failures — cannot drift between local and hosted.
