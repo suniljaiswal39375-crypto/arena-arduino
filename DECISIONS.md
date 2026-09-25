@@ -771,3 +771,25 @@ re-implementing anything.
   esbuild bundle, and the headless engine tests; what needs a real editor is left to the F5 dev
   loop documented in `vscode-sparklab/README.md`. Marketplace packaging and richer in-editor
   rendering (schematic preview, inline ERC squiggles) are explicitly open.
+
+## Pricing: the lab is free forever; paid tiers sell hosted convenience, never the lab — 25 September 2026
+
+Phase 15 asked for pricing and school/org billing. The decision encoded in
+`src/lib/billing/plans.ts` and shown on `/pricing`:
+
+- **Free means free, permanently.** Everything that runs in the browser or self-hosted —
+  builder, engines, missions, exports, CLI/MCP, classrooms on your own Postgres, Co-Lab rooms
+  via your own relay, the mentor gateway with your own key — is the ₹0 tier. The feature matrix
+  is code, and a test pins that every shipped row is reachable without paying.
+- **Paid tiers sell hosted convenience, not the lab.** Hosted Classroom and School & Org
+  cover managed accounts/cloud storage, a managed relay with persistent rooms, managed model
+  hosting, org administration and support. A commitment made now and written on the page: the
+  hosted tier will not move a currently-free capability behind a paywall.
+- **No invented prices.** `priceInr: null` means "to be decided"; the page renders "Pricing
+  TBD". Numbers belong to a business decision with pilot schools, not to a code sandbox, and
+  showing fabricated ones would break the project's honesty rule.
+- **No checkout, by construction.** Payment processing needs credentials, webhooks and a legal
+  entity; none of those belong in this repository. What ships is the model, the page and the
+  invariants — integration is the explicitly open remainder, blocked on the hosted-tier
+  decision, which this model is designed to make reversible: tiers gate only hosted-planned
+  rows.

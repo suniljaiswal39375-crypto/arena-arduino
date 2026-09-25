@@ -67,6 +67,7 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | KiCad netlist and BOM CSV export | ✅ |
 | Automation scenarios (Wokwi step vocabulary + extensions), 10 examples, `sparklab-cli`, reusable GitHub Action, MCP server (stdio locally, hosted at `/api/mcp` behind `SPARKLAB_CLI_TOKEN` with a projects-root sandbox) | ✅ |
 | VS Code extension shell (`vscode-sparklab/`): projects view, inspect/ERC, free-run and scenario simulation, Wokwi/KiCad/BOM export — driven over the shipped MCP stdio server; engine logic unit-tested headlessly | ✅ shell slice · see `vscode-sparklab/README.md` |
+| Pricing page + plan model (`/pricing`): local lab free forever; paid tiers = hosted convenience only, with "Pricing TBD" instead of invented numbers and no checkout | ✅ model shipped · payment integration pending the hosted-tier decision |
 | Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
 | AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
@@ -93,6 +94,7 @@ src/
     ai/                    mentor tools, planner, guardrails, trace inspector
     skills/                mastery map and badge cabinet
     docs/                  documentation
+    pricing/               plan model + pricing page (free lab; hosted tiers TBD)
     accessibility/         accessibility statement
   components/
     builder/               Toolbar, PartPalette, SchematicCanvas, CodePane,
@@ -114,7 +116,9 @@ src/
                            bridge, presence; BroadcastChannel + memory + WebSocket
                            transports, and a Node room relay (merged server state)
     interop/               Wokwi diagram.json + zip, KiCad netlist, BOM CSV
-    cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point)
+    cli/                   sparklab-cli (pure; scripts/sparklab-cli.ts is the entry point),
+                           MCP stdio client + editor-facing formatters
+    billing/               plan model: free lab forever, hosted tiers, feature matrix
     canvas/                grid and pin geometry, wire routing
     templates.ts           starter projects
   store/
@@ -282,8 +286,9 @@ npm run test:e2e             # starts a production server if needed
 
 Still unfinished: remaining Hindi catalogue/diagnostics/specialist content, full offline
 installation/update UX, live OAuth/hosted database validation, a hardened container build farm
-with SSE logs, non-AVR firmware, AI services, 3D/scan, and *persistent* multiplayer rooms
-(accounts/storage behind the relay). Co-Lab itself is shipped behind
+with SSE logs, non-AVR firmware, AI services, 3D/scan, *persistent* multiplayer rooms
+(accounts/storage behind the relay), and payment processing for the hosted tier (the pricing
+model and page are shipped; final numbers are a business decision still in progress). Co-Lab itself is shipped behind
 `NEXT_PUBLIC_FEATURE_MULTIPLAYER` — converged co-editing in zero-config same-browser rooms and,
 with `npm run collab:relay`, cross-device rooms — with its limits in `DECISIONS.md`. AVR
 firmware execution and the optional classroom foundation **are** shipped, with the limits above.

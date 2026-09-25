@@ -210,6 +210,9 @@ export default function LandingPage() {
             <Link href="/skills" className="hover:text-[var(--color-text)]">
               Skills
             </Link>
+            <Link href="/pricing" className="hover:text-[var(--color-text)]">
+              Pricing
+            </Link>
             <Link href="/accessibility" className="hover:text-[var(--color-text)]">
               Accessibility
             </Link>

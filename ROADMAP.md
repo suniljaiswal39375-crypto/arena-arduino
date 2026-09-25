@@ -210,7 +210,12 @@ This is what makes it a lab rather than a simulator.
 - Performance budget — **shipped as a hard gate:** `npm run budget` (also chained into postbuild)
   gzips the real first-load JS from `app-build-manifest.json` for `/`, `/builder`, `/missions` and
   fails the build over 250 kB. Current: builder 102 kB, landing 120 kB, missions 173 kB.
-- Pricing and school/org billing: still open (needs the hosted tier decision).
+- Pricing and school/org billing — **model + page shipped** (`/pricing`, `src/lib/billing/`):
+  the local lab is free forever; paid tiers sell hosted convenience only (managed accounts,
+  cloud storage, persistent cross-device Co-Lab, managed relay/model hosting, org admin);
+  hosted-tier prices are explicitly `null` = to-be-decided (no invented numbers), there is no
+  checkout, and the feature matrix is code with tests. Payment processing itself remains open
+  — it needs credentials/legal setup and the hosted-tier pricing decision.
 
 ---
 
@@ -728,3 +733,34 @@ Local verification: `npm run typecheck` and `npm run ext:check` passed; `npm tes
 
 Next: AI-mentor hosted slice, pricing/billing decision, per-file → `Y.Text` merging, then the
 remaining polish in Phase 15.
+
+### Checkpoint — pricing model and page, 2026-09-25 (local)
+
+The pricing/billing breadth item closes as far as a zero-config sandbox honestly can:
+
+- **`src/lib/billing/plans.ts`:** the typed plan model. Three tiers — Local Lab (₹0 forever),
+  Hosted Classroom, School & Org — and a feature matrix where every row carries its real
+  availability (`local` / `self-host` / `hosted-planned`). Invariants the tests pin: the free
+  tier reaches everything shipped today; paid tiers never claim unshipped features as shipped;
+  hosted-planned rows are attributed to concrete tiers; org-level items stay org-level.
+- **`/pricing`:** static page — plan cards, capability table, and an explicit honesty section.
+  Prices for hosted tiers render as "Pricing TBD" (`priceInr: null`), because inventing numbers
+  would violate the honesty rule; there is no checkout (payment processing needs credentials
+  and a legal entity this environment must not configure). Nav + footer links, `pricing` key
+  EN ('Pricing') + HI ('मूल्य').
+- **The decision (DECISIONS.md):** the lab itself is never paid; paid tiers sell hosted
+  convenience; the hosted tier launches without moving any currently-free capability behind a
+  paywall. Payment integration and final numbers remain the one genuinely open item, blocked on
+  the hosted-tier business decision.
+- **Tests:** 5 plan-model tests. (The AI-mentor hosted slice named earlier was verified to have
+  shipped in Phase 13 — `/api/mentor` + `server/mentor/gateway.ts`, 95 related tests — so it
+  needed no new work.)
+
+Local verification: `npm run typecheck` passed; `npm test` passed **955 tests in 91 files**
+(2 opt-ins skipped); `npm run scenarios` passed **10/10**; `npm run build` green with /pricing
+prerendered static and budgets unchanged (builder 102.4 kB / 250 kB).
+
+Phase 15 status after these four slices: hosted Co-Lab transport, VS Code extension shell and
+the pricing model are shipped; remaining open items are Hindi/regional-language polish, the
+unsupported scenario steps (`take-screenshot`, `touch`, `publish-mqtt`), per-file `Y.Text`
+merging, and the hosted-tier payment decision.
