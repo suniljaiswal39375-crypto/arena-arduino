@@ -1,4 +1,5 @@
 import type { FidelityTier } from '@/lib/brand';
+import type { ChipDef } from '@/lib/chips/chips';
 
 export const SCHEMA_VERSION = 1;
 
@@ -162,6 +163,8 @@ export interface ProjectDoc {
   sim: SimPrefs;
   provenance: Provenance;
   fidelity: FidelityMap;
+  /** Student-authored chips this project uses (the chip authoring flow). */
+  chips?: ChipDef[];
   updatedAt: number;
 }
 

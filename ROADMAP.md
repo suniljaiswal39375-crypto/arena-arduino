@@ -141,7 +141,15 @@ This is what makes it a lab rather than a simulator.
   faults (missing return path, reversed polarity, shorted pin, missing pull-up, wrong pin) into any
   ERC-clean working project, with hint ladders and fingerprint-verified repair; "Break this
   project" in the inspector rail. Remaining: difficulty tiers surfaced in UI.
-- **Chip authoring flow**: the 3 chips ship as data; writing a new chip in the browser does not exist.
+- **Chip authoring flow** — **shipped:** Chip Studio (`ChipStudio.tsx` + `lib/chips/compose.ts`):
+  guided composition of a custom chip from the three behaviour families the simulator honestly
+  models — inverter, window comparator (two threshold sliders), pulse generator (rate + duty).
+  Composing produces the same artifacts the shipped chips carry (palette part, Wokwi `chip.json`,
+  reference C source), embeds the definition in the project file (undoable `addChip`/`removeChip`
+  commands, re-registered on load), places the part on the canvas, and exports it in the Wokwi zip
+  as `<name>.chip.json` + `<name>.c` with a `chip-<name>` diagram type. Free-form C authoring stays
+  out of scope: there is no C compiler in the browser, and an unsimulatable chip would be a broken
+  promise.
 - **"Mystery hardware" faults** — **shipped:** `src/lib/sim/faults.ts` gives the functional engine
   a session-local fault schedule (sensor drift, sensor failure after warm-up) applied at the
   sensor-read funnel; never stored in a ProjectDoc. One authored mystery challenge ("the lying
@@ -447,4 +455,31 @@ Local verification for this checkpoint: `npm run typecheck` passed; `npm test` p
 **826 tests in 75 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
 `npm run build` compiled successfully.
 
-Next: chip authoring flow (the last Phase 13 item), MCP surface, then Phase 14.
+### Chip Studio (authoring flow) — 25 September 2026 (Phase 13 complete)
+
+- **`src/lib/chips/compose.ts`:** `ChipSpec` → `composeChip(spec, takenIds)` — pure validation
+  (name, description, pin names `[A-Z][A-Z0-9]{0,7}`, VCC/GND reserved, thresholds/rate/duty
+  ranges) and chip construction: id `user-chip-<slug>` (uniqueness-minted), compact pin spec with
+  fixed VCC/GND, controls (`thrLow`/`thrHigh` or `pulseBpm`), declarative `ChipLogic`, wiring
+  lines, an example sketch and the reference C source — all adapted to the authored pin names.
+- **Registration:** `lib/chips/registry.ts` (kept separate from `chips.ts` so the data module and
+  the part catalogue never import each other) pushes the chip into the same registries the shipped
+  parts use — palette, search, aliases, ERC, `chipById`. Authored ids must start with `user-chip-`,
+  so they can never shadow a shipped part.
+- **Project integration:** `ProjectDoc.chips?: ChipDef[]`; `addChip`/`removeChip` commands (undoable;
+  removal refused while instances are on the canvas); `loadDoc` re-registers embedded chips so a
+  reloaded or shared project keeps working. The Wokwi zip gains `<name>.chip.json` and `<name>.c`
+  and `wokwiTypeFor` maps authored chips to Wokwi's `chip-<name>` custom-chip convention.
+- **UI:** a "New chip" button in the palette opens the studio dialog: behaviour picker, name/
+  author/description, pin-name and parameter fields with field-level errors, and a live
+  `chip.json` + C preview. Adding registers the chip, places a part on the canvas, and embeds it
+  in the project. EN + HI strings throughout.
+- **Verified end to end in tests:** a composed chip wired to a board runs ERC-clean in a live
+  `SimEngine` and its output inverts a sketch-driven pin; reload and Wokwi-export round trips are
+  covered. A Playwright spec (`e2e/chip-studio.spec.ts`) runs the browser flow in CI.
+
+Local verification for this checkpoint: `npm run typecheck` passed; `npm test` passed
+**840 tests in 76 files** (2 CLI/Docker opt-ins skipped); `npm run scenarios` passed **10/10**;
+`npm run build` compiled successfully.
+
+Next: MCP surface (spec §12.7), then Phase 14.

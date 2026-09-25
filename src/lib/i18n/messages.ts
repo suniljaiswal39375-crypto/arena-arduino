@@ -63,6 +63,12 @@ export const en = {
   chaosGenerate: 'Break this project (Chaos Lab)', chaosGenerating: 'Seeding a fault…',
   chaosGenerateBlurb: 'Generate a fresh solvable fault in this working circuit: one seeded defect, three hints, and a repair check that runs the circuit.',
   chaosGenerateNone: 'Nothing to break here: the generator needs a clean, working circuit with wiring to spare.',
+  chipStudio: 'Chip Studio', chipStudioOpen: 'New chip', chipStudioIntro: 'Compose your own chip: pick a behaviour, name its pins, and it lands in your palette and your project file.',
+  chipKind: 'Behaviour', chipKindNot: 'Inverter', chipKindWindow: 'Window comparator', chipKindPulse: 'Pulse generator',
+  chipName: 'Chip name', chipAuthor: 'Your name (optional)', chipDesc: 'What is it for?',
+  chipInPin: 'Input pin name', chipOutPin: 'Output pin name', chipLowThr: 'Lower threshold', chipHighThr: 'Upper threshold',
+  chipBpm: 'Rate (beats per minute)', chipDuty: 'Pulse width (% of beat)',
+  chipPreview: 'Preview', chipAdd: 'Add chip to canvas', chipCancel: 'Cancel',
 } as const;
 export type MessageKey = keyof typeof en;
 export const hi: Record<MessageKey, string> = {
@@ -126,6 +132,12 @@ export const hi: Record<MessageKey, string> = {
   chaosGenerate: 'इस प्रोजेक्ट को बिगाड़ें (Chaos Lab)', chaosGenerating: 'खराबी तैयार हो रही है…',
   chaosGenerateBlurb: 'इस चालू सर्किट में एक नई, हल करने योग्य खराबी बनाएँ: एक बीजित दोष, तीन संकेत, और सर्किट चलाकर जाँचने वाला मरम्मत परीक्षण।',
   chaosGenerateNone: 'यहाँ बिगाड़ने को कुछ नहीं: जनरेटर को तारों वाला एक स्वच्छ, चालू सर्किट चाहिए।',
+  chipStudio: 'चिप स्टूडियो', chipStudioOpen: 'नई चिप', chipStudioIntro: 'अपनी चिप बनाएँ: व्यवहार चुनें, पिन के नाम दें, और वह आपके पैलेट और प्रोजेक्ट फ़ाइल में जुड़ जाएगी।',
+  chipKind: 'व्यवहार', chipKindNot: 'इनवर्टर', chipKindWindow: 'विंडो कंपैरेटर', chipKindPulse: 'पल्स जनरेटर',
+  chipName: 'चिप का नाम', chipAuthor: 'आपका नाम (वैकल्पिक)', chipDesc: 'यह किस काम के लिए है?',
+  chipInPin: 'इनपुट पिन का नाम', chipOutPin: 'आउटपुट पिन का नाम', chipLowThr: 'निचली दहलीज़', chipHighThr: 'ऊपरी दहलीज़',
+  chipBpm: 'दर (बीट प्रति मिनट)', chipDuty: 'पल्स चौड़ाई (बीट का %)',
+  chipPreview: 'झलक', chipAdd: 'चिप कैनवास पर जोड़ें', chipCancel: 'रद्द करें',
 };
 
 /** Text interpolation only. React escapes values; no HTML or eval is used. */

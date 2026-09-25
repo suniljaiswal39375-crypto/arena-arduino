@@ -546,3 +546,22 @@ has been performed.
   fingerprint is the base's healthy run; the student's document is run with the schedule active, so
   an un-replaced faulty part still fails the check even though the canvas looks perfect. The
   canonical fix — swap the module — works because the schedule keys on the old part id.
+
+## Chip Studio: compose, don't compile — 25 September 2026
+
+- **Authoring is guided composition over the three behaviour families the simulator actually
+  models** — inverter, window comparator, pulse generator — not free-form C. There is no C compiler
+  in the browser and no AVR-side chip execution in the firmware engine; a chip we could not
+  simulate would break the honesty rule, so the studio composes data (the same `ChipLogic` the
+  runtime evaluates) and generates the reference C source from battle-tested templates instead.
+- **Authored chips are project data, not global state.** The definition embeds in `ProjectDoc.chips`,
+  travels with save/export/reload, and re-registers into the shared part registries on load.
+  Registration goes through the same registries the shipped chips use — one code path, no second
+  class of part. Authored ids are forced under the `user-chip-` prefix so nothing a student writes
+  can shadow a shipped part.
+- **Authoring is undoable and reversible.** `addChip`/`removeChip` are commands in the Immer layer;
+  a chip with instances on the canvas refuses removal rather than leaving dangling types, and undo
+  removes the definition and placement together.
+- **The Wokwi export carries the real artifacts** (`<name>.chip.json` + `<name>.c`, diagram type
+  `chip-<name>`), so what the student composed in SparkLab is exactly what a Wokwi project would
+  compile — and the C templates mirror the shipped chips' implementations pin-for-pin.

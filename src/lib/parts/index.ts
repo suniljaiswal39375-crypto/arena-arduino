@@ -27,6 +27,21 @@ export function getPart(id: string): PartDef | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * Register an additional part at runtime (student-authored chips). Idempotent
+ * per id: the palette, search, aliases and the simulator all read the same
+ * registries, so one registration makes the part everywhere.
+ */
+export function registerPart(part: PartDef): void {
+  if (BY_ID.has(part.id)) return;
+  ALL_PARTS.push(part);
+  BY_ID.set(part.id, part);
+  addAlias(part.id, part.id);
+  addAlias(part.name, part.id);
+  for (const a of part.aliases) addAlias(a, part.id);
+  for (const t of part.tags) addAlias(t, part.id);
+}
+
 export function requirePart(id: string): PartDef {
   const p = BY_ID.get(id);
   if (!p) throw new Error(`Unknown part type: ${id}`);

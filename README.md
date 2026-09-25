@@ -68,7 +68,7 @@ hardware-fidelity claim. The 166-part catalogue also includes visual/export-only
 | Chaos Lab: 9 broken-on-purpose projects (including mystery hardware that fails after warm-up), each proven solvable, plus a seeded generator that breaks *your* working project | ✅ |
 | AI lab mentor (offline rule-based by default): typed tool calls that edit the circuit through the undoable command layer, ERC diagnostics, mission hints with a locked-solution refusal, post-run waveform inspector, EN/HI, confirm-before-destructive, per-session + per-IP rate limits | ✅ offline slice · hosted model optional (`NEXT_PUBLIC_FEATURE_MENTOR`) |
 | Showcase: the 20 ATL projects, each with a behaviour probe run on every change | ✅ |
-| 3 custom chips with Wokwi `chip.json` and Chips API C sources | ✅ |
+| 3 shipped custom chips + **Chip Studio**: author your own chip (inverter, window comparator, pulse generator) in the browser — palette part, Wokwi `chip.json` and reference C source, embedded in the project file | ✅ |
 | AVR firmware: active builder selector; real HEX execution, AVR GPIO/USART/ADC/TWI/Timer1 plus seven-seg/MAX7219/ULN2003 pin decoders; optional isolated build farm and SSE logs | ✅ AVR slice · see ROADMAP |
 | Inspect bench instruments: 8-ch logic analyzer + VCD, dual-channel virtual-time oscilloscope with auto-measurements, digital multimeter (DC V, mA, Ω, continuity, diode) and calibrated trigger modes | ✅ calibrated virtual-time slice · see limits below |
 | Public farm deployment, live OAuth/PostgreSQL, physical 1 GHz sampling, hosted-model mentor backend, multiplayer, 3D/scanning | ⏳ see ROADMAP |
